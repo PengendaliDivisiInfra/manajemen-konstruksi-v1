@@ -94,11 +94,18 @@ function hitungDurasiLengkap(tglMulai, tglSelesai, cal, mode){
    BAGIAN 2 — SCHEDULE WHITELIST (Anti-Interference dengan RAB/RAP)
    ===================================================================== */
 const SCHEDULE_WRITABLE_FIELDS = Object.freeze([
+  // relationship & kalender
   'predecessor','pred_type','lag_days','duration','calendar_id',
+  // legacy schedule fields (backward compat)
   'start_date','finish_date',
   'early_start','early_finish','late_start','late_finish',
   'total_float','is_critical',
-  'constraint_type','constraint_date'
+  'constraint_type','constraint_date',
+  // NEW schedule fields (Phase 1)
+  'durasi_hari',
+  'tgl_mulai_rencana','tgl_selesai_rencana',
+  'tgl_mulai_aktual','tgl_selesai_aktual',
+  'float_total'
 ]);
 
 function writeScheduleField(wbsItem, field, value){
@@ -122,173 +129,346 @@ const CONSTRAINT_TYPES = {
 };
 
 /* =====================================================================
-   BAGIAN 3 — CPM ENGINE
-   Forward Pass + Backward Pass + All Relationship Types + Constraints
+   BAGIAN 3 — CPM ENGINE v2 (Phase 2)
+   Topological Sort + Forward Pass + Backward Pass + Critical Path
    ===================================================================== */
-function runCPM(projectId){
-  const proj = DB.projects.find(p => p.id === projectId);
-  if (!proj) return { ok:false, message:'Proyek tidak ditemukan' };
+const CPM = {
 
-  const projCal = WorkingCalendar.get(proj.calendar_id);
-  const items = DB.project_wbs.filter(w => w.project_id === projectId && !w.is_group);
-  if (!items.length) return { ok:true, message:'Tidak ada item WBS' };
+  /* ── Helper: durasi efektif (kompatibel lama & baru) ── */
+  getDuration(it){
+    const a = num(it.duration);
+    if (a > 0) return Math.max(1, Math.round(a));
+    const b = num(it.durasi_hari);
+    if (b > 0) return Math.max(1, Math.round(b));
+    return 1;
+  },
 
-  const map = {};
-  items.forEach(it => { map[it.id] = it; });
+  /* ── Helper: parse string predecessor ──
+     Didukung:
+       "ID"           → FS, lag 0
+       "IDFS"         → FS, lag 0
+       "IDFS+2"       → FS, lag +2
+       "IDSS-1"       → SS, lag -1
+     Kolom pred_type & lag_days (jika terisi) menang atas string. */
+  parsePred(str){
+    if (!str) return null;
+    const s = String(str).trim();
+    const m = s.match(/^(.+?)\s*(FS|SS|FF|SF)\s*([+-]\s*\d+)?$/i);
+    if (m) return {
+      id:  m[1].trim(),
+      type:m[2].toUpperCase(),
+      lag: m[3] ? parseInt(m[3].replace(/\s/g,''), 10) : 0
+    };
+    return { id: s, type:'FS', lag:0 };
+  },
 
-  if (hasCycle_(items, map)){
-    console.error('[CPM] Circular dependency detected');
-    return { ok:false, message:'⚠ Terdeteksi siklus pada predecessor' };
-  }
+  /* ── Helper: relationship efektif untuk sebuah item ── */
+  getRelationship(it){
+    const raw = it.predecessor;
+    if (!raw) return null;
+    const parsed = this.parsePred(raw);
+    if (!parsed) return null;
+    const type = (it.pred_type && String(it.pred_type).trim())
+                 ? String(it.pred_type).trim().toUpperCase()
+                 : parsed.type;
+    const lag  = (it.lag_days !== undefined && it.lag_days !== null && it.lag_days !== '')
+                 ? num(it.lag_days)
+                 : parsed.lag;
+    return { predRef: parsed.id, type, lag };
+  },
 
-  const projStart = new Date(proj.tgl_mulai || new Date());
-  const MAX_ITER = items.length * 5;
+  /* ── Helper: bangun map id/kode → item ── */
+  buildMaps(items){
+    const byId = {}, byKode = {};
+    items.forEach(it => {
+      byId[it.id] = it;
+      if (it.kode_wbs) byKode[String(it.kode_wbs).trim()] = it;
+    });
+    return { byId, byKode };
+  },
 
-  /* ============ FORWARD PASS ============ */
-  const visited = {};
-  const computeES = (it, depth) => {
-    if (depth > MAX_ITER) return;
-    if (visited[it.id]) return;
-    visited[it.id] = true;
+  /* ── Helper: resolve referensi (id atau kode_wbs) ── */
+  resolveRef(ref, maps){
+    if (!ref) return null;
+    return maps.byId[ref] || maps.byKode[String(ref).trim()] || null;
+  },
 
-    const durWorking = Math.max(1, Math.round(num(it.duration) || 1));
-    const cal = WorkingCalendar.get(it.calendar_id || proj.calendar_id);
+  /* ── Helper: pilih kalender untuk sebuah item ── */
+  getCalendarFor(it, proj){
+    return WorkingCalendar.get(it.calendar_id || proj.calendar_id);
+  },
 
-    let es = projStart;
+  /* ═══════════════════════════════════════════════════════════
+     A. TOPOLOGICAL SORT — Kahn's Algorithm (iteratif, aman)
+     ═══════════════════════════════════════════════════════════ */
+  topologicalSort(items, maps){
+    const indeg = {}, succs = {};
+    items.forEach(it => { indeg[it.id] = 0; succs[it.id] = []; });
 
-    // Apply constraint
-    if (it.constraint_type && it.constraint_date){
-      const cd = new Date(it.constraint_date);
-      switch (it.constraint_type){
-        case 'SNET': if (cd > es) es = cd; break;
-        case 'MSO':  es = cd; break;
-        case 'FNET': es = WorkingCalendar.addWorkDays(cd, -durWorking, cal); break;
-      }
-    }
+    items.forEach(it => {
+      const rel = this.getRelationship(it);
+      if (!rel) return;
+      const pred = this.resolveRef(rel.predRef, maps);
+      if (!pred) return;
+      indeg[it.id]++;
+      succs[pred.id].push(it.id);
+    });
 
-    // Predecessor
-    if (it.predecessor && map[it.predecessor]){
-      const pred = map[it.predecessor];
-      computeES(pred, depth + 1);
-
-      const predES = pred._ES || projStart;
-      const predEF = pred._EF || WorkingCalendar.addWorkDays(projStart, num(pred.duration) || 1, cal);
-      const lag = Math.round(num(it.lag_days) || 0);
-      const type = it.pred_type || 'FS';
-
-      let candidate;
-      switch (type){
-        case 'FS': candidate = WorkingCalendar.addWorkDays(predEF,  lag, cal); break;
-        case 'SS': candidate = WorkingCalendar.addWorkDays(predES,  lag, cal); break;
-        case 'FF': candidate = WorkingCalendar.addWorkDays(predEF, -durWorking + lag, cal); break;
-        case 'SF': candidate = WorkingCalendar.addWorkDays(predES, -durWorking + lag, cal); break;
-        default:   candidate = predEF;
-      }
-      if (candidate > es) es = candidate;
-    }
-
-    it._ES = es;
-    it._EF = WorkingCalendar.addWorkDays(es, durWorking, cal);
-  };
-
-  items.forEach(it => computeES(it, 0));
-
-  /* ============ PROJECT FINISH ============ */
-  const projFinish = items.reduce((mx, it) => (it._EF && it._EF > mx) ? it._EF : mx, projStart);
-
-  /* ============ BACKWARD PASS ============ */
-  const successors = {};
-  items.forEach(it => {
-    if (it.predecessor && map[it.predecessor]){
-      (successors[it.predecessor] = successors[it.predecessor] || []).push(it);
-    }
-  });
-
-  const visitedB = {};
-  const computeLF = (it, depth) => {
-    if (depth > MAX_ITER) return;
-    if (visitedB[it.id]) return;
-    visitedB[it.id] = true;
-
-    const durWorking = Math.max(1, Math.round(num(it.duration) || 1));
-    const cal = WorkingCalendar.get(it.calendar_id || proj.calendar_id);
-    const succs = successors[it.id] || [];
-    let lf;
-
-    if (!succs.length){
-      lf = projFinish;
-    } else {
-      lf = null;
-      succs.forEach(s => {
-        computeLF(s, depth + 1);
-        const sLS = s._LS || projFinish;
-        const sLF = s._LF || projFinish;
-        const lag = Math.round(num(s.lag_days) || 0);
-        const type = s.pred_type || 'FS';
-        let candidate;
-        switch (type){
-          case 'FS': candidate = WorkingCalendar.addWorkDays(sLS, -lag, cal); break;
-          case 'SS': candidate = WorkingCalendar.addWorkDays(sLS, -lag, cal); break;
-          case 'FF': candidate = WorkingCalendar.addWorkDays(sLF, -lag, cal); break;
-          case 'SF': candidate = WorkingCalendar.addWorkDays(sLF, -lag, cal); break;
-          default:   candidate = sLS;
-        }
-        if (lf === null || candidate < lf) lf = candidate;
+    const queue = items.filter(it => indeg[it.id] === 0).map(it => it.id);
+    const order = [];
+    while (queue.length){
+      const id = queue.shift();
+      order.push(id);
+      succs[id].forEach(sid => {
+        indeg[sid]--;
+        if (indeg[sid] === 0) queue.push(sid);
       });
     }
 
-    it._LF = lf;
-    it._LS = WorkingCalendar.addWorkDays(lf, -durWorking, cal);
-    it._float = Math.round((it._LS - it._ES) / 86400000);
-  };
-
-  items.forEach(it => computeLF(it, 0));
-
-  /* ============ WRITE-BACK — SCHEDULE FIELDS ONLY ============ */
-  items.forEach(it => {
-    writeScheduleField(it, 'start_date',   WorkingCalendar.fmt(it._ES));
-    writeScheduleField(it, 'finish_date',  WorkingCalendar.fmt(it._EF));
-    writeScheduleField(it, 'early_start',  WorkingCalendar.fmt(it._ES));
-    writeScheduleField(it, 'early_finish', WorkingCalendar.fmt(it._EF));
-    writeScheduleField(it, 'late_start',   WorkingCalendar.fmt(it._LS));
-    writeScheduleField(it, 'late_finish',  WorkingCalendar.fmt(it._LF));
-    writeScheduleField(it, 'total_float',  it._float || 0);
-    writeScheduleField(it, 'is_critical',  (it._float || 0) <= 0 ? 1 : 0);
-
-    delete it._ES; delete it._EF; delete it._LS; delete it._LF; delete it._float;
-  });
-
-  // Update tanggal selesai proyek
-  const newFinish = WorkingCalendar.fmt(projFinish);
-  if (newFinish && newFinish !== proj.tgl_selesai){
-    proj.tgl_selesai = newFinish;
-    const dur = hitungDurasiLengkap(proj.tgl_mulai, newFinish, projCal, proj.durasi_mode || 'working');
-    proj.durasi_hari   = dur.durasi_hari;
-    proj.durasi_minggu = dur.durasi_minggu;
-    proj.durasi_kerja  = dur.durasi_kerja;
-  }
-
-  return { ok:true, message:'CPM selesai' };
-}
-
-/** Deteksi siklus pada graph predecessor */
-function hasCycle_(items, map){
-  const state = {};
-  const dfs = (id) => {
-    if (state[id] === 1) return true;
-    if (state[id] === 2) return false;
-    state[id] = 1;
-    const it = map[id];
-    if (it && it.predecessor && map[it.predecessor]){
-      if (dfs(it.predecessor)) return true;
+    if (order.length !== items.length){
+      const cycle = items.filter(it => order.indexOf(it.id) < 0)
+                         .map(it => it.kode_wbs || it.id);
+      return { ok:false, order, cycle };
     }
-    state[id] = 2;
-    return false;
-  };
-  for (const it of items){
-    if (dfs(it.id)) return true;
+    return { ok:true, order };
+  },
+
+  /* ═══════════════════════════════════════════════════════════
+     B. FORWARD PASS — ES & EF
+     ═══════════════════════════════════════════════════════════ */
+  forwardPass(items, order, proj, maps){
+    const byId = maps.byId;
+    const projStart = new Date(proj.tgl_mulai || new Date());
+
+    order.forEach(id => {
+      const it = byId[id];
+      const dur = this.getDuration(it);
+      const cal = this.getCalendarFor(it, proj);
+
+      let es = new Date(projStart);
+
+      // Constraint awal
+      const ct = it.constraint_type;
+      const cd = it.constraint_date ? new Date(it.constraint_date) : null;
+      if (ct && cd && !isNaN(cd.getTime())){
+        switch (ct){
+          case 'SNET':
+          case 'MSO':
+            if (cd > es) es = cd;
+            break;
+          case 'FNET': {
+            const cand = WorkingCalendar.addWorkDays(cd, -dur, cal);
+            if (cand > es) es = cand;
+            break;
+          }
+        }
+      }
+
+      // Predecessor
+      const rel = this.getRelationship(it);
+      if (rel){
+        const pred = this.resolveRef(rel.predRef, maps);
+        if (pred && pred._ES && pred._EF){
+          const lag = rel.lag;
+          let cand;
+          switch (rel.type){
+            case 'FS': cand = WorkingCalendar.addWorkDays(pred._EF,  lag, cal); break;
+            case 'SS': cand = WorkingCalendar.addWorkDays(pred._ES,  lag, cal); break;
+            case 'FF': cand = WorkingCalendar.addWorkDays(pred._EF, -dur + lag, cal); break;
+            case 'SF': cand = WorkingCalendar.addWorkDays(pred._ES, -dur + lag, cal); break;
+            default:   cand = pred._EF;
+          }
+          if (cand > es) es = cand;
+        }
+      }
+
+      it._ES = es;
+      it._EF = WorkingCalendar.addWorkDays(es, dur, cal);
+    });
+  },
+
+  /* ═══════════════════════════════════════════════════════════
+     C. BACKWARD PASS — LF & LS
+     ═══════════════════════════════════════════════════════════ */
+  backwardPass(items, order, projFinish, proj, maps){
+    const byId = maps.byId;
+    const succs = {};
+    items.forEach(it => { succs[it.id] = []; });
+
+    items.forEach(it => {
+      const rel = this.getRelationship(it);
+      if (!rel) return;
+      const pred = this.resolveRef(rel.predRef, maps);
+      if (pred) succs[pred.id].push(it);
+    });
+
+    // Iterasi terbalik → successors selalu sudah diproses
+    for (let i = order.length - 1; i >= 0; i--){
+      const it = byId[order[i]];
+      const dur = this.getDuration(it);
+      const cal = this.getCalendarFor(it, proj);
+      const list = succs[it.id];
+
+      let lf;
+      if (!list.length){
+        lf = new Date(projFinish);
+      } else {
+        lf = null;
+        list.forEach(s => {
+          const rel = this.getRelationship(s);
+          const lag = rel ? rel.lag : 0;
+          const type = rel ? rel.type : 'FS';
+          let cand;
+          switch (type){
+            case 'FS': cand = WorkingCalendar.addWorkDays(s._LS, -lag, cal); break;
+            case 'SS': cand = WorkingCalendar.addWorkDays(s._LS, -lag, cal); break;
+            case 'FF': cand = WorkingCalendar.addWorkDays(s._LF, -lag, cal); break;
+            case 'SF': cand = WorkingCalendar.addWorkDays(s._LF, -lag, cal); break;
+            default:   cand = s._LS;
+          }
+          if (lf === null || cand < lf) lf = cand;
+        });
+      }
+
+      // Constraint akhir
+      const ct = it.constraint_type;
+      const cd = it.constraint_date ? new Date(it.constraint_date) : null;
+      if (ct && cd && !isNaN(cd.getTime())){
+        switch (ct){
+          case 'FNLT':
+            if (cd < lf) lf = cd;
+            break;
+          case 'MFO':
+            lf = cd;
+            break;
+          case 'SNLT': {
+            const cand = WorkingCalendar.addWorkDays(cd, dur, cal);
+            if (cand < lf) lf = cand;
+            break;
+          }
+          case 'MSO': {
+            const cand = WorkingCalendar.addWorkDays(cd, dur, cal);
+            if (cand < lf) lf = cand;
+            break;
+          }
+        }
+      }
+
+      it._LF = lf;
+      it._LS = WorkingCalendar.addWorkDays(lf, -dur, cal);
+    }
+  },
+
+  /* ═══════════════════════════════════════════════════════════
+     D. FLOAT & CRITICAL PATH
+     ═══════════════════════════════════════════════════════════ */
+  computeFloat(items, proj){
+    items.forEach(it => {
+      const cal = this.getCalendarFor(it, proj);
+      // Total Float = LS − ES (dalam hari kerja)
+      const flt = WorkingCalendar.diffDays(
+        WorkingCalendar.fmt(it._ES),
+        WorkingCalendar.fmt(it._LS),
+        cal, 'working'
+      );
+      it._totalFloat = Math.max(0, flt);
+    });
+  },
+
+  /* ═══════════════════════════════════════════════════════════
+     ORCHESTRATOR
+     ═══════════════════════════════════════════════════════════ */
+  run(projectId){
+    const proj = DB.projects.find(p => p.id === projectId);
+    if (!proj) return { ok:false, message:'Proyek tidak ditemukan' };
+
+    const items = DB.project_wbs.filter(w =>
+      w.project_id === projectId && !w.is_group
+    );
+    if (!items.length) return { ok:true, message:'Tidak ada item WBS', count:0 };
+
+    // 1) Topological sort
+    const maps = this.buildMaps(items);
+    const ts = this.topologicalSort(items, maps);
+    if (!ts.ok){
+      return {
+        ok:false,
+        message:'⚠ Circular dependency: ' + ts.cycle.join(' → ')
+      };
+    }
+
+    // 2) Forward pass
+    this.forwardPass(items, ts.order, proj, maps);
+
+    // 3) Project finish
+    const projStart = new Date(proj.tgl_mulai || new Date());
+    let projFinish = projStart;
+    items.forEach(it => { if (it._EF && it._EF > projFinish) projFinish = it._EF; });
+
+    // 4) Backward pass
+    this.backwardPass(items, ts.order, projFinish, proj, maps);
+
+    // 5) Float + critical
+    this.computeFloat(items, proj);
+
+    // 6) Write-back (DUAL-WRITE)
+    items.forEach(it => {
+      const startISO  = WorkingCalendar.fmt(it._ES);
+      const finishISO = WorkingCalendar.fmt(it._EF);
+      const lsISO     = WorkingCalendar.fmt(it._LS);
+      const lfISO     = WorkingCalendar.fmt(it._LF);
+      const dur       = this.getDuration(it);
+      const flt       = it._totalFloat || 0;
+      const crit      = flt <= 0 ? 1 : 0;
+
+      // New fields (Phase 1)
+      writeScheduleField(it, 'durasi_hari',            dur);
+      writeScheduleField(it, 'tgl_mulai_rencana',      startISO);
+      writeScheduleField(it, 'tgl_selesai_rencana',    finishISO);
+      writeScheduleField(it, 'float_total',            flt);
+      writeScheduleField(it, 'is_critical',            crit);
+
+      // Legacy fields (backward compat)
+      writeScheduleField(it, 'start_date',   startISO);
+      writeScheduleField(it, 'finish_date',  finishISO);
+      writeScheduleField(it, 'early_start',  startISO);
+      writeScheduleField(it, 'early_finish', finishISO);
+      writeScheduleField(it, 'late_start',   lsISO);
+      writeScheduleField(it, 'late_finish',  lfISO);
+      writeScheduleField(it, 'total_float',  flt);
+
+      delete it._ES; delete it._EF; delete it._LS; delete it._LF; delete it._totalFloat;
+    });
+
+    // 7) Update tanggal selesai proyek
+    const newFinishISO = WorkingCalendar.fmt(projFinish);
+    if (newFinishISO && newFinishISO !== proj.tgl_selesai){
+      proj.tgl_selesai = newFinishISO;
+      const dur = hitungDurasiLengkap(
+        proj.tgl_mulai, newFinishISO,
+        WorkingCalendar.get(proj.calendar_id),
+        proj.durasi_mode || 'working'
+      );
+      proj.durasi_hari   = dur.durasi_hari;
+      proj.durasi_minggu = dur.durasi_minggu;
+      proj.durasi_kerja  = dur.durasi_kerja;
+    }
+
+    const criticalCount = items.filter(it => num(it.is_critical) === 1).length;
+    return {
+      ok: true,
+      message: 'CPM selesai',
+      count: items.length,
+      critical: criticalCount,
+      finish: newFinishISO,
+      start: WorkingCalendar.fmt(projStart)
+    };
   }
-  return false;
+};
+
+/* ── Backward-compat: fungsi lama memanggil runCPM ── */
+function runCPM(projectId){
+  return CPM.run(projectId);
 }
 
 /* =====================================================================
@@ -768,4 +948,32 @@ function seedCalendarDefaults(){
       {id:'hol_008', tanggal:'2026-12-25', nama:'Hari Natal', jenis:'nasional', calendar_id:'wcal_std_001'}
     ];
   }
+}
+
+/* =====================================================================
+   TEST CPM — Jalankan dari Console Browser
+   Pemakaian: testCPM()  atau  testCPM('<projectId>')
+   ===================================================================== */
+function testCPM(projectId){
+  projectId = projectId || STATE.activeProject;
+  const r = CPM.run(projectId);
+  console.log('%c[CPM Result]', 'color:#1abc9c;font-weight:bold', r);
+
+  const items = DB.project_wbs.filter(w =>
+    w.project_id === projectId && !w.is_group
+  );
+  console.table(items.map(it => ({
+    kode:     it.kode_wbs,
+    pred:     it.predecessor || '—',
+    type:     it.pred_type   || 'FS',
+    lag:      num(it.lag_days),
+    durasi:   num(it.durasi_hari),
+    ES:       it.tgl_mulai_rencana,
+    EF:       it.tgl_selesai_rencana,
+    LS:       it.late_start,
+    LF:       it.late_finish,
+    float:    num(it.float_total),
+    kritis:   num(it.is_critical) === 1 ? '★' : ''
+  })));
+  return r;
 }
