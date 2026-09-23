@@ -180,6 +180,128 @@ canvas{max-height:320px}
   box-shadow:0 12px 30px rgba(0,0,0,.5);
 }
 .toast.show{display:block;animation:pop .2s}
+
+/* =====================================================================
+   LEMBAR AHSP PUPR
+   ===================================================================== */
+.ahsp-sheet{
+  background:#ffffff;color:#1a1a1a;padding:26px 30px;border-radius:8px;
+  font-family:'Segoe UI',Arial,sans-serif;
+}
+.ahsp-sheet h2{
+  text-align:center;font-size:16px;font-weight:800;letter-spacing:.5px;
+  padding-bottom:8px;border-bottom:2px solid #1f4e79;color:#1f4e79;margin-bottom:16px;
+}
+.ahsp-meta{
+  display:grid;grid-template-columns:180px 12px 1fr;gap:4px 6px;
+  font-size:12.5px;margin-bottom:16px;color:#1a1a1a;
+}
+.ahsp-meta .k{font-weight:600}
+.ahsp-meta .v{font-weight:400}
+
+.ahsp-tbl{
+  width:100%;border-collapse:collapse;font-size:12px;color:#1a1a1a;
+}
+.ahsp-tbl th, .ahsp-tbl td{
+  border:1px solid #888;padding:5px 8px;vertical-align:middle;
+}
+.ahsp-tbl thead th{
+  background:#1f4e79;color:#fff;text-align:center;font-weight:700;
+  font-size:11px;letter-spacing:.4px;padding:8px 6px;
+}
+.ahsp-tbl tbody td.num{text-align:right;font-variant-numeric:tabular-nums}
+.ahsp-tbl tbody td.ctr{text-align:center}
+.ahsp-tbl tr.subhead td{
+  background:#dbe5f1;font-weight:700;letter-spacing:.5px;font-size:11.5px;
+}
+.ahsp-tbl tr.subtotal td{
+  background:#f0f4f8;font-weight:700;
+}
+.ahsp-tbl tr.roman td{
+  font-weight:700;background:#eef3fa;
+}
+.ahsp-tbl tr.grand-total td{
+  background:#1f4e79;color:#fff;font-weight:800;font-size:12.5px;
+}
+.ahsp-tbl tbody tr:hover{background:#f8fafc}
+
+.ahsp-note{
+  margin-top:14px;font-size:10.5px;color:#555;font-style:italic;
+  border-top:1px dashed #ccc;padding-top:8px;
+}
+
+.ahsp-actions{margin-top:14px;display:flex;gap:10px;justify-content:flex-end}
+
+/* =====================================================================
+   PRINT MEDIA — Laporan Formal
+   ===================================================================== */
+@media print {
+  /* Sembunyikan UI */
+  .topbar, .tabs, .no-print, .toast, .overlay,
+  .panel-head .row, #reconSubtabs, .btn, .badge,
+  .kpi::after, canvas { display:none !important; }
+
+  /* Reset layout */
+  body{
+    background:#fff !important;color:#000 !important;
+    font-family:'Segoe UI',Arial,sans-serif;font-size:11px;
+  }
+  main{padding:0 !important;max-width:100% !important}
+  .section{display:none !important}
+  .section.active{display:block !important}
+  .panel{
+    background:#fff !important;border:none !important;
+    padding:0 !important;margin:0 0 8px 0 !important;
+    box-shadow:none !important;
+  }
+
+  /* Print area */
+  .print-area{
+    padding:0 !important;background:#fff !important;color:#000 !important;
+  }
+  .ahsp-sheet{
+    padding:0 !important;background:#fff !important;color:#000 !important;
+    border-radius:0 !important;
+  }
+
+  /* Table print styling */
+  .ahsp-tbl{font-size:10px}
+  .ahsp-tbl th, .ahsp-tbl td{border:1px solid #333 !important;padding:3px 5px}
+  .ahsp-tbl thead th{
+    background:#1f4e79 !important;color:#fff !important;
+    -webkit-print-color-adjust:exact;print-color-adjust:exact;
+  }
+  .ahsp-tbl tr.subhead td,
+  .ahsp-tbl tr.subtotal td,
+  .ahsp-tbl tr.roman td,
+  .ahsp-tbl tr.grand-total td{
+    -webkit-print-color-adjust:exact;print-color-adjust:exact;
+  }
+  .ahsp-tbl tr.grand-total td{background:#1f4e79 !important;color:#fff !important}
+
+  /* Page break control */
+  .ahsp-tbl tr{page-break-inside:avoid}
+  .ahsp-tbl thead{display:table-header-group}
+  .ahsp-tbl tfoot{display:table-footer-group}
+  .ahsp-meta{page-break-inside:avoid}
+  .ahsp-note{page-break-inside:avoid}
+
+  /* Formal header */
+  .print-header{
+    display:block !important;
+    text-align:center;margin-bottom:14px;
+    border-bottom:2px solid #000;padding-bottom:8px;
+  }
+  .print-header h1{font-size:14px;font-weight:800;letter-spacing:.4px}
+  .print-header h2{font-size:12px;font-weight:700;margin-top:4px;border:none;padding:0;color:#000}
+  .print-header p{font-size:10px;color:#333;margin-top:2px}
+
+  @page{ size:A4 portrait; margin:12mm 12mm 14mm 12mm; }
+}
+
+/* Default: print-header disembunyikan di layar */
+.print-header{display:none}
+
 </style>
 </head>
 <body>
@@ -214,6 +336,7 @@ canvas{max-height:320px}
   <!-- ⬇️ TAMBAHKAN BARIS INI ⬇️ -->
   <div class="tab" data-tab="recon">🔀 Rekonsiliasi RAB→RAP</div>
   <!-- ⬆️ SAMPAI SINI ⬆️ -->
+  <div class="tab" data-tab="lembar">📋 Lembar AHSP PUPR</div>
 
   <div class="tab" data-tab="projects">🏗 Proyek</div>
   <div class="tab" data-tab="settings">⚙ Pengaturan</div>
@@ -416,6 +539,29 @@ canvas{max-height:320px}
       <div class="subpanel" id="sub-rekap">
         <div class="tw"><table id="tblRecon"></table></div>
       </div>
+    </div>
+  </section>
+
+    <!-- LEMBAR AHSP PUPR -->
+  <section class="section" id="sec-lembar">
+    <div class="panel no-print">
+      <div class="panel-head">
+        <div>
+          <h2>Lembar Analisis Harga Satuan Pekerjaan (AHSP) — Permen PUPR</h2>
+          <p>Tampilan baku sesuai format Kementerian PUPR dengan kalkulasi otomatis</p>
+        </div>
+        <div class="row">
+          <select id="lembarProjSel" style="width:180px"></select>
+          <select id="lembarAhspSel" style="width:340px"></select>
+          <button class="btn" id="btnLembarExportCSV">⬇ Export CSV</button>
+          <button class="btn btn-primary" id="btnLembarPrint">🖨 Cetak / PDF</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Area yang akan dicetak -->
+    <div class="panel print-area" id="ahspLembarWrap">
+      <div class="empty">Pilih proyek dan item AHSP untuk menampilkan lembar.</div>
     </div>
   </section>
 
@@ -793,18 +939,57 @@ function seedData(){
    KALKULASI ENGINE
    ===================================================================== */
 const Calc = {
-  /** Kapasitas produksi alat per jam (Q) — m3/jam atau unit/jam */
-  Q(alat){
+  /** Q untuk RAB — menggunakan parameter KONTRAK asli (locked) */
+  QRAB(alat){
     if (!alat || alat.jenis !== 'alat') return 0;
     const V  = num(alat.kapasitas_bucket);
-    const Fb = num(alat.faktor_bucket)   || 1;
-    const Fa = num(alat.faktor_efisiensi)|| 0.75;
+    const Fb = num(alat.faktor_bucket)    || 1;
+    const Fa = num(alat.faktor_efisiensi) || 0.75;
     const Ts = num(alat.waktu_siklus);
-    const Fk = num(alat.faktor_koreksi)  || 1;
-    const Fv = num(alat.faktor_konversi) || 1;
+    const Fk = num(alat.faktor_koreksi)   || 1;
+    const Fv = num(alat.faktor_konversi)  || 1;
     if (V <= 0 || Ts <= 0) return 0;
-    // Q = (V × Fb × Fa × 3600) / (Ts × Fk × Fv)
     return (V * Fb * Fa * 3600) / (Ts * Fk * Fv);
+  },
+
+    /** Q untuk RAP — memakai parameter LAPANGAN bila ada (fallback ke kontrak) */
+  QRAP(alat){
+    if (!alat || alat.jenis !== 'alat') return 0;
+    const V  = num(alat.kapasitas_bucket);
+    const Fb = num(alat.faktor_bucket)    || 1;
+    const Fa = num(alat.fa_lapangan)      || num(alat.faktor_efisiensi) || 0.75;
+    const Ts = num(alat.ts_lapangan)      || num(alat.waktu_siklus);
+    const Fk = num(alat.fk_lapangan)      || num(alat.faktor_koreksi)   || 1;
+    const Fv = num(alat.faktor_konversi)  || 1;
+    if (V <= 0 || Ts <= 0) return 0;
+    return (V * Fb * Fa * 3600) / (Ts * Fk * Fv);
+  },
+
+    /** Alias backward compat */
+  Q(alat){ return this.QRAB(alat); },
+
+  /** Koefisien RAB — SELALU dari Q kontrak (locked) */
+  koefRAB(det, res){
+    if (res && res.jenis === 'alat' && num(res.hitung_q) === 1){
+      const q = this.QRAB(res);
+      if (q > 0) return 1 / q;
+    }
+    return num(det.koefisien_master);
+  },
+
+  /** Koefisien RAP — prioritas: override manual → Q lapangan → master */
+  koefRAP(det, res){
+    // 1) Override manual eksplisit
+    if (det.koefisien_rap !== undefined && det.koefisien_rap !== null && det.koefisien_rap !== ''){
+      return num(det.koefisien_rap);
+    }
+    // 2) Alat dengan Q otomatis → pakai parameter lapangan
+    if (res && res.jenis === 'alat' && num(res.hitung_q) === 1){
+      const q = this.QRAP(res);
+      if (q > 0) return 1 / q;
+    }
+    // 3) Fallback
+    return this.koefRAB(det, res);
   },
 
   /** Koefisien RAB untuk sebuah detail AHSP */
@@ -972,7 +1157,7 @@ function cloneAhspToProject(projectId){
         ahsp_id: a.id,
         resource_id: d.resource_id,
         koefisien_master: koefMaster,
-        koefisien_rap: koefMaster,          // mulai sama, bisa dioverride
+        koefisien_rap: null,   // null = inherit dari Q lapangan
         harga_rab: r ? num(r.harga_rab) : 0,
         harga_rap: r ? num(r.harga_rap) : 0,
         keterangan: d.keterangan || ''
@@ -1009,6 +1194,7 @@ function switchTab(name){
   if (name==='projects')  renderProjects();
   if (name==='settings')  renderSettings();
   if (name==='recon')     { if (!DB.bj_material) seedReconMasterData(); renderReconRekap(); }
+  if (name==='lembar')    { initLembar(); }
 }
 
 /* =====================================================================
@@ -1106,6 +1292,16 @@ function formResource(id){
       <div class="row" style="margin-top:12px">
         <div class="field" style="flex:2"><label class="f">Keterangan Kondisi</label><input id="fr_ket" value="${esc(r?.ket_koreksi||'')}" placeholder="mis. Kondisi lumpur tinggi, sirkulasi air deras" /></div>
       </div>
+            <div class="sep"></div>
+      <p class="hint" style="margin-bottom:10px"><b>Parameter Lapangan (RAP)</b> — hanya memengaruhi Koefisien & Harga Satuan RAP, <b>tidak mengubah RAB Kontrak</b></p>
+      <div class="row">
+        <div class="field"><label class="f">Ts Lapangan (detik)</label><input id="fr_ts_lap" type="number" step="0.1" value="${num(r?.ts_lapangan)}" placeholder="kosong = sama dengan kontrak" /></div>
+        <div class="field"><label class="f">Fk Lapangan (basah/lumpur)</label><input id="fr_fk_lap" type="number" step="0.01" value="${num(r?.fk_lapangan)}" placeholder="kosong = sama dengan kontrak" /></div>
+        <div class="field"><label class="f">Fa Lapangan</label><input id="fr_fa_lap" type="number" step="0.01" value="${num(r?.fa_lapangan)}" placeholder="kosong = sama dengan kontrak" /></div>
+      </div>
+      <div class="row" style="margin-top:12px">
+        <div class="field" style="flex:2"><label class="f">Catatan Kondisi Lapangan</label><input id="fr_ket_lap" value="${esc(r?.ket_lapangan||'')}" placeholder="mis. Lumpur tinggi, genangan air" /></div>
+      </div>
     </div>
   `;
 
@@ -1119,6 +1315,8 @@ function formResource(id){
       satuan: $('#fr_satuan').value.trim(),
       harga_rab: num($('#fr_hrab').value),
       harga_rap: num($('#fr_hrap').value)
+      biaya_umum: num($('#fa_umum').value),
+      margin: num($('#fa_margin').value),
     };
     if (!obj.kode || !obj.nama){ toast('Kode & Nama wajib diisi', false); return false; }
     if (jenis==='alat'){
@@ -1132,6 +1330,10 @@ function formResource(id){
         faktor_koreksi: num($('#fr_fk').value),
         faktor_konversi: num($('#fr_fv').value),
         ket_koreksi: $('#fr_ket').value.trim()
+        ts_lapangan: num($('#fr_ts_lap').value) || null,
+        fk_lapangan: num($('#fr_fk_lap').value) || null,
+        fa_lapangan: num($('#fr_fa_lap').value) || null,
+        ket_lapangan: $('#fr_ket_lap').value.trim()
       });
     }
     if (r) Object.assign(r, obj);
@@ -1281,6 +1483,8 @@ function formAhsp(id){
       <div class="field"><label class="f">Satuan</label><input id="fa_satuan" value="${esc(a?.satuan||'m3')}" /></div>
       <div class="field"><label class="f">Kategori</label><input id="fa_kat" value="${esc(a?.kategori||'')}" /></div>
       <div class="field"><label class="f">Overhead &amp; Margin (%)</label><input id="fa_oh" type="number" step="0.01" value="${num(a?.overhead ?? SET.overhead)}" /></div>
+      <div class="field"><label class="f">Biaya Umum (%)</label><input id="fa_umum" type="number" step="0.01" value="${num(a?.biaya_umum ?? 2)}" /></div>
+      <div class="field"><label class="f">Biaya Keuntungan (%)</label><input id="fa_margin" type="number" step="0.01" value="${num(a?.margin ?? 4)}" /></div>      
     </div>
     <div class="sep"></div>
     <p class="hint" style="margin-bottom:8px"><b>Komponen Penyusun</b> — pilih resource dan isi koefisien. Biarkan koefisien 0 untuk alat ber-Q otomatis.</p>
@@ -1753,6 +1957,8 @@ function formProject(id){
       tgl_selesai: $('#fpj_ts').value,
       ppn: num(SET.ppn),
       overhead: num(SET.overhead)
+      biaya_umum: num($('#fa_umum').value),
+      margin: num($('#fa_margin').value),
     };
     if (p) Object.assign(p, obj);
     else {
@@ -2598,21 +2804,246 @@ function initRecon(){
 }
 
 /* =====================================================================
+   MODUL LEMBAR AHSP PUPR (Requirement 1)
+   ===================================================================== */
+function renderLembarAhsp(){
+  const pid = $('#lembarProjSel').value;
+  const aid = $('#lembarAhspSel').value;
+  const wrap = $('#ahspLembarWrap');
+  if (!pid || !aid){
+    wrap.innerHTML = '<div class="empty">Pilih proyek dan item AHSP.</div>';
+    return;
+  }
+  const proj = DB.projects.find(p=>p.id===pid);
+  const ahsp = DB.ahsp_headers.find(a=>a.id===aid);
+  if (!ahsp){ wrap.innerHTML = '<div class="empty">AHSP tidak ditemukan.</div>'; return; }
+
+  const dets = DB.project_ahsp_details.filter(d=>d.project_id===pid && d.ahsp_id===aid);
+
+  // Kelompokkan per kategori
+  const groups = {upah:[], bahan:[], alat:[]};
+  dets.forEach(d=>{
+    const r = DB.master_resources.find(x=>x.id===d.resource_id);
+    if (!r) return;
+    const row = {
+      kode: r.kode,
+      nama: r.nama,
+      satuan: r.satuan,
+      kRAB: Calc.koefRAB(d, r),
+      kRAP: Calc.koefRAP(d, r),
+      hRAB: num(d.harga_rab),
+      hRAP: num(d.harga_rap),
+      isAlat: r.jenis==='alat'
+    };
+    row.subRAB = row.kRAB * row.hRAB;
+    row.subRAP = row.kRAP * row.hRAP;
+    (groups[r.jenis] || groups.bahan).push(row);
+  });
+
+  const sum = arr => arr.reduce((s,x)=>s+x.subRAB,0);
+  const totI = sum(groups.upah);
+  const totII = sum(groups.bahan);
+  const totIII = sum(groups.alat);
+  const IV = totI + totII + totIII;
+
+  const ohPct = num(ahsp.overhead ?? SET.overhead);
+  const marginPct = num(ahsp.margin ?? 4);   // fallback 4% bila tak di-set
+  const umumPct = num(ahsp.biaya_umum ?? 2); // fallback 2%
+
+  const V  = IV * (umumPct/100);
+  const VI = IV * (marginPct/100);
+  const VII = IV + V + VI;
+  const VIII = Math.round(VII);
+
+  const fmtNum = n => fmt(n,2);
+  const fmtRp  = n => rp(n);
+  const fmtKoef = n => fmt(n, 6);
+
+  const rowH = (arr, no, isAlat) => arr.map((x,i)=>{
+    const koefTxt = isAlat
+      ? `<span title="Koef RAB / RAP">${fmtKoef(x.kRAB)} <span style="color:#999">/</span> ${fmtKoef(x.kRAP)}</span>`
+      : fmtKoef(x.kRAB);
+    const hargaTxt = isAlat
+      ? `${fmtRp(x.hRAB)} <span style="color:#999">/</span> ${fmtRp(x.hRAP)}`
+      : fmtRp(x.hRAB);
+    const subTxt = isAlat
+      ? `${fmtRp(x.subRAB)} <span style="color:#999">/</span> ${fmtRp(x.subRAP)}`
+      : fmtRp(x.subRAB);
+    return `<tr>
+      <td class="ctr">${i+1}</td>
+      <td>${esc(x.nama)}</td>
+      <td class="ctr">${esc(x.satuan)}</td>
+      <td class="num">${koefTxt}</td>
+      <td class="num">${hargaTxt}</td>
+      <td class="num">${subTxt}</td>
+    </tr>`;
+  }).join('');
+
+  wrap.innerHTML = `
+    <div class="print-header">
+      <h1>LEMBAR ANALISIS HARGA SATUAN PEKERJAAN</h1>
+      <h2>${esc(proj?.nama || '')}</h2>
+      <p>${esc(proj?.lokasi || '')} — Kode: ${esc(proj?.kode || '')}</p>
+    </div>
+
+    <div class="ahsp-sheet">
+      <h2>ANALISA HARGA SATUAN PEKERJAAN (AHSP)</h2>
+
+      <div class="ahsp-meta">
+        <div class="k">Kode Permen</div><div>:</div><div class="v">${esc(ahsp.kode)}</div>
+        <div class="k">Item Pekerjaan</div><div>:</div><div class="v">${esc(ahsp.nama)}</div>
+        <div class="k">Satuan</div><div>:</div><div class="v">${esc(ahsp.satuan)}</div>
+        <div class="k">Kategori</div><div>:</div><div class="v">${esc(ahsp.kategori || '-')}</div>
+      </div>
+
+      <table class="ahsp-tbl">
+        <thead>
+          <tr>
+            <th style="width:42px">No</th>
+            <th>Uraian</th>
+            <th style="width:60px">Satuan</th>
+            <th style="width:110px">Koefisien<br/><span style="font-weight:400;font-size:9px">(RAB / RAP)</span></th>
+            <th style="width:150px">Harga Satuan (Rp.)<br/><span style="font-weight:400;font-size:9px">(RAB / RAP)</span></th>
+            <th style="width:160px">Jumlah Harga (Rp.)<br/><span style="font-weight:400;font-size:9px">(RAB / RAP)</span></th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr class="subhead"><td class="ctr">I</td><td colspan="5">UPAH</td></tr>
+          ${groups.upah.length ? rowH(groups.upah, 'I', false) : '<tr><td colspan="6" style="text-align:center;color:#999;font-style:italic">— tidak ada komponen upah —</td></tr>'}
+          <tr class="subtotal"><td></td><td colspan="4" style="text-align:right">Subtotal I (Upah)</td><td class="num">${fmtRp(totI)}</td></tr>
+
+          <tr class="subhead"><td class="ctr">II</td><td colspan="5">BAHAN</td></tr>
+          ${groups.bahan.length ? rowH(groups.bahan, 'II', false) : '<tr><td colspan="6" style="text-align:center;color:#999;font-style:italic">— tidak ada komponen bahan —</td></tr>'}
+          <tr class="subtotal"><td></td><td colspan="4" style="text-align:right">Subtotal II (Bahan)</td><td class="num">${fmtRp(totII)}</td></tr>
+
+          <tr class="subhead"><td class="ctr">III</td><td colspan="5">ALAT</td></tr>
+          ${groups.alat.length ? rowH(groups.alat, 'III', true) : '<tr><td colspan="6" style="text-align:center;color:#999;font-style:italic">— tidak ada komponen alat —</td></tr>'}
+          <tr class="subtotal"><td></td><td colspan="4" style="text-align:right">Subtotal III (Alat)</td><td class="num">${fmtRp(totIII)}</td></tr>
+
+          <tr class="roman"><td class="ctr">IV</td><td colspan="4">Jumlah (I + II + III)</td><td class="num">${fmtRp(IV)}</td></tr>
+          <tr class="roman"><td class="ctr">V</td><td colspan="4">Biaya Umum / Overhead (${fmt(umumPct,2)}%)</td><td class="num">${fmtRp(V)}</td></tr>
+          <tr class="roman"><td class="ctr">VI</td><td colspan="4">Biaya Keuntungan / Margin (${fmt(marginPct,2)}%)</td><td class="num">${fmtRp(VI)}</td></tr>
+          <tr class="roman"><td class="ctr">VII</td><td colspan="4">Jumlah Harga (IV + V + VI)</td><td class="num">${fmtRp(VII)}</td></tr>
+          <tr class="grand-total"><td class="ctr">VIII</td><td colspan="4">DIBULATKAN — Harga Satuan Pekerjaan</td><td class="num">${fmtRp(VIII)}</td></tr>
+        </tbody>
+      </table>
+
+      <div class="ahsp-note">
+        Catatan: Kolom Koefisien/Harga/Jumlah menampilkan nilai <b>RAB / RAP</b> secara berdampingan untuk komponen Alat.
+        Koefisien RAB dikunci dari parameter kontrak; koefisien RAP dihitung dari parameter lapangan (Ts, Fk, Fa lapangan).
+        Harga satuan RAB termasuk overhead &amp; margin; harga satuan RAP bersih tanpa profit internal.
+      </div>
+
+      <div class="ahsp-actions no-print">
+        <button class="btn" id="btnLembarExportCSV2">⬇ Export CSV</button>
+        <button class="btn btn-primary" onclick="window.print()">🖨 Cetak / PDF</button>
+      </div>
+    </div>
+  `;
+
+  // Wire export CSV
+  setTimeout(()=>{
+    const btn = document.getElementById('btnLembarExportCSV2');
+    if (btn) btn.onclick = exportLembarCSV;
+  }, 50);
+
+  window._lastLembarCSV = {
+    proj: proj, ahsp: ahsp, groups: groups,
+    I: totI, II: totII, III: totIII, IV, V, VI, VII, VIII,
+    umumPct, marginPct
+  };
+}
+
+function exportLembarCSV(){
+  const d = window._lastLembarCSV;
+  if (!d){ toast('Belum ada lembar untuk diexport', false); return; }
+  const lines = [];
+  lines.push(`"Kode Permen","${d.ahsp.kode}"`);
+  lines.push(`"Item Pekerjaan","${d.ahsp.nama}"`);
+  lines.push(`"Satuan","${d.ahsp.satuan}"`);
+  lines.push('');
+  lines.push('"No","Uraian","Satuan","Koefisien RAB","Harga Satuan RAB","Jumlah RAB"');
+
+  const emit = (arr, label) => {
+    lines.push(`"","${label}","","","",""`);
+    arr.forEach((x,i)=>{
+      lines.push(`"${i+1}","${x.nama.replace(/"/g,'""')}","${x.satuan}","${x.kRAB.toFixed(6)}","${Math.round(x.hRAB)}","${Math.round(x.subRAB)}"`);
+    });
+  };
+  emit(d.groups.upah, 'I. UPAH');
+  emit(d.groups.bahan, 'II. BAHAN');
+  emit(d.groups.alat, 'III. ALAT');
+  lines.push('');
+  lines.push(`"IV","Jumlah (I+II+III)","","","","${Math.round(d.IV)}"`);
+  lines.push(`"V","Biaya Umum (${d.umumPct}%)","","","","${Math.round(d.V)}"`);
+  lines.push(`"VI","Biaya Keuntungan (${d.marginPct}%)","","","","${Math.round(d.VI)}"`);
+  lines.push(`"VII","Jumlah Harga","","","","${Math.round(d.VII)}"`);
+  lines.push(`"VIII","DIBULATKAN","","","","${Math.round(d.VIII)}"`);
+
+  const csv = lines.join('\n');
+  const blob = new Blob(['\ufeff' + csv], {type:'text/csv;charset=utf-8'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `AHSP-${d.ahsp.kode}-${today()}.csv`;
+  a.click();
+  toast('CSV lembar AHSP diexport');
+}
+
+/* =====================================================================
+   DETEKSI OTOMATIS REKONSILIASI (Requirement 6)
+   ===================================================================== */
+function detectReconNeeds(projectId, ahspId){
+  const dets = DB.project_ahsp_details.filter(d=>d.project_id===projectId && d.ahsp_id===ahspId);
+  const keywords = {
+    bekisting: /bekisting|perancah|multiplex|kayu/i,
+    beton:     /beton|readymix|ready mix|site mix|beton mutu/i,
+    material:  /pasir|kerikil|split|batu|agregat|semen/i
+  };
+  const result = { bekisting:false, beton:false, material:false, items:[] };
+  dets.forEach(d=>{
+    const r = DB.master_resources.find(x=>x.id===d.resource_id);
+    if (!r) return;
+    const txt = r.nama + ' ' + (r.kode || '');
+    if (keywords.bekisting.test(txt) && !result.bekisting){ result.bekisting = true; result.items.push({jenis:'bekisting', nama:r.nama}); }
+    if (keywords.beton.test(txt) && !result.beton){ result.beton = true; result.items.push({jenis:'beton', nama:r.nama}); }
+    if (keywords.material.test(txt) && !result.material){ result.material = true; result.items.push({jenis:'material', nama:r.nama}); }
+  });
+  return result;
+}
+
+/* =====================================================================
+   INIT LEMBAR
+   ===================================================================== */
+function initLembar(){
+  const ps = $('#lembarProjSel');
+  const as = $('#lembarAhspSel');
+  ps.innerHTML = DB.projects.map(p=>`<option value="${p.id}">${esc(p.kode)} — ${esc(p.nama)}</option>`).join('');
+  as.innerHTML = DB.ahsp_headers.map(a=>`<option value="${a.id}">${esc(a.kode)} — ${esc(a.nama)}</option>`).join('');
+  if (STATE.activeProject) ps.value = STATE.activeProject;
+  if (DB.ahsp_headers.length) as.value = DB.ahsp_headers[0].id;
+
+  ps.onchange = renderLembarAhsp;
+  as.onchange = renderLembarAhsp;
+  $('#btnLembarPrint').onclick = () => window.print();
+  $('#btnLembarExportCSV').onclick = exportLembarCSV;
+
+  renderLembarAhsp();
+}
+
+/* =====================================================================
    INIT
    ===================================================================== */
 (function init(){
   loadSET();
   const ok = loadDB();
-  if (!ok || !DB.projects || !DB.projects.length){
-    seedData();
-  }
+  if (!ok || !DB.projects || !DB.projects.length){ seedData(); }
   STATE.activeProject = DB.projects[0]?.id || '';
   renderProjectSelector();
   renderAll();
   renderSettings();
-  seedReconMasterData();   // <-- TAMBAHAN
-  initRecon();             // <-- TAMBAHAN
-  console.log('%cManajemen Konstruksi v1','color:#1abc9c;font-size:14px;font-weight:bold','— siap digunakan.');
+  seedReconMasterData();
+  initRecon();
+  console.log('%cManajemen Konstruksi v1 — siap digunakan','color:#1abc9c;font-size:14px;font-weight:bold');
 })();
 </script>
 </body>
