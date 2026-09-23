@@ -1129,3 +1129,156 @@ canvas{
 .fs-sm{font-size:11px}
 .fs-md{font-size:12px}
 .nowrap{white-space:nowrap}
+
+/* =====================================================================
+   GANTT CHART — MS PROJECT STYLE (Fase 1)
+   ===================================================================== */
+.gantt-root{
+  --gantt-row-h:26px;
+  --gantt-head-h:34px;
+  --gantt-axis-h:60px;
+  display:flex;
+  flex-direction:column;
+  border:1px solid var(--line);
+  border-radius:var(--radius);
+  overflow:hidden;
+  background:#0c1729;
+  font-size:12px;
+}
+
+.gantt-toolbar{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  padding:10px 14px;
+  background:#0e1a30;
+  border-bottom:1px solid var(--line);
+  flex-wrap:wrap;
+}
+.gantt-toolbar-left{display:flex;flex-direction:column;gap:2px}
+.gantt-title{font-weight:700;color:var(--txt);font-size:13px}
+.gantt-subtitle{font-size:11px;color:var(--muted)}
+.gantt-toolbar-right{display:flex;align-items:center;gap:8px}
+.gantt-lbl{font-size:10.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
+.gantt-zoom{padding:5px 9px;font-size:12px;width:auto}
+
+/* Grid: kiri (tabel) + kanan (chart) */
+.gantt-grid{
+  display:grid;
+  grid-template-columns:var(--gantt-table-w,640px) 1fr;
+  height:60vh;
+  min-height:340px;
+}
+
+/* ── Sisi kiri: Entry Table ── */
+.gantt-left{
+  border-right:1px solid var(--line);
+  display:flex;
+  flex-direction:column;
+  overflow:hidden;
+  background:#0c1729;
+}
+.gantt-thead{
+  display:flex;
+  height:var(--gantt-head-h);
+  background:#1f4e79;
+  color:#fff;
+  font-size:10.5px;
+  font-weight:700;
+  text-transform:uppercase;
+  letter-spacing:.5px;
+  overflow:hidden;
+  flex-shrink:0;
+}
+.gantt-th{
+  padding:0 8px;
+  display:flex;
+  align-items:center;
+  border-right:1px solid rgba(255,255,255,.08);
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+.gantt-tbody{
+  flex:1;
+  overflow-y:auto;
+  overflow-x:hidden;
+}
+.gantt-tbody::-webkit-scrollbar{width:0}
+
+.gantt-row{
+  display:flex;
+  height:var(--gantt-row-h);
+  line-height:var(--gantt-row-h);
+  border-bottom:1px solid rgba(36,54,92,.4);
+  transition:background .1s;
+  cursor:default;
+}
+.gantt-row:hover{background:rgba(47,129,247,.08)}
+.gantt-row.is-summary{background:rgba(47,129,247,.06);font-weight:700}
+.gantt-row.is-critical{background:rgba(220,38,38,.05)}
+.gantt-row.is-critical:hover{background:rgba(220,38,38,.11)}
+.gantt-row.is-critical .gantt-td:first-child{
+  border-left:3px solid #dc2626;
+  padding-left:5px;
+}
+
+.gantt-td{
+  padding:0 8px;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  border-right:1px solid rgba(36,54,92,.4);
+  font-variant-numeric:tabular-nums;
+  font-size:11.5px;
+  color:var(--txt);
+}
+.gantt-td:last-child{border-right:none}
+
+.gantt-indent{display:inline-block;height:1px}
+.gantt-expand{
+  display:inline-block;
+  width:12px;
+  color:var(--muted);
+  font-size:9px;
+  cursor:pointer;
+}
+.gantt-diamond-inline{
+  color:#0f172a;
+  font-size:9px;
+  margin-right:4px;
+  vertical-align:middle;
+}
+
+/* ── Sisi kanan: Chart ── */
+.gantt-right{
+  position:relative;
+  overflow:hidden;
+  background:#0b1220;
+}
+.gantt-axis-top{
+  height:var(--gantt-axis-h);
+  background:#0e1a30;
+  border-bottom:1px solid var(--line);
+  position:sticky;
+  top:0;
+  z-index:5;
+}
+.gantt-chart-scroll{
+  width:100%;
+  height:100%;
+  overflow:auto;
+  position:relative;
+}
+.gantt-canvas-wrap{position:relative}
+.gantt-axis{
+  display:block;
+  position:sticky;
+  top:0;
+  z-index:5;
+}
+.gantt-bars{display:block}
+
+/* Fix Chart.js lama tidak dipakai di panel ini */
+#ganttContainer canvas{max-height:none !important}
