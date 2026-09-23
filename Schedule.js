@@ -1303,12 +1303,16 @@ function testResourceLoader(projectId){
 }
 
 /* =====================================================================
-   BAGIAN 9A — GANTT ENGINE (Fase 1: Data Layer)
-   Bangun tree WBS → rollup summary → hitung progress%
+   BAGIAN 9 — GANTT CHART MS PROJECT STYLE (Fase 1)
+   A. GanttEngine — Data Layer (tree, rollup, progress)
+   B. GanttView  — Presentation Layer (table + bars + axis)
    ===================================================================== */
+
+/* ═══════════════════════════════════════════════════════════
+   A. GANTT ENGINE — Data Layer
+   ═══════════════════════════════════════════════════════════ */
 const GanttEngine = {
 
-  /* ── Bangun tree hierarkis dari project_wbs ── */
   buildTree(projectId, opts){
     opts = opts || {};
     const mode = opts.mode || 'rab';
@@ -1341,7 +1345,6 @@ const GanttEngine = {
     return { ok:true, nodes, proj };
   },
 
-  /* ── Buat satu node Gantt dari item WBS ── */
   makeNode(w, level, proj, mode){
     const isSummary = !!w.is_group;
     const duration  = num(w.durasi_hari) || num(w.duration) || (isSummary ? 0 : 1);
@@ -1379,7 +1382,6 @@ const GanttEngine = {
     };
   },
 
-  /* ── Format predecessor "I.1 FS+2" ── */
   formatPred(w){
     if (!w.predecessor) return '';
     const pred = DB.project_wbs.find(x => x.id === w.predecessor);
@@ -1392,7 +1394,6 @@ const GanttEngine = {
     return s;
   },
 
-  /* ── Format resource "Pekerja (0,35 OH), Mandor (0,04 OH)" ── */
   formatResources(w, proj, mode){
     if (!w.ahsp_id) return '';
     const dets = DB.project_ahsp_details.filter(d =>
@@ -1410,7 +1411,6 @@ const GanttEngine = {
     return parts.join(', ');
   },
 
-  /* ── Rollup summary: ES=min child, EF=max child, progress weighted ── */
   rollup(nodes){
     const maxLevel = Math.max(...nodes.map(n => n.level), 0);
     for (let lvl = maxLevel; lvl >= 0; lvl--){
@@ -1438,9 +1438,9 @@ const GanttEngine = {
   }
 };
 
-/* =====================================================================
-   BAGIAN 9B — GANTT VIEW (Fase 1: Presentation Layer)
-   ===================================================================== */
+/* ═══════════════════════════════════════════════════════════
+   B. GANTT VIEW — Presentation Layer
+   ═══════════════════════════════════════════════════════════ */
 const GanttView = {
 
   ZOOM: {
@@ -1449,9 +1449,8 @@ const GanttView = {
     monthly: { pxPerDay: 4,  label: 'Bulanan'  }
   },
 
-  ROW_H:     26,
-  AXIS_H:    60,
-  HEAD_H:    34,
+  ROW_H:  26,
+  AXIS_H: 60,
 
   COLUMNS: [
     { key:'kode',         label:'ID',        width: 60, align:'left'  },
@@ -1465,18 +1464,18 @@ const GanttView = {
 
   _state: null,
 
-  /* ═══ MOUNT — entry point yang dipanggil dari renderSchedule() ═══ */
+  /* ─────── MOUNT ─────── */
   mount(container, projectId, opts){
     if (!container) return null;
     opts = opts || {};
 
     const tree = GanttEngine.buildTree(projectId, { mode: opts.mode || 'rab' });
     if (!tree.ok){
-      container.innerHTML = `<div class="empty">${esc(tree.error)}</div>`;
+      container.innerHTML = '<div class="empty">' + esc(tree.error) + '</div>';
       return null;
     }
     if (!tree.nodes.length){
-      container.innerHTML = `<div class="empty">Belum ada item WBS. Tambahkan dulu di tab <b>WBS / BQ</b>.</div>`;
+      container.innerHTML = '<div class="empty">Belum ada item WBS. Tambahkan dulu di tab <b>WBS / BQ</b>.</div>';
       return null;
     }
 
@@ -1489,7 +1488,7 @@ const GanttView = {
       if (n.finishISO) allDates.push(n.finishISO);
     });
     if (!allDates.length){
-      container.innerHTML = `<div class="empty">Item WBS belum punya jadwal. Jalankan <b>Recalculate CPM</b> terlebih dahulu.</div>`;
+      container.innerHTML = '<div class="empty">Item WBS belum punya jadwal. Jalankan <b>Recalculate CPM</b> dulu.</div>';
       return null;
     }
     allDates.sort();
@@ -1513,129 +1512,69 @@ const GanttView = {
       mode: opts.mode || 'rab', cal
     };
     this._state = state;
+    container._lastZoom = zoom;
 
-   this.renderLayout(state);
-   this.wireEvents(state);
-   state.container._lastZoom = zoom;    // ← tambahkan ini
-   return state;
+    this.renderLayout(state);
+    this.wireEvents(state);
+    return state;
+  },
 
-  /* ═══ LAYOUT (Fase 1.1 — alignment fix) ═══ */
+  /* ─────── LAYOUT ─────── */
   renderLayout(state){
     const {container, nodes, chartWidth, totalHeight, proj, zoom} = state;
     const tableW = this.COLUMNS.reduce((s,c) => s + c.width, 0);
 
-    container.innerHTML = `
-      <div class="gantt-root" style="--gantt-table-w:${tableW}px">
-        <div class="gantt-toolbar">
-          <div class="gantt-toolbar-left">
-            <div class="gantt-title">🗓 ${esc(proj.kode)} — Gantt Chart</div>
-            <div class="gantt-subtitle">${esc(proj.nama)} · ${esc(proj.tgl_mulai)} → ${esc(proj.tgl_selesai)}</div>
-          </div>
-          <div class="gantt-toolbar-right">
-            <span class="gantt-lbl">Zoom</span>
-            <select class="gantt-zoom">
-              <option value="daily"   ${zoom==='daily'   ?'selected':''}>Harian</option>
-              <option value="weekly"  ${zoom==='weekly'  ?'selected':''}>Mingguan</option>
-              <option value="monthly" ${zoom==='monthly' ?'selected':''}>Bulanan</option>
-            </select>
-            <button class="btn btn-sm gantt-btn-today">📍 Hari Ini</button>
-          </div>
-        </div>
-
-        <div class="gantt-grid">
-          <!-- ── ENTRY TABLE ── -->
-          <div class="gantt-left">
-            <div class="gantt-thead">
-              ${this.COLUMNS.map(c =>
-                `<div class="gantt-th" style="width:${c.width}px;text-align:${c.align}">${esc(c.label)}</div>`
-              ).join('')}
-            </div>
-            <div class="gantt-tbody">
-              ${nodes.map((n,i) => this.rowHtml(n,i)).join('')}
-            </div>
-          </div>
-
-          <!-- ── CHART ── -->
-          <div class="gantt-right">
-            <div class="gantt-axis-top">
-              <div class="gantt-axis-track" style="width:${chartWidth}px">
-                <canvas class="gantt-axis" width="${chartWidth}" height="${this.AXIS_H}"></canvas>
-              </div>
-            </div>
-            <div class="gantt-chart-scroll">
-              <canvas class="gantt-bars" width="${chartWidth}" height="${totalHeight}"></canvas>
-            </div>
-          </div>
-        </div>
-      </div>
-    `;
+    container.innerHTML =
+      '<div class="gantt-root" style="--gantt-table-w:' + tableW + 'px">' +
+        '<div class="gantt-toolbar">' +
+          '<div class="gantt-toolbar-left">' +
+            '<div class="gantt-title">🗓 ' + esc(proj.kode) + ' — Gantt Chart</div>' +
+            '<div class="gantt-subtitle">' + esc(proj.nama) + ' · ' + esc(proj.tgl_mulai) + ' → ' + esc(proj.tgl_selesai) + '</div>' +
+          '</div>' +
+          '<div class="gantt-toolbar-right">' +
+            '<span class="gantt-lbl">Zoom</span>' +
+            '<select class="gantt-zoom">' +
+              '<option value="daily"   ' + (zoom==='daily'   ?'selected':'') + '>Harian</option>' +
+              '<option value="weekly"  ' + (zoom==='weekly'  ?'selected':'') + '>Mingguan</option>' +
+              '<option value="monthly" ' + (zoom==='monthly' ?'selected':'') + '>Bulanan</option>' +
+            '</select>' +
+            '<button class="btn btn-sm gantt-btn-today">📍 Hari Ini</button>' +
+          '</div>' +
+        '</div>' +
+        '<div class="gantt-grid">' +
+          '<div class="gantt-left">' +
+            '<div class="gantt-thead">' +
+              this.COLUMNS.map(c =>
+                '<div class="gantt-th" style="width:' + c.width + 'px;text-align:' + c.align + '">' + esc(c.label) + '</div>'
+              ).join('') +
+            '</div>' +
+            '<div class="gantt-tbody">' +
+              nodes.map((n,i) => this.rowHtml(n,i)).join('') +
+            '</div>' +
+          '</div>' +
+          '<div class="gantt-right">' +
+            '<div class="gantt-axis-top">' +
+              '<div class="gantt-axis-track" style="width:' + chartWidth + 'px">' +
+                '<canvas class="gantt-axis" width="' + chartWidth + '" height="' + this.AXIS_H + '"></canvas>' +
+              '</div>' +
+            '</div>' +
+            '<div class="gantt-chart-scroll">' +
+              '<canvas class="gantt-bars" width="' + chartWidth + '" height="' + totalHeight + '"></canvas>' +
+            '</div>' +
+          '</div>' +
+        '</div>' +
+      '</div>';
 
     this.drawAxis(state, container.querySelector('.gantt-axis'));
     this.drawBars(state, container.querySelector('.gantt-bars'));
   },
 
-  /* ═══ EVENTS (Fase 1.1) ═══ */
-  wireEvents(state){
-    const {container} = state;
-    const leftBody  = container.querySelector('.gantt-tbody');
-    const rightScr  = container.querySelector('.gantt-chart-scroll');
-    const axisTrack = container.querySelector('.gantt-axis-track');
-    const zoomSel   = container.querySelector('.gantt-zoom');
-    const btnToday  = container.querySelector('.gantt-btn-today');
-
-    // ── Sinkronisasi scroll ──
-    let syncing = false;
-    rightScr.addEventListener('scroll', () => {
-      // Horizontal → geser axis track
-      axisTrack.style.transform = `translateX(${-rightScr.scrollLeft}px)`;
-      // Vertikal → sinkron ke tabel kiri
-      if (!syncing){
-        syncing = true;
-        leftBody.scrollTop = rightScr.scrollTop;
-        syncing = false;
-      }
-    });
-    leftBody.addEventListener('scroll', () => {
-      if (syncing) return;
-      syncing = true;
-      rightScr.scrollTop = leftBody.scrollTop;
-      syncing = false;
-    });
-
-    // ── Zoom (pertahankan state.zoom saat re-mount) ──
-    zoomSel.onchange = e => {
-      this.mount(state.container, state.proj.id, {
-        mode: state.mode, zoom: e.target.value
-      });
-    };
-
-    // ── Today ──
-    btnToday.onclick = () => {
-      const today = new Date(); today.setHours(0,0,0,0);
-      const off = Math.round((today - state.startDate) / 86400000);
-      const x = off * state.zoomCfg.pxPerDay;
-      rightScr.scrollLeft = Math.max(0, x - rightScr.clientWidth / 2);
-      axisTrack.style.transform = `translateX(${-rightScr.scrollLeft}px)`;
-    };
-
-    // ── Auto-scroll ke today saat mount ──
-    setTimeout(() => {
-      const today = new Date(); today.setHours(0,0,0,0);
-      const off = Math.round((today - state.startDate) / 86400000);
-      if (off >= 0){
-        const x = off * state.zoomCfg.pxPerDay;
-        rightScr.scrollLeft = Math.max(0, x - rightScr.clientWidth / 2);
-        axisTrack.style.transform = `translateX(${-rightScr.scrollLeft}px)`;
-      }
-    }, 30);
-  },
-
-  /* ═══ ENTRY TABLE ROW ═══ */
+  /* ─────── ROW HTML ─────── */
   rowHtml(node, idx){
     const cls = [
       'gantt-row',
-      node.isSummary   ? 'is-summary'   : '',
-      node.isCritical  ? 'is-critical'  : ''
+      node.isSummary   ? 'is-summary'  : '',
+      node.isCritical  ? 'is-critical' : ''
     ].filter(Boolean).join(' ');
 
     const indent = node.level * 16;
@@ -1645,7 +1584,8 @@ const GanttView = {
       if (c.key === 'nama'){
         const exp = node.isSummary ? '<span class="gantt-expand">▾</span>' : '';
         const dia = node.isMilestone ? '<span class="gantt-diamond-inline">◆</span>' : '';
-        html = `<span class="gantt-indent" style="padding-left:${indent}px"></span>${exp}${dia}${esc(node.nama)}`;
+        html = '<span class="gantt-indent" style="padding-left:' + indent + 'px"></span>' +
+               exp + dia + esc(node.nama);
       } else if (c.key === 'duration'){
         html = node.isMilestone ? '0' : fmt(node.duration, 0);
       } else if (c.key === 'startISO' || c.key === 'finishISO'){
@@ -1653,14 +1593,15 @@ const GanttView = {
       } else {
         html = esc(node[c.key] || '—');
       }
-      return `<div class="gantt-td" style="width:${c.width}px;text-align:${c.align}">${html}</div>`;
+      return '<div class="gantt-td" style="width:' + c.width + 'px;text-align:' + c.align + '">' + html + '</div>';
     }).join('');
 
-    return `<div class="${cls}" data-idx="${idx}">${cells}</div>`;
+    return '<div class="' + cls + '" data-idx="' + idx + '">' + cells + '</div>';
   },
 
-  /* ═══ TIME AXIS ═══ */
+  /* ─────── AXIS ─────── */
   drawAxis(state, canvas){
+    if (!canvas) return;
     const ctx = canvas.getContext('2d');
     const {startDate, endDate, chartWidth, zoom, cal} = state;
     const H = this.AXIS_H, W = chartWidth;
@@ -1669,7 +1610,6 @@ const GanttView = {
     ctx.fillStyle = '#0e1a30';
     ctx.fillRect(0, 0, W, H);
 
-    // Background kerja/libur
     const d = new Date(startDate);
     while (d <= endDate){
       if (!WorkingCalendar.isWorkDay(d, cal)){
@@ -1680,7 +1620,6 @@ const GanttView = {
       d.setDate(d.getDate() + 1);
     }
 
-    // Minor gridline harian
     const d2 = new Date(startDate);
     ctx.strokeStyle = 'rgba(36,54,92,.5)';
     ctx.lineWidth = 1;
@@ -1691,7 +1630,6 @@ const GanttView = {
       ctx.lineTo(x, H);
       ctx.stroke();
 
-      // Label tanggal (harian atau tiap kelipatan 7)
       const showDay = (zoom === 'daily') || (zoom === 'weekly' && d2.getDate() % 7 === 1);
       if (showDay){
         ctx.fillStyle = '#8fa3c4';
@@ -1703,11 +1641,9 @@ const GanttView = {
       d2.setDate(d2.getDate() + 1);
     }
 
-    // Week boundary (garis tebal) & label week number
     const wd = new Date(startDate);
     const dayNr = (wd.getDay() + 6) % 7;
-    wd.setDate(wd.getDate() - dayNr); // rewind ke Senin
-
+    wd.setDate(wd.getDate() - dayNr);
     while (wd <= endDate){
       const x = Math.round((wd - startDate) / 86400000) * px + 0.5;
       if (x >= 0 && x <= W){
@@ -1730,7 +1666,6 @@ const GanttView = {
       wd.setDate(wd.getDate() + 7);
     }
 
-    // Month boundary & label
     let md = new Date(startDate.getFullYear(), startDate.getMonth(), 1);
     while (md <= endDate){
       const x = Math.round((md - startDate) / 86400000) * px + 0.5;
@@ -1758,7 +1693,6 @@ const GanttView = {
       md = new Date(md.getFullYear(), md.getMonth() + 1, 1);
     }
 
-    // Border bawah
     ctx.strokeStyle = '#24365c';
     ctx.beginPath();
     ctx.moveTo(0, H - 0.5);
@@ -1774,8 +1708,9 @@ const GanttView = {
     return 1 + Math.round((t - ft) / (7 * 86400000));
   },
 
-  /* ═══ BARS ═══ */
+  /* ─────── BARS ─────── */
   drawBars(state, canvas){
+    if (!canvas) return;
     const ctx = canvas.getContext('2d');
     const {nodes, startDate, cal} = state;
     const px  = state.zoomCfg.pxPerDay;
@@ -1784,7 +1719,6 @@ const GanttView = {
 
     ctx.clearRect(0, 0, W, H);
 
-    // Row striping
     nodes.forEach((n, i) => {
       if (n.isSummary){
         ctx.fillStyle = 'rgba(47,129,247,.06)';
@@ -1795,7 +1729,6 @@ const GanttView = {
       }
     });
 
-    // Non-working vertical shading
     const dShade = new Date(startDate);
     while (dShade <= state.endDate){
       if (!WorkingCalendar.isWorkDay(dShade, cal)){
@@ -1806,7 +1739,6 @@ const GanttView = {
       dShade.setDate(dShade.getDate() + 1);
     }
 
-    // Today marker
     const today = new Date(); today.setHours(0,0,0,0);
     const tOff = Math.round((today - startDate) / 86400000);
     if (tOff >= 0 && tOff <= state.totalDays){
@@ -1822,15 +1754,13 @@ const GanttView = {
       ctx.lineWidth = 1;
     }
 
-    // Draw bars
     nodes.forEach((n, i) => {
       const y = i * rowH;
-
       if (!n.startISO || !n.finishISO) return;
+
       const sOff = Math.round((new Date(n.startISO) - startDate) / 86400000);
       const fOff = Math.round((new Date(n.finishISO) - startDate) / 86400000);
 
-      // Milestone
       if (n.isMilestone){
         const cx = sOff * px;
         const cy = y + rowH / 2;
@@ -1886,7 +1816,6 @@ const GanttView = {
     ctx.fillStyle = '#0f172a';
     ctx.fillRect(x, y, w, h);
 
-    // End caps segitiga
     ctx.beginPath();
     ctx.moveTo(x, y + h);
     ctx.lineTo(x + 8, y + h);
@@ -1933,25 +1862,34 @@ const GanttView = {
     const r = parseInt(c.substr(0,2),16);
     const g = parseInt(c.substr(2,2),16);
     const b = parseInt(c.substr(4,2),16);
-    return `rgb(${Math.round(r + (255-r)*amt)},${Math.round(g + (255-g)*amt)},${Math.round(b + (255-b)*amt)})`;
+    return 'rgb(' +
+      Math.round(r + (255-r)*amt) + ',' +
+      Math.round(g + (255-g)*amt) + ',' +
+      Math.round(b + (255-b)*amt) + ')';
   },
 
-  /* ═══ EVENTS ═══ */
+  /* ─────── EVENTS ─────── */
   wireEvents(state){
     const {container} = state;
     const leftBody  = container.querySelector('.gantt-tbody');
     const rightScr  = container.querySelector('.gantt-chart-scroll');
+    const axisTrack = container.querySelector('.gantt-axis-track');
     const zoomSel   = container.querySelector('.gantt-zoom');
     const btnToday  = container.querySelector('.gantt-btn-today');
 
-    // Sync scroll vertikal dua arah
     let syncing = false;
+
     rightScr.addEventListener('scroll', () => {
-      if (syncing) return;
-      syncing = true;
-      leftBody.scrollTop = rightScr.scrollTop;
-      syncing = false;
+      if (axisTrack){
+        axisTrack.style.transform = 'translateX(' + (-rightScr.scrollLeft) + 'px)';
+      }
+      if (!syncing){
+        syncing = true;
+        leftBody.scrollTop = rightScr.scrollTop;
+        syncing = false;
+      }
     });
+
     leftBody.addEventListener('scroll', () => {
       if (syncing) return;
       syncing = true;
@@ -1959,157 +1897,46 @@ const GanttView = {
       syncing = false;
     });
 
-    // Zoom
     zoomSel.onchange = e => {
       this.mount(state.container, state.proj.id, {
         mode: state.mode, zoom: e.target.value
       });
     };
 
-    // Today
     btnToday.onclick = () => {
       const today = new Date(); today.setHours(0,0,0,0);
       const off = Math.round((today - state.startDate) / 86400000);
       const x = off * state.zoomCfg.pxPerDay;
       rightScr.scrollLeft = Math.max(0, x - rightScr.clientWidth / 2);
+      if (axisTrack){
+        axisTrack.style.transform = 'translateX(' + (-rightScr.scrollLeft) + 'px)';
+      }
     };
 
-    // Auto-scroll ke today saat mount
     setTimeout(() => {
       const today = new Date(); today.setHours(0,0,0,0);
       const off = Math.round((today - state.startDate) / 86400000);
       if (off >= 0){
         const x = off * state.zoomCfg.pxPerDay;
         rightScr.scrollLeft = Math.max(0, x - rightScr.clientWidth / 2);
+        if (axisTrack){
+          axisTrack.style.transform = 'translateX(' + (-rightScr.scrollLeft) + 'px)';
+        }
       }
     }, 30);
   }
 };
 
-/* ═══════════════════════════════════════════════════════════
-   B. RESOURCE HISTOGRAM — Kebutuhan harian/periodik per resource
-   ═══════════════════════════════════════════════════════════ */
-const ResourceHistogram = {
-  render(projectId, canvasEl, resourceKode, granularity){
-    if (!canvasEl || !resourceKode) return;
-    granularity = granularity || 'daily';
-
-    const rl = ResourceLoader.load(projectId, {mode:'rab', granularity});
-    if (!rl.ok) return;
-
-    // Agregasi map harian ke bucket kalau perlu
-    const rawMap = rl.resDailyMap[resourceKode] || {};
-    const map = {};
-    Object.keys(rawMap).forEach(d => {
-      const k = granularity === 'monthly' ? d.slice(0,7)
-              : granularity === 'weekly'  ? ResourceLoader.bucketKey(d, 'weekly')
-              : d;
-      map[k] = (map[k] || 0) + rawMap[d];
-    });
-
-    const labels = Object.keys(map).sort();
-    const values = labels.map(k => map[k]);
-
-    const info = rl.byResource.find(x => x.kode === resourceKode);
-    const cap = num(info?.kapasitas_harian);
-    // kapasitas per bucket = kapasitas harian × jumlah hari dalam bucket (approx)
-    const capBucket = granularity === 'daily' ? cap
-                    : granularity === 'weekly' ? cap * 5
-                    : cap * 22;
-
-    const datasets = [{
-      label: 'Kebutuhan ' + (info?.nama || resourceKode) + ' (' + (info?.satuan||'') + ')',
-      data: values,
-      backgroundColor: values.map(v => capBucket > 0 && v > capBucket
-        ? 'rgba(239,68,68,.75)' : 'rgba(47,129,247,.75)'),
-      borderColor: values.map(v => capBucket > 0 && v > capBucket ? '#dc2626' : '#1f6fe0'),
-      borderWidth: 1,
-      borderRadius: 4
-    }];
-
-    if (capBucket > 0){
-      datasets.push({
-        label: 'Kapasitas (' + fmt(capBucket, 0) + ' ' + (info?.satuan||'') + ')',
-        data: labels.map(() => capBucket),
-        type: 'line',
-        borderColor: '#f59e0b',
-        backgroundColor: 'rgba(245,158,11,.1)',
-        borderWidth: 2,
-        borderDash: [6, 4],
-        pointRadius: 0,
-        fill: false
-      });
+/* =====================================================================
+   BAGIAN 9C — Backward-compat stub (jika ada kode lama masih pakai)
+   ===================================================================== */
+const GanttRenderer = {
+  render(projectId, canvasEl){
+    // diarahkan ke GanttView — canvasEl kini jadi container
+    if (canvasEl && canvasEl.parentElement){
+      const wrap = canvasEl.parentElement;
+      GanttView.mount(wrap, projectId, { zoom: wrap._lastZoom || 'weekly' });
     }
-
-    if (STATE.chartHist){ STATE.chartHist.destroy(); STATE.chartHist = null; }
-    STATE.chartHist = new Chart(canvasEl.getContext('2d'), {
-      type: 'bar',
-      data: {labels, datasets},
-      options: {
-        responsive: true, maintainAspectRatio: false,
-        animation: {duration: 300},
-        plugins: {
-          legend: {labels:{color:'#e6edf7', font:{size:11}}},
-          tooltip: {
-            callbacks: {
-              label: c => c.dataset.label + ': ' + fmt(c.parsed.y, 2)
-            }
-          }
-        },
-        scales: {
-          x: {ticks:{color:'#8fa3c4', font:{size:10}}, grid:{display:false}},
-          y: {beginAtZero:true, ticks:{color:'#8fa3c4'}, grid:{color:'rgba(36,54,92,.5)'}}
-        }
-      }
-    });
-  }
-};
-
-/* ═══════════════════════════════════════════════════════════
-   C. OVER-ALLOCATION DETECTOR
-   Bandingkan kebutuhan harian vs kapasitas_harian per resource
-   ═══════════════════════════════════════════════════════════ */
-const OverAllocationDetector = {
-  detect(projectId){
-    const rl = ResourceLoader.load(projectId, {mode:'rab', granularity:'daily'});
-    if (!rl.ok) return {ok: false, error: rl.error, alerts: []};
-
-    const infoMap = {};
-    rl.byResource.forEach(x => { infoMap[x.kode] = x; });
-
-    const alerts = [];
-    Object.keys(rl.resDailyMap).forEach(kode => {
-      const info = infoMap[kode];
-      const cap = num(info?.kapasitas_harian);
-      if (cap <= 0) return;
-
-      const map = rl.resDailyMap[kode];
-      const violations = [];
-      Object.keys(map).forEach(d => {
-        if (map[d] > cap){
-          violations.push({tanggal: d, qty: map[d], over: map[d] - cap});
-        }
-      });
-
-      if (violations.length){
-        violations.sort((a,b) => a.tanggal.localeCompare(b.tanggal));
-        const maxOver = Math.max(...violations.map(v => v.over));
-        const worst   = violations.find(v => v.over === maxOver);
-        alerts.push({
-          kode, nama: info.nama, jenis: info.jenis,
-          satuan: info.satuan, kapasitas: cap,
-          jumlah_hari: violations.length,
-          tanggal_terburuk: worst.tanggal,
-          qty_terburuk: worst.qty,
-          over_terburuk: maxOver,
-          persen_over: (maxOver / cap * 100),
-          violations
-        });
-      }
-    });
-
-    alerts.sort((a,b) => b.persen_over - a.persen_over);
-    return {ok: true, alerts, total_checked: rl.byResource.length};
   }
 };
 
