@@ -1090,7 +1090,7 @@ function renderSchedule(){
    const ganttEl = document.getElementById('ganttContainer');
    if (ganttEl){
      const mode = $('#schedMode')?.value || 'rab';
-     GanttView.mount(ganttEl, pid, { mode, zoom: ganttEl._zoom || 'weekly' });
+     GanttView.mount(ganttEl, pid, { mode, zoom: ganttEl._lastZoom || 'weekly' });
    }
 
   /* ── Phase 4: Resource Histogram ── */
@@ -1514,12 +1514,12 @@ const GanttView = {
     };
     this._state = state;
 
-    this.renderLayout(state);
-    this.wireEvents(state);
-    return state;
-  },
+   this.renderLayout(state);
+   this.wireEvents(state);
+   state.container._lastZoom = zoom;    // ← tambahkan ini
+   return state;
 
-  /* ═══ LAYOUT ═══ */
+  /* ═══ LAYOUT (Fase 1.1 — alignment fix) ═══ */
   renderLayout(state){
     const {container, nodes, chartWidth, totalHeight, proj, zoom} = state;
     const tableW = this.COLUMNS.reduce((s,c) => s + c.width, 0);
@@ -1543,6 +1543,7 @@ const GanttView = {
         </div>
 
         <div class="gantt-grid">
+          <!-- ── ENTRY TABLE ── -->
           <div class="gantt-left">
             <div class="gantt-thead">
               ${this.COLUMNS.map(c =>
@@ -1554,13 +1555,15 @@ const GanttView = {
             </div>
           </div>
 
+          <!-- ── CHART ── -->
           <div class="gantt-right">
-            <div class="gantt-chart-scroll">
-              <div class="gantt-canvas-wrap"
-                   style="width:${chartWidth}px;height:${totalHeight + this.AXIS_H}px">
+            <div class="gantt-axis-top">
+              <div class="gantt-axis-track" style="width:${chartWidth}px">
                 <canvas class="gantt-axis" width="${chartWidth}" height="${this.AXIS_H}"></canvas>
-                <canvas class="gantt-bars" width="${chartWidth}" height="${totalHeight}"></canvas>
               </div>
+            </div>
+            <div class="gantt-chart-scroll">
+              <canvas class="gantt-bars" width="${chartWidth}" height="${totalHeight}"></canvas>
             </div>
           </div>
         </div>
@@ -1569,6 +1572,62 @@ const GanttView = {
 
     this.drawAxis(state, container.querySelector('.gantt-axis'));
     this.drawBars(state, container.querySelector('.gantt-bars'));
+  },
+
+  /* ═══ EVENTS (Fase 1.1) ═══ */
+  wireEvents(state){
+    const {container} = state;
+    const leftBody  = container.querySelector('.gantt-tbody');
+    const rightScr  = container.querySelector('.gantt-chart-scroll');
+    const axisTrack = container.querySelector('.gantt-axis-track');
+    const zoomSel   = container.querySelector('.gantt-zoom');
+    const btnToday  = container.querySelector('.gantt-btn-today');
+
+    // ── Sinkronisasi scroll ──
+    let syncing = false;
+    rightScr.addEventListener('scroll', () => {
+      // Horizontal → geser axis track
+      axisTrack.style.transform = `translateX(${-rightScr.scrollLeft}px)`;
+      // Vertikal → sinkron ke tabel kiri
+      if (!syncing){
+        syncing = true;
+        leftBody.scrollTop = rightScr.scrollTop;
+        syncing = false;
+      }
+    });
+    leftBody.addEventListener('scroll', () => {
+      if (syncing) return;
+      syncing = true;
+      rightScr.scrollTop = leftBody.scrollTop;
+      syncing = false;
+    });
+
+    // ── Zoom (pertahankan state.zoom saat re-mount) ──
+    zoomSel.onchange = e => {
+      this.mount(state.container, state.proj.id, {
+        mode: state.mode, zoom: e.target.value
+      });
+    };
+
+    // ── Today ──
+    btnToday.onclick = () => {
+      const today = new Date(); today.setHours(0,0,0,0);
+      const off = Math.round((today - state.startDate) / 86400000);
+      const x = off * state.zoomCfg.pxPerDay;
+      rightScr.scrollLeft = Math.max(0, x - rightScr.clientWidth / 2);
+      axisTrack.style.transform = `translateX(${-rightScr.scrollLeft}px)`;
+    };
+
+    // ── Auto-scroll ke today saat mount ──
+    setTimeout(() => {
+      const today = new Date(); today.setHours(0,0,0,0);
+      const off = Math.round((today - state.startDate) / 86400000);
+      if (off >= 0){
+        const x = off * state.zoomCfg.pxPerDay;
+        rightScr.scrollLeft = Math.max(0, x - rightScr.clientWidth / 2);
+        axisTrack.style.transform = `translateX(${-rightScr.scrollLeft}px)`;
+      }
+    }, 30);
   },
 
   /* ═══ ENTRY TABLE ROW ═══ */
