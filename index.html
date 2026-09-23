@@ -180,6 +180,36 @@
       </div>
       <canvas id="chartResourceLoad" style="max-height:340px"></canvas>
     </div>
+        <div class="panel">
+      <div class="panel-head">
+        <div><h2>📊 Gantt Chart — Jadwal WBS</h2>
+          <p>Batang <span style="color:#2f81f7">biru</span> = normal · <span style="color:#ef4444">merah</span> = jalur kritis</p></div>
+      </div>
+      <canvas id="chartGantt" style="max-height:none"></canvas>
+    </div>
+    
+    <div class="panel">
+      <div class="panel-head">
+        <div><h2>📈 Histogram Kebutuhan Sumber Daya</h2><p>Fluktuasi harian / mingguan per resource</p></div>
+        <div class="row">
+          <select id="histResource" style="width:280px"></select>
+          <select id="histGranularity" style="width:130px">
+            <option value="daily">Harian</option>
+            <option value="weekly" selected>Mingguan</option>
+            <option value="monthly">Bulanan</option>
+          </select>
+        </div>
+      </div>
+      <canvas id="chartHistogram" style="max-height:340px"></canvas>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head">
+        <div><h2>🚨 Pusat Deteksi Bentrok (Over-Allocation)</h2>
+          <p>Resource yang kebutuhannya melampaui <code>kapasitas_harian</code> di master_resources</p></div>
+      </div>
+      <div id="overAllocWrap"></div>
+    </div>
   </section>
 
   <!-- ===================== WORKING CALENDAR ===================== -->
@@ -1073,6 +1103,7 @@ function formResource(id){
     <div class="row" style="margin-top:12px">
       <div class="field"><label class="f">Harga RAB</label><input id="fr_hrab" type="number" value="${num(r?.harga_rab)}" /></div>
       <div class="field"><label class="f">Harga RAP (Riil)</label><input id="fr_hrap" type="number" value="${num(r?.harga_rap)}" /></div>
+      <div class="field"><label class="f">Kapasitas Harian</label><input id="fr_kap" type="number" step="0.01" value="${num(r?.kapasitas_harian)}" placeholder="0 = tanpa batas" /></div>
     </div>
     <div id="alatBox" style="display:${isAlat?'block':'none'}">
       <div class="sep"></div>
@@ -1122,6 +1153,7 @@ function formResource(id){
       satuan: $('#fr_satuan').value.trim(),
       harga_rab: num($('#fr_hrab').value),
       harga_rap: num($('#fr_hrap').value)
+      kapasitas_harian: num($('#fr_kap').value),
     };
     if (!obj.kode || !obj.nama){ toast('Kode & Nama wajib diisi', false); return false; }
     if (jenis === 'alat'){
