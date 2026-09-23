@@ -1519,7 +1519,7 @@ const GanttView = {
     return state;
   },
 
-  /* ─────── LAYOUT ─────── */
+  /* ─────── LAYOUT (Fase 1.2 — grid 2×2) ─────── */
   renderLayout(state){
     const {container, nodes, chartWidth, totalHeight, proj, zoom} = state;
     const tableW = this.COLUMNS.reduce((s,c) => s + c.width, 0);
@@ -1541,27 +1541,33 @@ const GanttView = {
             '<button class="btn btn-sm gantt-btn-today">📍 Hari Ini</button>' +
           '</div>' +
         '</div>' +
-        '<div class="gantt-grid">' +
-          '<div class="gantt-left">' +
-            '<div class="gantt-thead">' +
-              this.COLUMNS.map(c =>
-                '<div class="gantt-th" style="width:' + c.width + 'px;text-align:' + c.align + '">' + esc(c.label) + '</div>'
-              ).join('') +
-            '</div>' +
-            '<div class="gantt-tbody">' +
-              nodes.map((n,i) => this.rowHtml(n,i)).join('') +
+
+        '<div class="gantt-body">' +
+
+          /* R1 C1 — Header tabel */
+          '<div class="gantt-thead">' +
+            this.COLUMNS.map(c =>
+              '<div class="gantt-th" style="width:' + c.width + 'px;text-align:' + c.align + '">' + esc(c.label) + '</div>'
+            ).join('') +
+          '</div>' +
+
+          /* R1 C2 — Axis kanan */
+          '<div class="gantt-axis-wrap">' +
+            '<div class="gantt-axis-track" style="width:' + chartWidth + 'px">' +
+              '<canvas class="gantt-axis" width="' + chartWidth + '" height="' + this.AXIS_H + '"></canvas>' +
             '</div>' +
           '</div>' +
-          '<div class="gantt-right">' +
-            '<div class="gantt-axis-top">' +
-              '<div class="gantt-axis-track" style="width:' + chartWidth + 'px">' +
-                '<canvas class="gantt-axis" width="' + chartWidth + '" height="' + this.AXIS_H + '"></canvas>' +
-              '</div>' +
-            '</div>' +
-            '<div class="gantt-chart-scroll">' +
-              '<canvas class="gantt-bars" width="' + chartWidth + '" height="' + totalHeight + '"></canvas>' +
-            '</div>' +
+
+          /* R2 C1 — Tabel body */
+          '<div class="gantt-tbody">' +
+            nodes.map((n,i) => this.rowHtml(n,i)).join('') +
           '</div>' +
+
+          /* R2 C2 — Bars */
+          '<div class="gantt-bars-wrap">' +
+            '<canvas class="gantt-bars" width="' + chartWidth + '" height="' + totalHeight + '"></canvas>' +
+          '</div>' +
+
         '</div>' +
       '</div>';
 
@@ -1868,17 +1874,18 @@ const GanttView = {
       Math.round(b + (255-b)*amt) + ')';
   },
 
-  /* ─────── EVENTS ─────── */
+  /* ─────── EVENTS (Fase 1.2) ─────── */
   wireEvents(state){
     const {container} = state;
     const leftBody  = container.querySelector('.gantt-tbody');
-    const rightScr  = container.querySelector('.gantt-chart-scroll');
+    const rightScr  = container.querySelector('.gantt-bars-wrap');
     const axisTrack = container.querySelector('.gantt-axis-track');
     const zoomSel   = container.querySelector('.gantt-zoom');
     const btnToday  = container.querySelector('.gantt-btn-today');
 
     let syncing = false;
 
+    // Bars scroll → sinkronkan axis (X) & tabel (Y)
     rightScr.addEventListener('scroll', () => {
       if (axisTrack){
         axisTrack.style.transform = 'translateX(' + (-rightScr.scrollLeft) + 'px)';
@@ -1890,6 +1897,7 @@ const GanttView = {
       }
     });
 
+    // Tabel kiri scroll → sinkronkan ke bars (Y)
     leftBody.addEventListener('scroll', () => {
       if (syncing) return;
       syncing = true;
@@ -1897,12 +1905,14 @@ const GanttView = {
       syncing = false;
     });
 
+    // Zoom
     zoomSel.onchange = e => {
       this.mount(state.container, state.proj.id, {
         mode: state.mode, zoom: e.target.value
       });
     };
 
+    // Today
     btnToday.onclick = () => {
       const today = new Date(); today.setHours(0,0,0,0);
       const off = Math.round((today - state.startDate) / 86400000);
@@ -1913,6 +1923,7 @@ const GanttView = {
       }
     };
 
+    // Auto-scroll ke today saat mount
     setTimeout(() => {
       const today = new Date(); today.setHours(0,0,0,0);
       const off = Math.round((today - state.startDate) / 86400000);
@@ -1924,8 +1935,7 @@ const GanttView = {
         }
       }
     }, 30);
-  }
-};
+  },
 
 /* =====================================================================
    BAGIAN 9C — Backward-compat stub (jika ada kode lama masih pakai)
