@@ -1177,3 +1177,48 @@ function testCPM(projectId){
   })));
   return r;
 }
+
+/* =====================================================================
+   TEST RESOURCE LOADER — jalankan dari Console Browser
+   Pemakaian: testResourceLoader()  atau  testResourceLoader('<projectId>')
+   ===================================================================== */
+function testResourceLoader(projectId){
+  projectId = projectId || STATE.activeProject;
+
+  const modes = ['rab','rap'];
+  const dists = ['uniform','triangular','bell'];
+
+  modes.forEach(mode => {
+    dists.forEach(dist => {
+      const r = ResourceLoader.load(projectId, {
+        mode, distribution: dist, granularity: 'daily'
+      });
+      if (!r.ok){ console.warn(mode, dist, r.error); return; }
+
+      const tot = r.totals.upah + r.totals.bahan + r.totals.alat;
+      console.log(
+        `%c[${mode.toUpperCase()} / ${dist}]%c total=${rp(tot)} | buckets=${r.buckets.length} | resources=${r.byResource.length}`,
+        'color:#1abc9c;font-weight:bold', 'color:#e6edf7'
+      );
+    });
+  });
+
+  // Verifikasi konservasi: Σ bucket = Σ resource = Σ WBS
+  const r = ResourceLoader.load(projectId, {mode:'rab', distribution:'uniform', granularity:'daily'});
+  const sB = r.buckets.reduce((s,b) => s + b.upah + b.bahan + b.alat, 0);
+  const sR = r.byResource.reduce((s,x) => s + x.total_cost, 0);
+  const sW = r.byWBS.reduce((s,x) => s + x.upah + x.bahan + x.alat, 0);
+  console.log('%c[Conservation Check]', 'color:#f59e0b;font-weight:bold');
+  console.log('  Σ buckets :', rp(sB));
+  console.log('  Σ resource:', rp(sR));
+  console.log('  Σ WBS     :', rp(sW));
+  console.log('  Δ max     :', rp(Math.max(Math.abs(sB-sR), Math.abs(sR-sW), Math.abs(sB-sW))));
+
+  console.table(r.byResource.slice(0, 15).map(x => ({
+    kode: x.kode, jenis: x.jenis, satuan: x.satuan,
+    total_qty: +x.total_qty.toFixed(2),
+    peak_daily: +x.peak_daily_qty.toFixed(3),
+    total_cost: Math.round(x.total_cost)
+  })));
+  return r;
+}
