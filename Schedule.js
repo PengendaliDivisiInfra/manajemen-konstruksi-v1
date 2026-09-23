@@ -1206,13 +1206,6 @@ function initScheduleEvents(){
    D. OverAllocationDetector — Deteksi over-alokasi
    ===================================================================== */
 
-
-/* =====================================================================
-   BAGIAN 9 — GANTT CHART MS PROJECT STYLE (Fase 1)
-   A. GanttEngine — Data Layer (tree, rollup, progress)
-   B. GanttView  — Presentation Layer (table + bars + axis)
-   ===================================================================== */
-
 /* ═══════════════════════════════════════════════════════════
    A. GANTT ENGINE — Data Layer
    ═══════════════════════════════════════════════════════════ */
@@ -1967,6 +1960,105 @@ const OverAllocationDetector = {
     return {ok: true, alerts, total_checked: rl.byResource.length};
   }
 };
+
+/* =====================================================================
+   BAGIAN 10 — SEED WORKING CALENDARS & HOLIDAYS (Frontend fallback)
+   ===================================================================== */
+function seedCalendarDefaults(){
+  if (!DB.working_calendars || !DB.working_calendars.length){
+    DB.working_calendars = [
+      {id:'wcal_std_001', kode:'CAL-STD', nama:'Kalender Standar (Senin-Jumat)',
+       work_days:'1,2,3,4,5', jam_per_hari:8, start_hour:'08:00',
+       keterangan:'Standar proyek pemerintah', is_default:1},
+      {id:'wcal_6d_002', kode:'CAL-6D', nama:'Kalender 6 Hari Kerja',
+       work_days:'1,2,3,4,5,6', jam_per_hari:8, start_hour:'08:00',
+       keterangan:'Untuk proyek percepatan', is_default:0},
+      {id:'wcal_24h_003', kode:'CAL-24H', nama:'Kalender 24/7',
+       work_days:'0,1,2,3,4,5,6', jam_per_hari:24, start_hour:'00:00',
+       keterangan:'Untuk pekerjaan kontinu', is_default:0}
+    ];
+  }
+  if (!DB.holidays){
+    DB.holidays = [
+      {id:'hol_001', tanggal:'2026-01-01', nama:'Tahun Baru 2026', jenis:'nasional', calendar_id:'wcal_std_001'},
+      {id:'hol_002', tanggal:'2026-03-19', nama:'Nyepi', jenis:'nasional', calendar_id:'wcal_std_001'},
+      {id:'hol_003', tanggal:'2026-04-03', nama:'Wafat Isa Almasih', jenis:'nasional', calendar_id:'wcal_std_001'},
+      {id:'hol_004', tanggal:'2026-05-01', nama:'Hari Buruh', jenis:'nasional', calendar_id:'wcal_std_001'},
+      {id:'hol_005', tanggal:'2026-05-14', nama:'Kenaikan Isa Almasih', jenis:'nasional', calendar_id:'wcal_std_001'},
+      {id:'hol_006', tanggal:'2026-06-01', nama:'Hari Lahir Pancasila', jenis:'nasional', calendar_id:'wcal_std_001'},
+      {id:'hol_007', tanggal:'2026-08-17', nama:'Hari Kemerdekaan RI', jenis:'nasional', calendar_id:'wcal_std_001'},
+      {id:'hol_008', tanggal:'2026-12-25', nama:'Hari Natal', jenis:'nasional', calendar_id:'wcal_std_001'}
+    ];
+  }
+}
+
+/* =====================================================================
+   TEST CPM — Jalankan dari Console Browser
+   ===================================================================== */
+function testCPM(projectId){
+  projectId = projectId || STATE.activeProject;
+  const r = CPM.run(projectId);
+  console.log('%c[CPM Result]', 'color:#1abc9c;font-weight:bold', r);
+
+  const items = DB.project_wbs.filter(w =>
+    w.project_id === projectId && !w.is_group
+  );
+  console.table(items.map(it => ({
+    kode:     it.kode_wbs,
+    pred:     it.predecessor || '—',
+    type:     it.pred_type   || 'FS',
+    lag:      num(it.lag_days),
+    durasi:   num(it.durasi_hari),
+    ES:       it.tgl_mulai_rencana,
+    EF:       it.tgl_selesai_rencana,
+    LS:       it.late_start,
+    LF:       it.late_finish,
+    float:    num(it.float_total),
+    kritis:   num(it.is_critical) === 1 ? '★' : ''
+  })));
+  return r;
+}
+
+/* =====================================================================
+   TEST RESOURCE LOADER — jalankan dari Console Browser
+   ===================================================================== */
+function testResourceLoader(projectId){
+  projectId = projectId || STATE.activeProject;
+  const modes = ['rab','rap'];
+  const dists = ['uniform','triangular','bell'];
+
+  modes.forEach(mode => {
+    dists.forEach(dist => {
+      const r = ResourceLoader.load(projectId, {
+        mode, distribution: dist, granularity: 'daily'
+      });
+      if (!r.ok){ console.warn(mode, dist, r.error); return; }
+      const tot = r.totals.upah + r.totals.bahan + r.totals.alat;
+      console.log(
+        `%c[${mode.toUpperCase()} / ${dist}]%c total=${rp(tot)} | buckets=${r.buckets.length}`,
+        'color:#1abc9c;font-weight:bold', 'color:#e6edf7'
+      );
+    });
+  });
+
+  const r = ResourceLoader.load(projectId, {mode:'rab', distribution:'uniform', granularity:'daily'});
+  const sB = r.buckets.reduce((s,b) => s + b.upah + b.bahan + b.alat, 0);
+  const sR = r.byResource.reduce((s,x) => s + x.total_cost, 0);
+  const sW = r.byWBS.reduce((s,x) => s + x.upah + x.bahan + x.alat, 0);
+  console.log('%c[Conservation Check]', 'color:#f59e0b;font-weight:bold');
+  console.log('  Σ buckets :', rp(sB));
+  console.log('  Σ resource:', rp(sR));
+  console.log('  Σ WBS     :', rp(sW));
+  console.log('  Δ max     :', rp(Math.max(Math.abs(sB-sR), Math.abs(sR-sW), Math.abs(sB-sW))));
+
+  console.table(r.byResource.slice(0, 15).map(x => ({
+    kode: x.kode, jenis: x.jenis, satuan: x.satuan,
+    total_qty: +x.total_qty.toFixed(2),
+    peak_daily: +x.peak_daily_qty.toFixed(3),
+    total_cost: Math.round(x.total_cost)
+  })));
+  return r;
+}
 
 /* =====================================================================
    BAGIAN 10 — SYNC MANAGER (Phase 5)
