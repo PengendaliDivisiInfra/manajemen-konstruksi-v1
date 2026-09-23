@@ -1941,6 +1941,131 @@ const GanttRenderer = {
 };
 
 /* =====================================================================
+   BAGIAN 9D — RESOURCE HISTOGRAM
+   Kebutuhan harian/periodik per resource + garis kapasitas
+   ===================================================================== */
+const ResourceHistogram = {
+  render(projectId, canvasEl, resourceKode, granularity){
+    if (!canvasEl || !resourceKode) return;
+    granularity = granularity || 'daily';
+
+    const rl = ResourceLoader.load(projectId, {mode:'rab', granularity});
+    if (!rl.ok) return;
+
+    const rawMap = rl.resDailyMap[resourceKode] || {};
+    const map = {};
+    Object.keys(rawMap).forEach(d => {
+      const k = granularity === 'monthly' ? d.slice(0,7)
+              : granularity === 'weekly'  ? ResourceLoader.bucketKey(d, 'weekly')
+              : d;
+      map[k] = (map[k] || 0) + rawMap[d];
+    });
+
+    const labels = Object.keys(map).sort();
+    const values = labels.map(k => map[k]);
+
+    const info = rl.byResource.find(x => x.kode === resourceKode);
+    const cap = num(info?.kapasitas_harian);
+    const capBucket = granularity === 'daily'  ? cap
+                    : granularity === 'weekly' ? cap * 5
+                    : cap * 22;
+
+    const datasets = [{
+      label: 'Kebutuhan ' + (info?.nama || resourceKode) +
+             ' (' + (info?.satuan || '') + ')',
+      data: values,
+      backgroundColor: values.map(v => capBucket > 0 && v > capBucket
+        ? 'rgba(239,68,68,.75)' : 'rgba(47,129,247,.75)'),
+      borderColor: values.map(v => capBucket > 0 && v > capBucket ? '#dc2626' : '#1f6fe0'),
+      borderWidth: 1,
+      borderRadius: 4
+    }];
+
+    if (capBucket > 0){
+      datasets.push({
+        label: 'Kapasitas (' + fmt(capBucket, 0) + ' ' + (info?.satuan||'') + ')',
+        data: labels.map(() => capBucket),
+        type: 'line',
+        borderColor: '#f59e0b',
+        backgroundColor: 'rgba(245,158,11,.1)',
+        borderWidth: 2,
+        borderDash: [6, 4],
+        pointRadius: 0,
+        fill: false
+      });
+    }
+
+    if (STATE.chartHist){ STATE.chartHist.destroy(); STATE.chartHist = null; }
+    STATE.chartHist = new Chart(canvasEl.getContext('2d'), {
+      type: 'bar',
+      data: {labels, datasets},
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        animation: {duration: 300},
+        plugins: {
+          legend: {labels:{color:'#e6edf7', font:{size:11}}},
+          tooltip: {
+            callbacks: { label: c => c.dataset.label + ': ' + fmt(c.parsed.y, 2) }
+          }
+        },
+        scales: {
+          x: {ticks:{color:'#8fa3c4', font:{size:10}}, grid:{display:false}},
+          y: {beginAtZero:true, ticks:{color:'#8fa3c4'}, grid:{color:'rgba(36,54,92,.5)'}}
+        }
+      }
+    });
+  }
+};
+
+/* =====================================================================
+   BAGIAN 9E — OVER-ALLOCATION DETECTOR
+   Bandingkan kebutuhan harian vs kapasitas_harian per resource
+   ===================================================================== */
+const OverAllocationDetector = {
+  detect(projectId){
+    const rl = ResourceLoader.load(projectId, {mode:'rab', granularity:'daily'});
+    if (!rl.ok) return {ok: false, error: rl.error, alerts: []};
+
+    const infoMap = {};
+    rl.byResource.forEach(x => { infoMap[x.kode] = x; });
+
+    const alerts = [];
+    Object.keys(rl.resDailyMap).forEach(kode => {
+      const info = infoMap[kode];
+      const cap = num(info?.kapasitas_harian);
+      if (cap <= 0) return;
+
+      const map = rl.resDailyMap[kode];
+      const violations = [];
+      Object.keys(map).forEach(d => {
+        if (map[d] > cap){
+          violations.push({tanggal: d, qty: map[d], over: map[d] - cap});
+        }
+      });
+
+      if (violations.length){
+        violations.sort((a,b) => a.tanggal.localeCompare(b.tanggal));
+        const maxOver = Math.max(...violations.map(v => v.over));
+        const worst   = violations.find(v => v.over === maxOver);
+        alerts.push({
+          kode, nama: info.nama, jenis: info.jenis,
+          satuan: info.satuan, kapasitas: cap,
+          jumlah_hari: violations.length,
+          tanggal_terburuk: worst.tanggal,
+          qty_terburuk: worst.qty,
+          over_terburuk: maxOver,
+          persen_over: (maxOver / cap * 100),
+          violations
+        });
+      }
+    });
+
+    alerts.sort((a,b) => b.persen_over - a.persen_over);
+    return {ok: true, alerts, total_checked: rl.byResource.length};
+  }
+};
+
+/* =====================================================================
    BAGIAN 10 — SYNC MANAGER (Phase 5)
    Partial payload · Version guard · Soft lock
    ===================================================================== */
