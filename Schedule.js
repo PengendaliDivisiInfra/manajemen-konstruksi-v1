@@ -698,125 +698,244 @@ document.addEventListener('visibilitychange', () => {
 });
 
 /* =====================================================================
-   BAGIAN 7 — RESOURCE LOADING (Time-Phased)
-   Read-only terhadap RAB/RAP
+   BAGIAN 7 — RESOURCE LOADER v2 (Phase 3)
+   Ekstraksi kebutuhan × distribusi waktu × agregasi bucket
+   READ-ONLY terhadap master_resources, ahsp_details_master, project_ahsp_details
    ===================================================================== */
-function breakdownResources(projectId, granularity){
-  granularity = granularity || 'weekly';
-  const proj = DB.projects.find(p => p.id === projectId);
-  if (!proj) return { error:'Proyek tidak ditemukan' };
+const ResourceLoader = {
 
-  const items = DB.project_wbs.filter(w =>
-    w.project_id === projectId && !w.is_group && w.start_date && w.finish_date
-  );
-  if (!items.length) return { buckets:[], byResource:{}, totals:{upah:0,bahan:0,alat:0} };
-
-  const allDates = [];
-  items.forEach(it => {
-    const d1 = new Date(it.start_date);
-    const d2 = new Date(it.finish_date);
-    for (let d = new Date(d1); d <= d2; d.setDate(d.getDate() + 1)){
-      allDates.push(d.toISOString().slice(0,10));
+  /* ── Util: daftar hari kerja eksklusif [start, finish) ── */
+  workingDaysInRange(startISO, finishISOExcl, cal){
+    const out = [];
+    if (!startISO || !finishISOExcl) return out;
+    const end = new Date(finishISOExcl + 'T00:00:00');
+    let d = new Date(startISO + 'T00:00:00');
+    if (isNaN(d.getTime()) || isNaN(end.getTime())) return out;
+    let guard = 0;
+    while (d < end && guard++ < 5000){
+      if (WorkingCalendar.isWorkDay(d, cal)){
+        out.push(d.toISOString().slice(0,10));
+      }
+      d.setDate(d.getDate() + 1);
     }
-  });
-  const uniqueDates = [...new Set(allDates)].sort();
-  if (!uniqueDates.length) return { buckets:[], byResource:{}, totals:{upah:0,bahan:0,alat:0} };
+    return out;
+  },
 
-  const bucketMap = {};
-  uniqueDates.forEach(tgl => {
-    let key;
-    if (granularity === 'monthly') key = tgl.slice(0,7);
-    else if (granularity === 'weekly'){
-      const d = new Date(tgl);
-      const startOfYear = new Date(d.getFullYear(), 0, 1);
-      const week = Math.ceil(((d - startOfYear) / 86400000 + startOfYear.getDay() + 1) / 7);
-      key = d.getFullYear() + '-W' + String(week).padStart(2, '0');
-    } else key = tgl;
-
-    if (!bucketMap[key]){
-      bucketMap[key] = {
-        bucket_key: key,
-        tanggal_mulai: tgl,
-        tanggal_selesai: tgl,
-        upah: 0, bahan: 0, alat: 0,
-        detail_upah: {}, detail_bahan: {}, detail_alat: {}
-      };
+  /* ── Util: bobot distribusi ternormalisasi ── */
+  computeWeights(n, mode){
+    if (n <= 0) return [];
+    if (n === 1) return [1];
+    const w = new Array(n);
+    if (mode === 'triangular'){
+      const c = (n - 1) / 2;
+      for (let i = 0; i < n; i++){
+        w[i] = 1 - Math.abs(i - c) / (c || 1) + 0.05;
+      }
+    } else if (mode === 'bell'){
+      const c = (n - 1) / 2;
+      const sigma = n / 4 || 1;
+      for (let i = 0; i < n; i++){
+        w[i] = Math.exp(-Math.pow((i - c) / sigma, 2)) + 0.02;
+      }
     } else {
-      if (tgl > bucketMap[key].tanggal_selesai) bucketMap[key].tanggal_selesai = tgl;
+      for (let i = 0; i < n; i++) w[i] = 1;
     }
-  });
+    const sum = w.reduce((s, x) => s + x, 0) || 1;
+    return w.map(x => x / sum);
+  },
 
-  const byResource = {};
-  const projCal = WorkingCalendar.get(proj.calendar_id);
+  /* ── Util: bucket key sesuai granularitas ── */
+  bucketKey(iso, gran){
+    if (gran === 'monthly') return iso.slice(0, 7);
+    if (gran === 'weekly'){
+      const d = new Date(iso + 'T00:00:00');
+      const startOfYear = new Date(d.getFullYear(), 0, 1);
+      const week = Math.ceil(
+        (((d - startOfYear) / 86400000 + startOfYear.getDay() + 1) / 7)
+      );
+      return d.getFullYear() + '-W' + String(week).padStart(2, '0');
+    }
+    return iso;
+  },
 
-  items.forEach(it => {
-    const d1 = new Date(it.start_date);
-    const d2 = new Date(it.finish_date);
-    const workingDays = Math.max(1, WorkingCalendar.diffDays(it.start_date, it.finish_date, projCal, 'working'));
-    const volHarian = num(it.volume_rab) / workingDays;
-
-    const dets = DB.project_ahsp_details.filter(pd =>
-      pd.project_id === projectId && pd.ahsp_id === it.ahsp_id
+  /* ═══════════════════════════════════════════════════════════
+     A. EKSTRAKSI KEBUTUHAN PER ITEM WBS
+     Volume × Koefisien → qty_total; × harga → cost_total
+     ═══════════════════════════════════════════════════════════ */
+  extractItemNeeds(projectId, mode){
+    mode = mode || 'rab';
+    const items = DB.project_wbs.filter(w =>
+      w.project_id === projectId && !w.is_group && w.ahsp_id
     );
 
-    for (let d = new Date(d1); d <= d2; d.setDate(d.getDate() + 1)){
-      if (!WorkingCalendar.isWorkDay(d, projCal)) continue;
-      const tgl = d.toISOString().slice(0,10);
+    // Pre-index project_ahsp_details by ahsp_id
+    const detByAhsp = {};
+    DB.project_ahsp_details.forEach(d => {
+      if (d.project_id !== projectId) return;
+      (detByAhsp[d.ahsp_id] = detByAhsp[d.ahsp_id] || []).push(d);
+    });
 
-      let bkey;
-      if (granularity === 'monthly') bkey = tgl.slice(0,7);
-      else if (granularity === 'weekly'){
-        const startOfYear = new Date(d.getFullYear(), 0, 1);
-        const week = Math.ceil(((d - startOfYear) / 86400000 + startOfYear.getDay() + 1) / 7);
-        bkey = d.getFullYear() + '-W' + String(week).padStart(2, '0');
-      } else bkey = tgl;
+    // Pre-index resources
+    const resById = {};
+    DB.master_resources.forEach(r => { resById[r.id] = r; });
 
-      const bucket = bucketMap[bkey];
-      if (!bucket) continue;
+    const result = [];
+    items.forEach(w => {
+      const vol = mode === 'rap' ? num(w.volume_rap) : num(w.volume_rab);
+      if (vol <= 0) return;
+      const dets = detByAhsp[w.ahsp_id] || [];
+      const needs = [];
 
-      dets.forEach(pd => {
-        const r = DB.master_resources.find(x => x.id === pd.resource_id);
+      dets.forEach(d => {
+        const r = resById[d.resource_id];
         if (!r) return;
+        const k = mode === 'rap' ? Calc.koefRAP(d, r) : Calc.koefRAB(d, r);
+        if (k <= 0) return;
+        const h = mode === 'rap' ? num(d.harga_rap) : num(d.harga_rab);
+        const qty  = k * vol;
+        const cost = qty * h;
+        if (qty <= 0 && cost <= 0) return;
+        needs.push({
+          resource_id: r.id,
+          kode:   r.kode,
+          nama:   r.nama,
+          jenis:  r.jenis,
+          satuan: r.satuan,
+          koef:   k,
+          harga:  h,
+          qty_total:  qty,
+          cost_total: cost
+        });
+      });
 
-        const kRAB = Calc.koefRAB(pd, r);
-        const hRAB = num(pd.harga_rab) || num(r.harga_rab);
-        const biaya = kRAB * hRAB * volHarian;
-        const qty = kRAB * volHarian;
+      result.push({ wbs: w, volume: vol, needs });
+    });
+    return result;
+  },
 
-        if (r.jenis === 'upah'){
-          bucket.upah += biaya;
-          bucket.detail_upah[r.kode] = (bucket.detail_upah[r.kode] || 0) + qty;
-        } else if (r.jenis === 'bahan'){
-          bucket.bahan += biaya;
-          bucket.detail_bahan[r.kode] = (bucket.detail_bahan[r.kode] || 0) + qty;
-        } else if (r.jenis === 'alat'){
-          bucket.alat += biaya;
-          bucket.detail_alat[r.kode] = (bucket.detail_alat[r.kode] || 0) + qty;
-        }
+  /* ═══════════════════════════════════════════════════════════
+     B. DISTRIBUSI HARIAN & AGREGASI BUCKET
+     ═══════════════════════════════════════════════════════════ */
+  load(projectId, opts){
+    opts = opts || {};
+    const mode  = opts.mode         || 'rab';
+    const dist  = opts.distribution || 'uniform';
+    const gran  = opts.granularity  || 'weekly';
 
-        if (!byResource[r.kode]){
-          byResource[r.kode] = {
-            kode: r.kode, nama: r.nama, jenis: r.jenis, satuan: r.satuan,
-            total_qty: 0, total_biaya: 0
+    const proj = DB.projects.find(p => p.id === projectId);
+    if (!proj) return { ok:false, error:'Proyek tidak ditemukan' };
+
+    // Pastikan CPM terbaru
+    const cpm = CPM.run(projectId);
+    if (!cpm.ok) return { ok:false, error: cpm.message };
+
+    const items = this.extractItemNeeds(projectId, mode);
+
+    const buckets     = {};
+    const byResource  = {};
+    const resDailyMap = {};  // resKode → { isoDate: qty }
+    const byWBS       = [];
+
+    items.forEach(({ wbs, volume, needs }) => {
+      if (!wbs.tgl_mulai_rencana || !wbs.tgl_selesai_rencana) return;
+
+      const cal = WorkingCalendar.get(wbs.calendar_id || proj.calendar_id);
+      const days = this.workingDaysInRange(
+        wbs.tgl_mulai_rencana, wbs.tgl_selesai_rencana, cal
+      );
+      if (!days.length) return;
+
+      const weights = this.computeWeights(days.length, dist);
+
+      const wbsAgg = {
+        kode_wbs: wbs.kode_wbs,
+        uraian:   wbs.uraian,
+        start:    wbs.tgl_mulai_rencana,
+        finish:   wbs.tgl_selesai_rencana,
+        durasi:   days.length,
+        volume,
+        upah: 0, bahan: 0, alat: 0
+      };
+
+      needs.forEach(n => {
+        const detKey = 'detail_' + n.jenis;
+
+        if (!byResource[n.kode]){
+          byResource[n.kode] = {
+            kode: n.kode, nama: n.nama, jenis: n.jenis, satuan: n.satuan,
+            total_qty: 0, total_cost: 0, peak_daily_qty: 0
           };
         }
-        byResource[r.kode].total_qty += qty;
-        byResource[r.kode].total_biaya += biaya;
-      });
-    }
-  });
+        byResource[n.kode].total_qty  += n.qty_total;
+        byResource[n.kode].total_cost += n.cost_total;
 
-  return {
-    proyek: { kode: proj.kode, nama: proj.nama, mulai: proj.tgl_mulai, selesai: proj.tgl_selesai },
-    granularity,
-    buckets: Object.values(bucketMap).sort((a, b) => a.bucket_key.localeCompare(b.bucket_key)),
-    byResource: Object.values(byResource).sort((a, b) => b.total_biaya - a.total_biaya),
-    totals: {
-      upah:  Object.values(bucketMap).reduce((s, b) => s + b.upah, 0),
-      bahan: Object.values(bucketMap).reduce((s, b) => s + b.bahan, 0),
-      alat:  Object.values(bucketMap).reduce((s, b) => s + b.alat, 0)
-    }
-  };
+        if (!resDailyMap[n.kode]) resDailyMap[n.kode] = {};
+
+        days.forEach((tgl, i) => {
+          const w    = weights[i];
+          const qty  = n.qty_total  * w;
+          const cost = n.cost_total * w;
+          const bkey = this.bucketKey(tgl, gran);
+
+          if (!buckets[bkey]){
+            buckets[bkey] = {
+              bucket_key: bkey,
+              tanggal_mulai: tgl,
+              tanggal_selesai: tgl,
+              upah: 0, bahan: 0, alat: 0,
+              detail_upah: {}, detail_bahan: {}, detail_alat: {}
+            };
+          } else {
+            const b = buckets[bkey];
+            if (tgl < b.tanggal_mulai)   b.tanggal_mulai   = tgl;
+            if (tgl > b.tanggal_selesai) b.tanggal_selesai = tgl;
+          }
+          const b = buckets[bkey];
+          b[n.jenis] += cost;
+          b[detKey][n.kode] = (b[detKey][n.kode] || 0) + qty;
+
+          resDailyMap[n.kode][tgl] = (resDailyMap[n.kode][tgl] || 0) + qty;
+        });
+
+        if (n.jenis === 'upah')  wbsAgg.upah  += n.cost_total;
+        if (n.jenis === 'bahan') wbsAgg.bahan += n.cost_total;
+        if (n.jenis === 'alat')  wbsAgg.alat  += n.cost_total;
+      });
+
+      byWBS.push(wbsAgg);
+    });
+
+    /* ── Peak per resource ── */
+    Object.keys(resDailyMap).forEach(kode => {
+      const map = resDailyMap[kode];
+      let peak = 0;
+      for (const d in map) if (map[d] > peak) peak = map[d];
+      if (byResource[kode]) byResource[kode].peak_daily_qty = peak;
+    });
+
+    return {
+      ok: true,
+      proyek: {
+        kode: proj.kode, nama: proj.nama,
+        mulai: proj.tgl_mulai, selesai: proj.tgl_selesai
+      },
+      mode, distribution: dist, granularity: gran,
+      buckets:    Object.values(buckets).sort((a,b) => a.bucket_key.localeCompare(b.bucket_key)),
+      byResource: Object.values(byResource).sort((a,b) => b.total_cost - a.total_cost),
+      byWBS:      byWBS.sort((a,b) => a.kode_wbs.localeCompare(b.kode_wbs)),
+      totals: {
+        upah:  Object.values(buckets).reduce((s,b) => s + b.upah,  0),
+        bahan: Object.values(buckets).reduce((s,b) => s + b.bahan, 0),
+        alat:  Object.values(buckets).reduce((s,b) => s + b.alat,  0)
+      }
+    };
+  }
+};
+
+/* ── Backward-compat: kode lama yang memanggil breakdownResources ── */
+function breakdownResources(projectId, granularity){
+  const r = ResourceLoader.load(projectId, { granularity: granularity || 'weekly' });
+  return r.ok ? r : { error: r.error };
 }
 
 /* =====================================================================
@@ -824,7 +943,7 @@ function breakdownResources(projectId, granularity){
    ===================================================================== */
 function renderSchedule(){
   const pid = STATE.activeProject;
-  if (!pid){ return; }
+  if (!pid) return;
 
   const cpm = runCPM(pid);
   const proj = activeProj();
@@ -841,10 +960,19 @@ function renderSchedule(){
   `;
 
   const gran = $('#schedGranularity')?.value || 'weekly';
-  const rl = breakdownResources(pid, gran);
+  const mode = $('#schedMode')?.value         || 'rab';
+  const dist = $('#schedDistribution')?.value || 'uniform';
 
+  const rl = ResourceLoader.load(pid, { granularity: gran, mode, distribution: dist });
+  if (!rl.ok){
+    $('#tblResourceLoad').innerHTML =
+      `<tbody><tr><td class="empty">${esc(rl.error)}</td></tr></tbody>`;
+    return;
+  }
+
+  /* ── Tabel time-phased ── */
   const head = `<thead><tr>
-    <th>Periode</th>
+    <th>Periode</th><th>Rentang</th>
     <th class="num">Upah (Rp)</th>
     <th class="num">Bahan (Rp)</th>
     <th class="num">Alat (Rp)</th>
@@ -852,14 +980,48 @@ function renderSchedule(){
   </tr></thead>`;
   const body = rl.buckets.map(b => `<tr>
     <td><b>${esc(b.bucket_key)}</b></td>
+    <td style="font-size:11px;color:var(--muted)">${esc(b.tanggal_mulai)} → ${esc(b.tanggal_selesai)}</td>
     <td class="num">${rp(b.upah)}</td>
     <td class="num">${rp(b.bahan)}</td>
     <td class="num">${rp(b.alat)}</td>
     <td class="num"><b>${rp(b.upah + b.bahan + b.alat)}</b></td>
   </tr>`).join('');
+  const foot = `<tfoot><tr style="background:#0e1a30;font-weight:800">
+    <td colspan="2" style="text-align:right;padding:10px">TOTAL</td>
+    <td class="num">${rp(rl.totals.upah)}</td>
+    <td class="num">${rp(rl.totals.bahan)}</td>
+    <td class="num">${rp(rl.totals.alat)}</td>
+    <td class="num">${rp(rl.totals.upah + rl.totals.bahan + rl.totals.alat)}</td>
+  </tr></tfoot>`;
   $('#tblResourceLoad').innerHTML = head +
-    `<tbody>${body || '<tr><td colspan="5" class="empty">Tidak ada data jadwal.</td></tr>'}</tbody>`;
+    `<tbody>${body || '<tr><td colspan="6" class="empty">Tidak ada data jadwal.</td></tr>'}</tbody>` + foot;
 
+  /* ── Tabel per-resource dengan Peak/hari ── */
+  const rHead = `<thead><tr>
+    <th>Kode</th><th>Nama</th><th>Jenis</th><th>Satuan</th>
+    <th class="num">Total Qty</th>
+    <th class="num">Peak/hari</th>
+    <th class="num">Total Biaya</th>
+  </tr></thead>`;
+  const rBody = rl.byResource.map(r => {
+    const ratio = r.total_qty > 0 ? (r.peak_daily_qty / r.total_qty * 100) : 0;
+    return `<tr>
+      <td><b>${esc(r.kode)}</b></td>
+      <td>${esc(r.nama)}</td>
+      <td><span class="badge b-${r.jenis}">${esc(r.jenis)}</span></td>
+      <td>${esc(r.satuan)}</td>
+      <td class="num">${fmt(r.total_qty, 2)}</td>
+      <td class="num">${fmt(r.peak_daily_qty, 3)} <span style="color:var(--muted);font-size:10px">(${fmt(ratio,1)}%)</span></td>
+      <td class="num">${rp(r.total_cost)}</td>
+    </tr>`;
+  }).join('');
+  const tblResEl = $('#tblResourceByRes');
+  if (tblResEl){
+    tblResEl.innerHTML = rHead +
+      `<tbody>${rBody || '<tr><td colspan="7" class="empty">Tidak ada data.</td></tr>'}</tbody>`;
+  }
+
+  /* ── Critical path ── */
   const cHead = `<thead><tr>
     <th>Kode</th><th>Uraian</th><th class="center">Dur</th>
     <th class="center">Start</th><th class="center">Finish</th>
@@ -868,12 +1030,40 @@ function renderSchedule(){
   const cBody = critical.map(w => `<tr>
     <td><b>${esc(w.kode_wbs)}</b></td>
     <td>${esc(w.uraian)}</td>
-    <td class="center">${num(w.duration) || 1}</td>
-    <td class="center">${esc(w.start_date || '-')}</td>
-    <td class="center">${esc(w.finish_date || '-')}</td>
-    <td class="center"><span class="badge b-danger">${fmt(num(w.total_float), 0)}h</span></td>
+    <td class="center">${num(w.durasi_hari) || num(w.duration) || 1}</td>
+    <td class="center">${esc(w.tgl_mulai_rencana || w.start_date || '-')}</td>
+    <td class="center">${esc(w.tgl_selesai_rencana || w.finish_date || '-')}</td>
+    <td class="center"><span class="badge b-danger">${fmt(num(w.float_total ?? w.total_float), 0)}h</span></td>
   </tr>`).join('') || '<tr><td colspan="6" class="empty">Tidak ada item kritis</td></tr>';
   $('#tblCritical').innerHTML = cHead + `<tbody>${cBody}</tbody>`;
+
+  /* ── Grafik distribusi biaya per periode ── */
+  const cv = $('#chartResourceLoad');
+  if (cv){
+    if (STATE.chartRL) STATE.chartRL.destroy();
+    STATE.chartRL = new Chart(cv.getContext('2d'), {
+      type: 'bar',
+      data: {
+        labels: rl.buckets.map(b => b.bucket_key),
+        datasets: [
+          {label:'Upah',  data: rl.buckets.map(b => b.upah),  backgroundColor:'rgba(47,129,247,.75)',  stack:'s'},
+          {label:'Bahan', data: rl.buckets.map(b => b.bahan), backgroundColor:'rgba(26,188,156,.75)',  stack:'s'},
+          {label:'Alat',  data: rl.buckets.map(b => b.alat),  backgroundColor:'rgba(245,158,11,.75)',  stack:'s'}
+        ]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: {
+          legend: {labels:{color:'#e6edf7', font:{size:11}}},
+          tooltip: {callbacks:{label: c => c.dataset.label + ': ' + rp(c.parsed.y)}}
+        },
+        scales: {
+          x: {stacked:true, ticks:{color:'#8fa3c4'}, grid:{display:false}},
+          y: {stacked:true, ticks:{color:'#8fa3c4', callback:v => 'Rp ' + (v/1e6).toFixed(0) + 'jt'}, grid:{color:'rgba(36,54,92,.5)'}}
+        }
+      }
+    });
+  }
 }
 
 /* =====================================================================
@@ -895,13 +1085,23 @@ function initScheduleEvents(){
   if (selGran){
     selGran.onchange = renderSchedule;
   }
+  const selMode = document.getElementById('schedMode');
+  if (selMode) selMode.onchange = renderSchedule;
+
+  const selDist = document.getElementById('schedDistribution');
+  if (selDist) selDist.onchange = renderSchedule;
+   
   const btnExp = document.getElementById('btnExportSchedule');
   if (btnExp){
     btnExp.onclick = () => {
       const pid = STATE.activeProject;
       if (!pid) return;
       const gran = $('#schedGranularity')?.value || 'weekly';
-      const rl = breakdownResources(pid, gran);
+      const mode = $('#schedMode')?.value         || 'rab';
+      const dist = $('#schedDistribution')?.value || 'uniform';
+      const rl = ResourceLoader.load(pid, { granularity: gran, mode, distribution: dist });
+      if (!rl.ok){ toast('Gagal: ' + rl.error, false); return; }
+
       const header = ['Periode','Mulai','Selesai','Upah_Rp','Bahan_Rp','Alat_Rp','Total_Rp'];
       const rows = rl.buckets.map(b => [
         b.bucket_key, b.tanggal_mulai, b.tanggal_selesai,
@@ -912,7 +1112,7 @@ function initScheduleEvents(){
       const blob = new Blob(['\ufeff' + csv], {type:'text/csv;charset=utf-8'});
       const a = document.createElement('a');
       a.href = URL.createObjectURL(blob);
-      a.download = 'resource-loading-' + gran + '-' + today() + '.csv';
+      a.download = 'resource-loading-' + mode + '-' + gran + '-' + today() + '.csv';
       a.click();
       toast('CSV diexport');
     };
