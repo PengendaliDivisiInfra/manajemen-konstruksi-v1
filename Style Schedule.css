@@ -1131,11 +1131,11 @@ canvas{
 .nowrap{white-space:nowrap}
 
 /* =====================================================================
-   GANTT CHART — MS PROJECT STYLE (Fase 1.2 — Grid Layout Fix)
+   GANTT CHART — MS PROJECT STYLE (Fase 1.3 — Visible Summary + Strict Align)
    ===================================================================== */
 .gantt-root{
-  --gantt-row-h:26px;      /* tinggi baris tabel & bar — WAJIB sama */
-  --gantt-head-h:60px;     /* tinggi thead kiri & axis kanan — WAJIB sama */
+  --gantt-row-h:26px;
+  --gantt-head-h:60px;
   display:flex;
   flex-direction:column;
   border:1px solid var(--line);
@@ -1145,7 +1145,6 @@ canvas{
   font-size:12px;
 }
 
-/* ── Toolbar ── */
 .gantt-toolbar{
   display:flex;
   align-items:center;
@@ -1164,14 +1163,7 @@ canvas{
 .gantt-lbl{font-size:10.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
 .gantt-zoom{padding:5px 9px;font-size:12px;width:auto}
 
-/* ═══════════════════════════════════════════════════════════
-   GRID 2×2 — kunci alignment sempurna
-   ┌────────────────────┬────────────────────┐
-   │ .gantt-thead       │ .gantt-axis-wrap   │ ← row 1: 60px fixed
-   ├────────────────────┼────────────────────┤
-   │ .gantt-tbody       │ .gantt-bars-wrap   │ ← row 2: fleksibel
-   └────────────────────┴────────────────────┘
-   ═══════════════════════════════════════════════════════════ */
+/* ── Grid 2×2 ── */
 .gantt-body{
   display:grid;
   grid-template-columns: var(--gantt-table-w,640px) 1fr;
@@ -1181,10 +1173,13 @@ canvas{
   overflow:hidden;
 }
 
-/* ── R1 C1: Header tabel (kolom-kolom kiri) ── */
+/* ── R1 C1: Header tabel — FORCE 60px ── */
 .gantt-thead{
   grid-column:1;
   grid-row:1;
+  height:var(--gantt-head-h);
+  min-height:var(--gantt-head-h);
+  max-height:var(--gantt-head-h);
   display:flex;
   align-items:stretch;
   background:#1f4e79;
@@ -1210,10 +1205,13 @@ canvas{
 }
 .gantt-th:last-child{border-right:none}
 
-/* ── R1 C2: Axis kanan (skala waktu) ── */
+/* ── R1 C2: Axis — FORCE 60px ── */
 .gantt-axis-wrap{
   grid-column:2;
   grid-row:1;
+  height:var(--gantt-head-h);
+  min-height:var(--gantt-head-h);
+  max-height:var(--gantt-head-h);
   overflow:hidden;
   background:#0e1a30;
   position:relative;
@@ -1224,10 +1222,11 @@ canvas{
   top:0;
   left:0;
   height:var(--gantt-head-h);
+  width:max-content;
   will-change:transform;
 }
 
-/* ── R2 C1: Tabel body (scroll Y) ── */
+/* ── R2 C1: Tabel body ── */
 .gantt-tbody{
   grid-column:1;
   grid-row:2;
@@ -1236,12 +1235,15 @@ canvas{
   background:#0c1729;
   border-right:1px solid var(--line);
   box-sizing:border-box;
+  align-content:flex-start;
 }
 .gantt-tbody::-webkit-scrollbar{width:0}
 
 .gantt-row{
   display:flex;
   height:var(--gantt-row-h);
+  min-height:var(--gantt-row-h);
+  max-height:var(--gantt-row-h);
   box-sizing:border-box;
   line-height:var(--gantt-row-h);
   border-bottom:1px solid rgba(36,54,92,.4);
@@ -1273,9 +1275,9 @@ canvas{
 
 .gantt-indent{display:inline-block;height:1px}
 .gantt-expand{display:inline-block;width:12px;color:var(--muted);font-size:9px;cursor:pointer}
-.gantt-diamond-inline{color:#0f172a;font-size:9px;margin-right:4px;vertical-align:middle}
+.gantt-diamond-inline{color:#e6edf7;font-size:9px;margin-right:4px;vertical-align:middle}
 
-/* ── R2 C2: Bars area (scroll X & Y) ── */
+/* ── R2 C2: Bars area ── */
 .gantt-bars-wrap{
   grid-column:2;
   grid-row:2;
@@ -1285,10 +1287,10 @@ canvas{
   box-sizing:border-box;
 }
 
-/* Canvas block-level — anti inline-gap */
 .gantt-axis,
 .gantt-bars{
   display:block;
+  vertical-align:top;
   max-height:none !important;
 }
 
