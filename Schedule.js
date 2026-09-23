@@ -1085,9 +1085,13 @@ function renderSchedule(){
       }
     });
   }
-     /* ── Phase 4: Gantt ── */
-  const ganttEl = document.getElementById('chartGantt');
-  if (ganttEl) GanttRenderer.render(pid, ganttEl);
+   
+   /* ── Fase 1: Gantt MS Project Style ── */
+   const ganttEl = document.getElementById('ganttContainer');
+   if (ganttEl){
+     const mode = $('#schedMode')?.value || 'rab';
+     GanttView.mount(ganttEl, pid, { mode, zoom: ganttEl._zoom || 'weekly' });
+   }
 
   /* ── Phase 4: Resource Histogram ── */
   const selRes = document.getElementById('histResource');
@@ -1299,108 +1303,627 @@ function testResourceLoader(projectId){
 }
 
 /* =====================================================================
-   BAGIAN 9 — PHASE 4 VISUALIZATION & DETECTION
-   Gantt · Resource Histogram · Over-Allocation Detector
+   BAGIAN 9A — GANTT ENGINE (Fase 1: Data Layer)
+   Bangun tree WBS → rollup summary → hitung progress%
    ===================================================================== */
+const GanttEngine = {
 
-/* ═══════════════════════════════════════════════════════════
-   A. GANTT CHART — Bar horizontal, biru=normal, merah=kritis
-   ═══════════════════════════════════════════════════════════ */
-const GanttRenderer = {
-  render(projectId, canvasEl){
-    if (!canvasEl) return;
+  /* ── Bangun tree hierarkis dari project_wbs ── */
+  buildTree(projectId, opts){
+    opts = opts || {};
+    const mode = opts.mode || 'rab';
     const proj = DB.projects.find(p => p.id === projectId);
-    if (!proj) return;
+    if (!proj) return { ok:false, error:'Proyek tidak ditemukan', nodes:[] };
 
-    const items = DB.project_wbs
-      .filter(w => w.project_id === projectId && !w.is_group && w.tgl_mulai_rencana)
-      .sort((a,b) => (a.tgl_mulai_rencana || '').localeCompare(b.tgl_mulai_rencana || ''));
+    const allWbs = DB.project_wbs.filter(w => w.project_id === projectId);
+    if (!allWbs.length) return { ok:true, nodes:[], proj };
 
-    if (STATE.chartGantt){ STATE.chartGantt.destroy(); STATE.chartGantt = null; }
+    const childrenOf = {};
+    allWbs.forEach(w => {
+      const pk = w.parent_id || '__root__';
+      (childrenOf[pk] = childrenOf[pk] || []).push(w);
+    });
+    Object.keys(childrenOf).forEach(k =>
+      childrenOf[k].sort((a,b) => (a.urut||0) - (b.urut||0))
+    );
 
-    if (!items.length){
-      const ctx = canvasEl.getContext('2d');
-      ctx.clearRect(0, 0, canvasEl.width, canvasEl.height);
-      ctx.fillStyle = '#8fa3c4';
-      ctx.font = '13px Segoe UI';
-      ctx.textAlign = 'center';
-      ctx.fillText('Belum ada item WBS dengan jadwal.', canvasEl.width/2, 40);
-      return;
+    const nodes = [];
+    const walk = (parentKey, level) => {
+      (childrenOf[parentKey] || []).forEach(w => {
+        const node = this.makeNode(w, level, proj, mode);
+        nodes.push(node);
+        if (w.is_group) walk(w.id, level + 1);
+      });
+    };
+    walk('__root__', 0);
+
+    this.rollup(nodes);
+    return { ok:true, nodes, proj };
+  },
+
+  /* ── Buat satu node Gantt dari item WBS ── */
+  makeNode(w, level, proj, mode){
+    const isSummary = !!w.is_group;
+    const duration  = num(w.durasi_hari) || num(w.duration) || (isSummary ? 0 : 1);
+    const startISO  = w.tgl_mulai_rencana   || w.start_date  || '';
+    const finishISO = w.tgl_selesai_rencana || w.finish_date || '';
+
+    let progressPct = 0;
+    if (!isSummary){
+      const target = mode === 'rap' ? num(w.volume_rap) : num(w.volume_rab);
+      if (target > 0){
+        const done = DB.progress
+          .filter(p => p.wbs_id === w.id)
+          .reduce((s,p) => s + num(p.volume), 0);
+        progressPct = Math.min(100, (done / target) * 100);
+      }
     }
 
-    // Tinggi canvas adaptif: 28px per baris + 60px padding
-    canvasEl.style.height = Math.max(200, items.length * 28 + 60) + 'px';
+    return {
+      id: w.id,
+      kode: w.kode_wbs || '',
+      nama: w.uraian || '',
+      level,
+      isSummary,
+      isMilestone: !isSummary && duration === 0,
+      isCritical:  !isSummary && num(w.is_critical) === 1,
+      duration,
+      startISO,
+      finishISO,
+      predecessors: this.formatPred(w),
+      resources:    isSummary ? '' : this.formatResources(w, proj, mode),
+      progressPct,
+      parentId: w.parent_id || null,
+      totalRab: num(w.volume_rab) * Calc.hargaSatuanRAB(proj.id, w.ahsp_id),
+      raw: w
+    };
+  },
 
-    const projStart = new Date(proj.tgl_mulai + 'T00:00:00');
-    const dayMs = 86400000;
+  /* ── Format predecessor "I.1 FS+2" ── */
+  formatPred(w){
+    if (!w.predecessor) return '';
+    const pred = DB.project_wbs.find(x => x.id === w.predecessor);
+    if (!pred) return '';
+    const type = (w.pred_type || 'FS').toUpperCase();
+    const lag  = num(w.lag_days);
+    let s = pred.kode_wbs || '?';
+    if (type !== 'FS') s += ' ' + type;
+    if (lag !== 0)     s += (lag > 0 ? '+' : '') + lag + 'd';
+    return s;
+  },
 
-    const labels = items.map(w => w.kode_wbs + '  ' + String(w.uraian || '').slice(0, 45));
-    const data = items.map(w => {
-      const s = new Date(w.tgl_mulai_rencana + 'T00:00:00');
-      const f = new Date(w.tgl_selesai_rencana + 'T00:00:00');
-      const a = Math.round((s - projStart) / dayMs);
-      const b = Math.round((f - projStart) / dayMs);
-      return [a, b];
+  /* ── Format resource "Pekerja (0,35 OH), Mandor (0,04 OH)" ── */
+  formatResources(w, proj, mode){
+    if (!w.ahsp_id) return '';
+    const dets = DB.project_ahsp_details.filter(d =>
+      d.project_id === proj.id && d.ahsp_id === w.ahsp_id
+    );
+    if (!dets.length) return '';
+    const parts = [];
+    dets.slice(0, 3).forEach(d => {
+      const r = DB.master_resources.find(x => x.id === d.resource_id);
+      if (!r) return;
+      const k = mode === 'rap' ? Calc.koefRAP(d, r) : Calc.koefRAB(d, r);
+      parts.push(`${r.nama} (${fmt(k, 3)})`);
     });
-    const bg = items.map(w => num(w.is_critical) === 1
-      ? 'rgba(239,68,68,.85)' : 'rgba(47,129,247,.85)');
-    const bc = items.map(w => num(w.is_critical) === 1 ? '#dc2626' : '#1f6fe0');
+    if (dets.length > 3) parts.push(`+${dets.length - 3} lainnya`);
+    return parts.join(', ');
+  },
 
-    STATE.chartGantt = new Chart(canvasEl.getContext('2d'), {
-      type: 'bar',
-      data: {
-        labels,
-        datasets: [{
-          label: 'Jadwal',
-          data,
-          backgroundColor: bg,
-          borderColor: bc,
-          borderWidth: 1,
-          borderRadius: 4,
-          barPercentage: 0.7
-        }]
-      },
-      options: {
-        indexAxis: 'y',
-        responsive: true,
-        maintainAspectRatio: false,
-        animation: {duration: 300},
-        plugins: {
-          legend: {display: false},
-          tooltip: {
-            callbacks: {
-              title: c => items[c[0].dataIndex].kode_wbs + ' — ' + items[c[0].dataIndex].uraian,
-              label: c => {
-                const w = items[c.dataIndex];
-                return [
-                  'Mulai  : ' + (w.tgl_mulai_rencana || '-'),
-                  'Selesai: ' + (w.tgl_selesai_rencana || '-'),
-                  'Durasi : ' + (num(w.durasi_hari) || num(w.duration) || 1) + ' hari kerja',
-                  'Float  : ' + num(w.float_total ?? w.total_float) + ' hari',
-                  num(w.is_critical) === 1 ? '★ JALUR KRITIS' : '○ non-kritis'
-                ];
-              }
-            }
-          }
-        },
-        scales: {
-          x: {
-            ticks: {
-              color: '#8fa3c4', font: {size: 10},
-              callback: v => {
-                const d = new Date(projStart.getTime() + v * dayMs);
-                return localISO(d).slice(5);
-              }
-            },
-            grid: {color: 'rgba(36,54,92,.5)'}
-          },
-          y: {
-            ticks: {color: '#e6edf7', font: {size: 10}},
-            grid: {display: false}
-          }
+  /* ── Rollup summary: ES=min child, EF=max child, progress weighted ── */
+  rollup(nodes){
+    const maxLevel = Math.max(...nodes.map(n => n.level), 0);
+    for (let lvl = maxLevel; lvl >= 0; lvl--){
+      nodes.filter(n => n.level === lvl && n.isSummary).forEach(n => {
+        const kids = nodes.filter(c => c.parentId === n.id);
+        if (!kids.length) return;
+
+        const starts   = kids.map(c => c.startISO).filter(Boolean).sort();
+        const finishes = kids.map(c => c.finishISO).filter(Boolean).sort();
+        if (starts.length)   n.startISO  = starts[0];
+        if (finishes.length) n.finishISO = finishes[finishes.length - 1];
+
+        const cal = WorkingCalendar.get(n.raw.calendar_id);
+        if (n.startISO && n.finishISO){
+          n.duration = WorkingCalendar.diffDays(n.startISO, n.finishISO, cal, 'working');
+        }
+
+        const weight = kids.reduce((s,c) => s + c.totalRab, 0);
+        if (weight > 0){
+          n.progressPct = kids.reduce((s,c) => s + c.progressPct * c.totalRab, 0) / weight;
+        }
+        n.isCritical = kids.some(c => c.isCritical);
+      });
+    }
+  }
+};
+
+/* =====================================================================
+   BAGIAN 9B — GANTT VIEW (Fase 1: Presentation Layer)
+   ===================================================================== */
+const GanttView = {
+
+  ZOOM: {
+    daily:   { pxPerDay: 32, label: 'Harian'   },
+    weekly:  { pxPerDay: 12, label: 'Mingguan' },
+    monthly: { pxPerDay: 4,  label: 'Bulanan'  }
+  },
+
+  ROW_H:     26,
+  AXIS_H:    60,
+  HEAD_H:    34,
+
+  COLUMNS: [
+    { key:'kode',         label:'ID',        width: 60, align:'left'  },
+    { key:'nama',         label:'Task Name', width:230, align:'left'  },
+    { key:'duration',     label:'Dur',       width: 44, align:'right' },
+    { key:'startISO',     label:'Start',     width: 82, align:'center'},
+    { key:'finishISO',    label:'Finish',    width: 82, align:'center'},
+    { key:'predecessors', label:'Pred',      width: 66, align:'left'  },
+    { key:'resources',    label:'Resources', width:130, align:'left'  }
+  ],
+
+  _state: null,
+
+  /* ═══ MOUNT — entry point yang dipanggil dari renderSchedule() ═══ */
+  mount(container, projectId, opts){
+    if (!container) return null;
+    opts = opts || {};
+
+    const tree = GanttEngine.buildTree(projectId, { mode: opts.mode || 'rab' });
+    if (!tree.ok){
+      container.innerHTML = `<div class="empty">${esc(tree.error)}</div>`;
+      return null;
+    }
+    if (!tree.nodes.length){
+      container.innerHTML = `<div class="empty">Belum ada item WBS. Tambahkan dulu di tab <b>WBS / BQ</b>.</div>`;
+      return null;
+    }
+
+    const nodes = tree.nodes;
+    const proj  = tree.proj;
+
+    const allDates = [];
+    nodes.forEach(n => {
+      if (n.startISO)  allDates.push(n.startISO);
+      if (n.finishISO) allDates.push(n.finishISO);
+    });
+    if (!allDates.length){
+      container.innerHTML = `<div class="empty">Item WBS belum punya jadwal. Jalankan <b>Recalculate CPM</b> terlebih dahulu.</div>`;
+      return null;
+    }
+    allDates.sort();
+    const minDate = allDates[0];
+    const maxDate = allDates[allDates.length - 1];
+
+    const cal = WorkingCalendar.get(proj.calendar_id);
+    const startDate = WorkingCalendar.addWorkDays(minDate, -3, cal);
+    const endDate   = WorkingCalendar.addWorkDays(maxDate,  7, cal);
+
+    const zoom    = opts.zoom || 'weekly';
+    const zoomCfg = this.ZOOM[zoom] || this.ZOOM.weekly;
+
+    const totalDays   = Math.round((endDate - startDate) / 86400000) + 1;
+    const chartWidth  = Math.max(400, totalDays * zoomCfg.pxPerDay);
+    const totalHeight = nodes.length * this.ROW_H;
+
+    const state = {
+      container, nodes, proj, startDate, endDate, totalDays,
+      chartWidth, totalHeight, zoom, zoomCfg,
+      mode: opts.mode || 'rab', cal
+    };
+    this._state = state;
+
+    this.renderLayout(state);
+    this.wireEvents(state);
+    return state;
+  },
+
+  /* ═══ LAYOUT ═══ */
+  renderLayout(state){
+    const {container, nodes, chartWidth, totalHeight, proj, zoom} = state;
+    const tableW = this.COLUMNS.reduce((s,c) => s + c.width, 0);
+
+    container.innerHTML = `
+      <div class="gantt-root" style="--gantt-table-w:${tableW}px">
+        <div class="gantt-toolbar">
+          <div class="gantt-toolbar-left">
+            <div class="gantt-title">🗓 ${esc(proj.kode)} — Gantt Chart</div>
+            <div class="gantt-subtitle">${esc(proj.nama)} · ${esc(proj.tgl_mulai)} → ${esc(proj.tgl_selesai)}</div>
+          </div>
+          <div class="gantt-toolbar-right">
+            <span class="gantt-lbl">Zoom</span>
+            <select class="gantt-zoom">
+              <option value="daily"   ${zoom==='daily'   ?'selected':''}>Harian</option>
+              <option value="weekly"  ${zoom==='weekly'  ?'selected':''}>Mingguan</option>
+              <option value="monthly" ${zoom==='monthly' ?'selected':''}>Bulanan</option>
+            </select>
+            <button class="btn btn-sm gantt-btn-today">📍 Hari Ini</button>
+          </div>
+        </div>
+
+        <div class="gantt-grid">
+          <div class="gantt-left">
+            <div class="gantt-thead">
+              ${this.COLUMNS.map(c =>
+                `<div class="gantt-th" style="width:${c.width}px;text-align:${c.align}">${esc(c.label)}</div>`
+              ).join('')}
+            </div>
+            <div class="gantt-tbody">
+              ${nodes.map((n,i) => this.rowHtml(n,i)).join('')}
+            </div>
+          </div>
+
+          <div class="gantt-right">
+            <div class="gantt-chart-scroll">
+              <div class="gantt-canvas-wrap"
+                   style="width:${chartWidth}px;height:${totalHeight + this.AXIS_H}px">
+                <canvas class="gantt-axis" width="${chartWidth}" height="${this.AXIS_H}"></canvas>
+                <canvas class="gantt-bars" width="${chartWidth}" height="${totalHeight}"></canvas>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+
+    this.drawAxis(state, container.querySelector('.gantt-axis'));
+    this.drawBars(state, container.querySelector('.gantt-bars'));
+  },
+
+  /* ═══ ENTRY TABLE ROW ═══ */
+  rowHtml(node, idx){
+    const cls = [
+      'gantt-row',
+      node.isSummary   ? 'is-summary'   : '',
+      node.isCritical  ? 'is-critical'  : ''
+    ].filter(Boolean).join(' ');
+
+    const indent = node.level * 16;
+
+    const cells = this.COLUMNS.map(c => {
+      let html;
+      if (c.key === 'nama'){
+        const exp = node.isSummary ? '<span class="gantt-expand">▾</span>' : '';
+        const dia = node.isMilestone ? '<span class="gantt-diamond-inline">◆</span>' : '';
+        html = `<span class="gantt-indent" style="padding-left:${indent}px"></span>${exp}${dia}${esc(node.nama)}`;
+      } else if (c.key === 'duration'){
+        html = node.isMilestone ? '0' : fmt(node.duration, 0);
+      } else if (c.key === 'startISO' || c.key === 'finishISO'){
+        html = esc(node[c.key] || '—');
+      } else {
+        html = esc(node[c.key] || '—');
+      }
+      return `<div class="gantt-td" style="width:${c.width}px;text-align:${c.align}">${html}</div>`;
+    }).join('');
+
+    return `<div class="${cls}" data-idx="${idx}">${cells}</div>`;
+  },
+
+  /* ═══ TIME AXIS ═══ */
+  drawAxis(state, canvas){
+    const ctx = canvas.getContext('2d');
+    const {startDate, endDate, chartWidth, zoom, cal} = state;
+    const H = this.AXIS_H, W = chartWidth;
+    const px = state.zoomCfg.pxPerDay;
+
+    ctx.fillStyle = '#0e1a30';
+    ctx.fillRect(0, 0, W, H);
+
+    // Background kerja/libur
+    const d = new Date(startDate);
+    while (d <= endDate){
+      if (!WorkingCalendar.isWorkDay(d, cal)){
+        const x = Math.round((d - startDate) / 86400000) * px;
+        ctx.fillStyle = 'rgba(255,255,255,.025)';
+        ctx.fillRect(x, 0, px, H);
+      }
+      d.setDate(d.getDate() + 1);
+    }
+
+    // Minor gridline harian
+    const d2 = new Date(startDate);
+    ctx.strokeStyle = 'rgba(36,54,92,.5)';
+    ctx.lineWidth = 1;
+    while (d2 <= endDate){
+      const x = Math.round((d2 - startDate) / 86400000) * px + 0.5;
+      ctx.beginPath();
+      ctx.moveTo(x, 0);
+      ctx.lineTo(x, H);
+      ctx.stroke();
+
+      // Label tanggal (harian atau tiap kelipatan 7)
+      const showDay = (zoom === 'daily') || (zoom === 'weekly' && d2.getDate() % 7 === 1);
+      if (showDay){
+        ctx.fillStyle = '#8fa3c4';
+        ctx.font = '9px Segoe UI';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(String(d2.getDate()).padStart(2,'0'), x + px/2, H * 0.78);
+      }
+      d2.setDate(d2.getDate() + 1);
+    }
+
+    // Week boundary (garis tebal) & label week number
+    const wd = new Date(startDate);
+    const dayNr = (wd.getDay() + 6) % 7;
+    wd.setDate(wd.getDate() - dayNr); // rewind ke Senin
+
+    while (wd <= endDate){
+      const x = Math.round((wd - startDate) / 86400000) * px + 0.5;
+      if (x >= 0 && x <= W){
+        ctx.strokeStyle = '#3a5590';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, H);
+        ctx.stroke();
+        ctx.lineWidth = 1;
+
+        if (zoom !== 'monthly'){
+          ctx.fillStyle = '#8fa3c4';
+          ctx.font = 'bold 9px Segoe UI';
+          ctx.textAlign = 'left';
+          ctx.textBaseline = 'middle';
+          ctx.fillText('W' + String(this.isoWeek(wd)).padStart(2,'0'), x + 4, H * 0.30);
         }
       }
+      wd.setDate(wd.getDate() + 7);
+    }
+
+    // Month boundary & label
+    let md = new Date(startDate.getFullYear(), startDate.getMonth(), 1);
+    while (md <= endDate){
+      const x = Math.round((md - startDate) / 86400000) * px + 0.5;
+      if (x >= 0 && x <= W){
+        ctx.strokeStyle = '#5a7ab0';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, H);
+        ctx.stroke();
+        ctx.lineWidth = 1;
+
+        const nm = new Date(md.getFullYear(), md.getMonth() + 1, 1);
+        const nx = Math.round((nm - startDate) / 86400000) * px;
+        const cx = (x + nx) / 2;
+        ctx.fillStyle = '#e6edf7';
+        ctx.font = 'bold 11px Segoe UI';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(
+          md.toLocaleDateString('id-ID', {month:'short', year:'2-digit'}).toUpperCase(),
+          cx, H * 0.52
+        );
+      }
+      md = new Date(md.getFullYear(), md.getMonth() + 1, 1);
+    }
+
+    // Border bawah
+    ctx.strokeStyle = '#24365c';
+    ctx.beginPath();
+    ctx.moveTo(0, H - 0.5);
+    ctx.lineTo(W, H - 0.5);
+    ctx.stroke();
+  },
+
+  isoWeek(d){
+    const t = new Date(d.valueOf());
+    const dn = (d.getDay() + 6) % 7;
+    t.setDate(t.getDate() - dn + 3);
+    const ft = new Date(t.getFullYear(), 0, 4);
+    return 1 + Math.round((t - ft) / (7 * 86400000));
+  },
+
+  /* ═══ BARS ═══ */
+  drawBars(state, canvas){
+    const ctx = canvas.getContext('2d');
+    const {nodes, startDate, cal} = state;
+    const px  = state.zoomCfg.pxPerDay;
+    const H   = canvas.height, W = canvas.width;
+    const rowH = this.ROW_H;
+
+    ctx.clearRect(0, 0, W, H);
+
+    // Row striping
+    nodes.forEach((n, i) => {
+      if (n.isSummary){
+        ctx.fillStyle = 'rgba(47,129,247,.06)';
+        ctx.fillRect(0, i*rowH, W, rowH);
+      } else if (i % 2 === 0){
+        ctx.fillStyle = 'rgba(255,255,255,.012)';
+        ctx.fillRect(0, i*rowH, W, rowH);
+      }
     });
+
+    // Non-working vertical shading
+    const dShade = new Date(startDate);
+    while (dShade <= state.endDate){
+      if (!WorkingCalendar.isWorkDay(dShade, cal)){
+        const x = Math.round((dShade - startDate) / 86400000) * px;
+        ctx.fillStyle = 'rgba(255,255,255,.018)';
+        ctx.fillRect(x, 0, px, H);
+      }
+      dShade.setDate(dShade.getDate() + 1);
+    }
+
+    // Today marker
+    const today = new Date(); today.setHours(0,0,0,0);
+    const tOff = Math.round((today - startDate) / 86400000);
+    if (tOff >= 0 && tOff <= state.totalDays){
+      const x = tOff * px + 0.5;
+      ctx.strokeStyle = '#f59e0b';
+      ctx.lineWidth = 2;
+      ctx.setLineDash([5, 4]);
+      ctx.beginPath();
+      ctx.moveTo(x, 0);
+      ctx.lineTo(x, H);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.lineWidth = 1;
+    }
+
+    // Draw bars
+    nodes.forEach((n, i) => {
+      const y = i * rowH;
+
+      if (!n.startISO || !n.finishISO) return;
+      const sOff = Math.round((new Date(n.startISO) - startDate) / 86400000);
+      const fOff = Math.round((new Date(n.finishISO) - startDate) / 86400000);
+
+      // Milestone
+      if (n.isMilestone){
+        const cx = sOff * px;
+        const cy = y + rowH / 2;
+        this.diamond(ctx, cx, cy, 7, n.isCritical ? '#dc2626' : '#0f172a');
+        return;
+      }
+
+      const x = sOff * px;
+      const w = Math.max(3, (fOff - sOff) * px);
+
+      if (n.isSummary){
+        this.summaryBar(ctx, x, y + (rowH - 10)/2, w, 10);
+      } else {
+        const fill   = n.isCritical ? '#dc2626' : '#2f81f7';
+        const stroke = n.isCritical ? '#7f1d1d' : '#1f6fe0';
+        this.taskBar(ctx, x, y + (rowH - 14)/2, w, 14, fill, stroke, n.progressPct);
+      }
+    });
+  },
+
+  taskBar(ctx, x, y, w, h, fill, stroke, pct){
+    const bg = this.lighten(fill, 0.55);
+    ctx.fillStyle = bg;
+    this.rrect(ctx, x, y, w, h, 3);
+    ctx.fill();
+
+    if (pct > 0){
+      const pw = Math.max(2, w * (pct/100));
+      ctx.fillStyle = fill;
+      this.rrect(ctx, x, y, pw, h, 3);
+      ctx.fill();
+    } else {
+      ctx.fillStyle = fill;
+      this.rrect(ctx, x, y, w, h, 3);
+      ctx.fill();
+    }
+
+    ctx.strokeStyle = stroke;
+    ctx.lineWidth = 1;
+    this.rrect(ctx, x + .5, y + .5, w - 1, h - 1, 3);
+    ctx.stroke();
+
+    if (w > 60 && pct > 0){
+      ctx.fillStyle = '#fff';
+      ctx.font = 'bold 9px Segoe UI';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(Math.round(pct) + '%', x + w/2, y + h/2);
+    }
+  },
+
+  summaryBar(ctx, x, y, w, h){
+    ctx.fillStyle = '#0f172a';
+    ctx.fillRect(x, y, w, h);
+
+    // End caps segitiga
+    ctx.beginPath();
+    ctx.moveTo(x, y + h);
+    ctx.lineTo(x + 8, y + h);
+    ctx.lineTo(x, y + h + 5);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.beginPath();
+    ctx.moveTo(x + w, y + h);
+    ctx.lineTo(x + w - 8, y + h);
+    ctx.lineTo(x + w, y + h + 5);
+    ctx.closePath();
+    ctx.fill();
+  },
+
+  diamond(ctx, cx, cy, r, fill){
+    ctx.beginPath();
+    ctx.moveTo(cx, cy - r);
+    ctx.lineTo(cx + r, cy);
+    ctx.lineTo(cx, cy + r);
+    ctx.lineTo(cx - r, cy);
+    ctx.closePath();
+    ctx.fillStyle = fill;
+    ctx.fill();
+    ctx.strokeStyle = '#fff';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+  },
+
+  rrect(ctx, x, y, w, h, r){
+    if (w < 2*r) r = w/2;
+    if (h < 2*r) r = h/2;
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y,     x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x,     y + h, r);
+    ctx.arcTo(x,     y + h, x,     y,     r);
+    ctx.arcTo(x,     y,     x + w, y,     r);
+    ctx.closePath();
+  },
+
+  lighten(hex, amt){
+    const c = hex.replace('#','');
+    const r = parseInt(c.substr(0,2),16);
+    const g = parseInt(c.substr(2,2),16);
+    const b = parseInt(c.substr(4,2),16);
+    return `rgb(${Math.round(r + (255-r)*amt)},${Math.round(g + (255-g)*amt)},${Math.round(b + (255-b)*amt)})`;
+  },
+
+  /* ═══ EVENTS ═══ */
+  wireEvents(state){
+    const {container} = state;
+    const leftBody  = container.querySelector('.gantt-tbody');
+    const rightScr  = container.querySelector('.gantt-chart-scroll');
+    const zoomSel   = container.querySelector('.gantt-zoom');
+    const btnToday  = container.querySelector('.gantt-btn-today');
+
+    // Sync scroll vertikal dua arah
+    let syncing = false;
+    rightScr.addEventListener('scroll', () => {
+      if (syncing) return;
+      syncing = true;
+      leftBody.scrollTop = rightScr.scrollTop;
+      syncing = false;
+    });
+    leftBody.addEventListener('scroll', () => {
+      if (syncing) return;
+      syncing = true;
+      rightScr.scrollTop = leftBody.scrollTop;
+      syncing = false;
+    });
+
+    // Zoom
+    zoomSel.onchange = e => {
+      this.mount(state.container, state.proj.id, {
+        mode: state.mode, zoom: e.target.value
+      });
+    };
+
+    // Today
+    btnToday.onclick = () => {
+      const today = new Date(); today.setHours(0,0,0,0);
+      const off = Math.round((today - state.startDate) / 86400000);
+      const x = off * state.zoomCfg.pxPerDay;
+      rightScr.scrollLeft = Math.max(0, x - rightScr.clientWidth / 2);
+    };
+
+    // Auto-scroll ke today saat mount
+    setTimeout(() => {
+      const today = new Date(); today.setHours(0,0,0,0);
+      const off = Math.round((today - state.startDate) / 86400000);
+      if (off >= 0){
+        const x = off * state.zoomCfg.pxPerDay;
+        rightScr.scrollLeft = Math.max(0, x - rightScr.clientWidth / 2);
+      }
+    }, 30);
   }
 };
 
