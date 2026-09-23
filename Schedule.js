@@ -1530,3 +1530,92 @@ const OverAllocationDetector = {
     return {ok: true, alerts, total_checked: rl.byResource.length};
   }
 };
+
+/* =====================================================================
+   BAGIAN 10 — SYNC MANAGER (Phase 5)
+   Partial payload · Version guard · Soft lock
+   ===================================================================== */
+const SyncManager = {
+
+  CLIENT_ID: 'cli_' + Date.now().toString(36) + '_' +
+             Math.random().toString(36).slice(2, 7),
+
+  /* ── Strip field transien & cache turunan sebelum kirim ── */
+  sanitize(db){
+    if (!db || typeof db !== 'object') return db;
+    const FORBIDDEN = new Set([
+      'resDailyMap','buckets','byResource','byWBS','totals',
+      'violations','_ES','_EF','_LS','_LF','_totalFloat'
+    ]);
+    const clean = {};
+    Object.keys(db).forEach(sheetName => {
+      const arr = db[sheetName];
+      if (!Array.isArray(arr)){ clean[sheetName] = arr; return; }
+      clean[sheetName] = arr.map(row => {
+        if (!row || typeof row !== 'object') return row;
+        const out = {};
+        Object.keys(row).forEach(k => {
+          if (k.startsWith('_')) return;
+          if (FORBIDDEN.has(k)) return;
+          out[k] = row[k];
+        });
+        return out;
+      });
+    });
+    return clean;
+  },
+
+  estimateSizeKB(db){
+    try {
+      const s = JSON.stringify(db);
+      return +(s.length / 1024).toFixed(1);
+    } catch(e){ return -1; }
+  },
+
+  /* ── Push dengan version guard ── */
+  async push(db, settings, opts){
+    opts = opts || {};
+    const clean = this.sanitize(db);
+    const sizeKB = this.estimateSizeKB(clean);
+    if (sizeKB > 3000) console.warn('[SyncManager] payload besar:', sizeKB, 'KB');
+    console.log('[SyncManager] push payload:', sizeKB, 'KB');
+
+    const baseVersion = opts.force ? null : (STATE.dbVersion ?? null);
+
+    const out = await sheetRequest('push', {
+      db: clean,
+      settings,
+      baseVersion,
+      clientId: this.CLIENT_ID
+    });
+
+    if (out.ok && typeof out.dbVersion === 'number'){
+      STATE.dbVersion = out.dbVersion;
+      saveDB();
+    }
+    return Object.assign(out, { sizeKB });
+  },
+
+  /* ── Pull ── */
+  async pull(){
+    const out = await sheetRequest('pull', {});
+    if (out.ok && typeof out.dbVersion === 'number'){
+      STATE.dbVersion = out.dbVersion;
+    }
+    return out;
+  },
+
+  /* ── Soft lock ── */
+  async lock(ttlMs){
+    const out = await sheetRequest('softLock', {
+      clientId: this.CLIENT_ID, ttlMs: ttlMs || 120000
+    });
+    return out;
+  },
+  async release(){
+    return sheetRequest('softRelease', { clientId: this.CLIENT_ID });
+  },
+  async status(){
+    return sheetRequest('softStatus', {});
+  }
+};
