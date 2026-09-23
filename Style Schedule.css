@@ -1131,11 +1131,11 @@ canvas{
 .nowrap{white-space:nowrap}
 
 /* =====================================================================
-   GANTT CHART — MS PROJECT STYLE (Fase 1)
+   GANTT CHART — MS PROJECT STYLE (Fase 1.1 — Alignment Fix)
    ===================================================================== */
 .gantt-root{
   --gantt-row-h:26px;
-  --gantt-head-h:34px;
+  --gantt-head-h:60px;   /* ← DISAMAKAN dengan AXIS_H */
   --gantt-axis-h:60px;
   display:flex;
   flex-direction:column;
@@ -1163,7 +1163,7 @@ canvas{
 .gantt-lbl{font-size:10.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
 .gantt-zoom{padding:5px 9px;font-size:12px;width:auto}
 
-/* Grid: kiri (tabel) + kanan (chart) */
+/* Grid utama */
 .gantt-grid{
   display:grid;
   grid-template-columns:var(--gantt-table-w,640px) 1fr;
@@ -1171,7 +1171,7 @@ canvas{
   min-height:340px;
 }
 
-/* ── Sisi kiri: Entry Table ── */
+/* ── SISI KIRI: Entry Table ── */
 .gantt-left{
   border-right:1px solid var(--line);
   display:flex;
@@ -1181,7 +1181,7 @@ canvas{
 }
 .gantt-thead{
   display:flex;
-  height:var(--gantt-head-h);
+  height:var(--gantt-head-h);   /* ← 60px, matching axis */
   background:#1f4e79;
   color:#fff;
   font-size:10.5px;
@@ -1190,6 +1190,8 @@ canvas{
   letter-spacing:.5px;
   overflow:hidden;
   flex-shrink:0;
+  align-items:flex-end;          /* label di bawah, sejajar baris 'hari' axis */
+  padding-bottom:6px;
 }
 .gantt-th{
   padding:0 8px;
@@ -1251,34 +1253,37 @@ canvas{
   vertical-align:middle;
 }
 
-/* ── Sisi kanan: Chart ── */
+/* ── SISI KANAN: Chart (restrukturisasi) ── */
 .gantt-right{
-  position:relative;
+  display:flex;
+  flex-direction:column;
   overflow:hidden;
   background:#0b1220;
 }
+
+/* Axis OUTSIDE scroll container — hanya horizontal yang disinkron */
 .gantt-axis-top{
   height:var(--gantt-axis-h);
+  flex-shrink:0;
+  overflow:hidden;
   background:#0e1a30;
   border-bottom:1px solid var(--line);
-  position:sticky;
-  top:0;
-  z-index:5;
+  position:relative;
 }
+.gantt-axis-track{
+  position:absolute;
+  top:0;
+  left:0;
+  height:var(--gantt-axis-h);
+  will-change:transform;
+}
+
+/* Bars container — scroll x & y */
 .gantt-chart-scroll{
+  flex:1;
   width:100%;
-  height:100%;
   overflow:auto;
   position:relative;
 }
-.gantt-canvas-wrap{position:relative}
-.gantt-axis{
-  display:block;
-  position:sticky;
-  top:0;
-  z-index:5;
-}
 .gantt-bars{display:block}
-
-/* Fix Chart.js lama tidak dipakai di panel ini */
 #ganttContainer canvas{max-height:none !important}
