@@ -952,7 +952,7 @@ const Calc = {
     return (V * Fb * Fa * 3600) / (Ts * Fk * Fv);
   },
 
-    /** Q untuk RAP — memakai parameter LAPANGAN bila ada (fallback ke kontrak) */
+  /** Q untuk RAP — memakai parameter LAPANGAN bila ada (fallback ke kontrak) */
   QRAP(alat){
     if (!alat || alat.jenis !== 'alat') return 0;
     const V  = num(alat.kapasitas_bucket);
@@ -965,10 +965,10 @@ const Calc = {
     return (V * Fb * Fa * 3600) / (Ts * Fk * Fv);
   },
 
-    /** Alias backward compat */
+  /** Alias backward compat — sebagian kode lama masih memanggil Calc.Q */
   Q(alat){ return this.QRAB(alat); },
 
-  /** Koefisien RAB — SELALU dari Q kontrak (locked) */
+  /** Koefisien RAB — SELALU dari Q kontrak (locked, tidak terpengaruh parameter lapangan) */
   koefRAB(det, res){
     if (res && res.jenis === 'alat' && num(res.hitung_q) === 1){
       const q = this.QRAB(res);
@@ -979,32 +979,12 @@ const Calc = {
 
   /** Koefisien RAP — prioritas: override manual → Q lapangan → master */
   koefRAP(det, res){
-    // 1) Override manual eksplisit
     if (det.koefisien_rap !== undefined && det.koefisien_rap !== null && det.koefisien_rap !== ''){
       return num(det.koefisien_rap);
     }
-    // 2) Alat dengan Q otomatis → pakai parameter lapangan
     if (res && res.jenis === 'alat' && num(res.hitung_q) === 1){
       const q = this.QRAP(res);
       if (q > 0) return 1 / q;
-    }
-    // 3) Fallback
-    return this.koefRAB(det, res);
-  },
-
-  /** Koefisien RAB untuk sebuah detail AHSP */
-  koefRAB(det, res){
-    if (res && res.jenis === 'alat' && num(res.hitung_q) === 1){
-      const q = this.Q(res);
-      if (q > 0) return 1 / q;
-    }
-    return num(det.koefisien_master);
-  },
-
-  /** Koefisien RAP untuk sebuah detail AHSP (pakai override bila ada) */
-  koefRAP(det, res){
-    if (det.koefisien_rap !== undefined && det.koefisien_rap !== null && det.koefisien_rap !== ''){
-      return num(det.koefisien_rap);
     }
     return this.koefRAB(det, res);
   },
@@ -1111,11 +1091,9 @@ const Calc = {
     const durasi = Math.max(1, Math.round(num(proj.durasi_minggu)||1));
     const rows = this.wbsRows(projectId).filter(r=>!r.isGroup);
     const totalRAB = rows.reduce((s,r)=>s+r.total_rab,0) || 1;
-
     const planned = [];
     const actual  = [];
     const labels  = [];
-
     for (let w=1; w<=durasi; w++){
       labels.push('M'+w);
       let pCum = 0, aCum = 0;
@@ -1269,7 +1247,7 @@ function formResource(id){
     </div>
     <div id="alatBox" style="display:${isAlat?'block':'none'}">
       <div class="sep"></div>
-      <p class="hint" style="margin-bottom:10px"><b>Parameter Kapasitas Produksi Alat</b> — Q = (V × Fb × Fa × 3600) / (Ts × Fk × Fv)</p>
+      <p class="hint" style="margin-bottom:10px"><b>Parameter Kapasitas Produksi Alat (RAB)</b> — Q = (V × Fb × Fa × 3600) / (Ts × Fk × Fv)</p>
       <div class="row">
         <div class="field"><label class="f">Hitung Q Otomatis</label>
           <select id="fr_hq"><option value="1" ${num(r?.hitung_q)===1?'selected':''}>Ya</option><option value="0" ${num(r?.hitung_q)!==1?'selected':''}>Tidak (manual)</option></select>
@@ -1290,10 +1268,11 @@ function formResource(id){
         <div class="field"><label class="f">Faktor Konversi Fv</label><input id="fr_fv" type="number" step="0.01" value="${num(r?.faktor_konversi)||1}" /></div>
       </div>
       <div class="row" style="margin-top:12px">
-        <div class="field" style="flex:2"><label class="f">Keterangan Kondisi</label><input id="fr_ket" value="${esc(r?.ket_koreksi||'')}" placeholder="mis. Kondisi lumpur tinggi, sirkulasi air deras" /></div>
+        <div class="field" style="flex:2"><label class="f">Keterangan Kondisi</label><input id="fr_ket" value="${esc(r?.ket_koreksi||'')}" placeholder="mis. Kondisi lumpur tinggi" /></div>
       </div>
-            <div class="sep"></div>
-      <p class="hint" style="margin-bottom:10px"><b>Parameter Lapangan (RAP)</b> — hanya memengaruhi Koefisien & Harga Satuan RAP, <b>tidak mengubah RAB Kontrak</b></p>
+
+      <div class="sep"></div>
+      <p class="hint" style="margin-bottom:10px"><b>Parameter Lapangan (RAP)</b> — hanya memengaruhi Koefisien &amp; Harga Satuan RAP, <b>tidak mengubah RAB Kontrak</b></p>
       <div class="row">
         <div class="field"><label class="f">Ts Lapangan (detik)</label><input id="fr_ts_lap" type="number" step="0.1" value="${num(r?.ts_lapangan)}" placeholder="kosong = sama dengan kontrak" /></div>
         <div class="field"><label class="f">Fk Lapangan (basah/lumpur)</label><input id="fr_fk_lap" type="number" step="0.01" value="${num(r?.fk_lapangan)}" placeholder="kosong = sama dengan kontrak" /></div>
@@ -1315,12 +1294,10 @@ function formResource(id){
       satuan: $('#fr_satuan').value.trim(),
       harga_rab: num($('#fr_hrab').value),
       harga_rap: num($('#fr_hrap').value)
-      biaya_umum: num($('#fa_umum').value),
-      margin: num($('#fa_margin').value),
     };
     if (!obj.kode || !obj.nama){ toast('Kode & Nama wajib diisi', false); return false; }
     if (jenis==='alat'){
-      Object.assign(obj,{
+      Object.assign(obj, {
         hitung_q: num($('#fr_hq').value),
         jenis_alat: $('#fr_ja').value,
         kapasitas_bucket: num($('#fr_v').value),
@@ -1329,7 +1306,7 @@ function formResource(id){
         waktu_siklus: num($('#fr_ts').value),
         faktor_koreksi: num($('#fr_fk').value),
         faktor_konversi: num($('#fr_fv').value),
-        ket_koreksi: $('#fr_ket').value.trim()
+        ket_koreksi: $('#fr_ket').value.trim(),
         ts_lapangan: num($('#fr_ts_lap').value) || null,
         fk_lapangan: num($('#fr_fk_lap').value) || null,
         fa_lapangan: num($('#fr_fa_lap').value) || null,
@@ -1501,6 +1478,8 @@ function formAhsp(id){
       satuan: $('#fa_satuan').value.trim(),
       kategori: $('#fa_kat').value.trim(),
       overhead: num($('#fa_oh').value),
+      biaya_umum: num($('#fa_umum').value),
+      margin: num($('#fa_margin').value),
       sumber: 'Permen PUPR SDA'
     };
     if (a) Object.assign(a, obj); else DB.ahsp_headers.push(obj);
@@ -1957,13 +1936,11 @@ function formProject(id){
       tgl_selesai: $('#fpj_ts').value,
       ppn: num(SET.ppn),
       overhead: num(SET.overhead)
-      biaya_umum: num($('#fa_umum').value),
-      margin: num($('#fa_margin').value),
     };
     if (p) Object.assign(p, obj);
     else {
       DB.projects.push(obj);
-      cloneAhspToProject(obj.id);   // <-- Kloning template AHSP
+      cloneAhspToProject(obj.id);
       STATE.activeProject = obj.id;
     }
     saveDB(); renderAll(); toast('Proyek disimpan & AHSP dikloning');
@@ -2806,6 +2783,7 @@ function initRecon(){
 /* =====================================================================
    MODUL LEMBAR AHSP PUPR (Requirement 1)
    ===================================================================== */
+  let _lastLembarCSV = null;
 function renderLembarAhsp(){
   const pid = $('#lembarProjSel').value;
   const aid = $('#lembarAhspSel').value;
