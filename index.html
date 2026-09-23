@@ -133,7 +133,16 @@
         <div><h2>Master Schedule — CPM &amp; Resource Loading</h2><p>Auto-scheduling MS Project style</p></div>
         <div class="row">
           <button class="btn" id="btnRunCPM">🔄 Recalculate CPM</button>
-          <select id="schedGranularity" style="width:150px">
+          <select id="schedMode" style="width:120px">
+            <option value="rab">RAB (Rencana)</option>
+            <option value="rap">RAP (Riil)</option>
+          </select>
+          <select id="schedDistribution" style="width:150px">
+            <option value="uniform">Distribusi Merata</option>
+            <option value="triangular">Kurva Segitiga</option>
+            <option value="bell">Kurva Lonceng</option>
+          </select>
+          <select id="schedGranularity" style="width:130px">
             <option value="daily">Harian</option>
             <option value="weekly" selected>Mingguan</option>
             <option value="monthly">Bulanan</option>
@@ -149,6 +158,13 @@
         <div><h2>Time-Phased Resource Loading</h2><p>Kebutuhan Upah, Bahan &amp; Alat per periode (read-only terhadap RAB/RAP)</p></div>
       </div>
       <div class="tw" style="max-height:45vh"><table id="tblResourceLoad"></table></div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head">
+        <div><h2>Kebutuhan per Sumber Daya</h2><p>Total qty, beban puncak harian, dan biaya agregat per resource</p></div>
+      </div>
+      <div class="tw" style="max-height:45vh"><table id="tblResourceByRes"></table></div>
     </div>
 
     <div class="panel">
