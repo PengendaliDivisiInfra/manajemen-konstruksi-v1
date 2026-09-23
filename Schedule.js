@@ -1623,6 +1623,7 @@ const GanttView = {
 
     ctx.clearRect(0, 0, W, H);
 
+    // ── A. Row background striping (agar sinkron dgn tabel kiri) ──
     nodes.forEach((n, i) => {
       if (n.isSummary){
         ctx.fillStyle = 'rgba(47,129,247,.06)';
@@ -1633,6 +1634,18 @@ const GanttView = {
       }
     });
 
+    // ── B. Horizontal row separator (KUNCI ALIGNMENT VISUAL) ──
+    ctx.strokeStyle = 'rgba(36,54,92,.4)';
+    ctx.lineWidth = 1;
+    for (let i = 1; i <= nodes.length; i++){
+      const y = i * rowH - 0.5;
+      ctx.beginPath();
+      ctx.moveTo(0, y);
+      ctx.lineTo(W, y);
+      ctx.stroke();
+    }
+
+    // ── C. Non-working day shading ──
     const dShade = new Date(startDate);
     while (dShade <= state.endDate){
       if (!WorkingCalendar.isWorkDay(dShade, cal)){
@@ -1643,6 +1656,7 @@ const GanttView = {
       dShade.setDate(dShade.getDate() + 1);
     }
 
+    // ── D. Today marker ──
     const today = new Date(); today.setHours(0,0,0,0);
     const tOff = Math.round((today - startDate) / 86400000);
     if (tOff >= 0 && tOff <= state.totalDays){
@@ -1658,6 +1672,7 @@ const GanttView = {
       ctx.lineWidth = 1;
     }
 
+    // ── E. Bars (task + summary + milestone) ──
     nodes.forEach((n, i) => {
       const y = i * rowH;
       if (!n.startISO || !n.finishISO) return;
@@ -1665,10 +1680,11 @@ const GanttView = {
       const sOff = Math.round((new Date(n.startISO) - startDate) / 86400000);
       const fOff = Math.round((new Date(n.finishISO) - startDate) / 86400000);
 
+      // Milestone
       if (n.isMilestone){
         const cx = sOff * px;
         const cy = y + rowH / 2;
-        this.diamond(ctx, cx, cy, 7, n.isCritical ? '#dc2626' : '#0f172a');
+        this.diamond(ctx, cx, cy, 7, n.isCritical ? '#dc2626' : '#e6edf7');
         return;
       }
 
@@ -1676,7 +1692,8 @@ const GanttView = {
       const w = Math.max(3, (fOff - sOff) * px);
 
       if (n.isSummary){
-        this.summaryBar(ctx, x, y + (rowH - 10)/2, w, 10);
+        // Summary bar — JELAS TERLIHAT dengan warna terang
+        this.summaryBar(ctx, x, y + (rowH - 12)/2, w, 12);
       } else {
         const fill   = n.isCritical ? '#dc2626' : '#2f81f7';
         const stroke = n.isCritical ? '#7f1d1d' : '#1f6fe0';
@@ -1717,9 +1734,24 @@ const GanttView = {
   },
 
   summaryBar(ctx, x, y, w, h){
-    ctx.fillStyle = '#0f172a';
+    // Fill terang + border terang → KONTRAS di background gelap
+    ctx.fillStyle = '#475569';
     ctx.fillRect(x, y, w, h);
 
+    // Border putih tipis atas & bawah
+    ctx.strokeStyle = '#94a3b8';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(x, y + 0.5);
+    ctx.lineTo(x + w, y + 0.5);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(x, y + h - 0.5);
+    ctx.lineTo(x + w, y + h - 0.5);
+    ctx.stroke();
+
+    // End-cap triangle (kiri bawah)
+    ctx.fillStyle = '#94a3b8';
     ctx.beginPath();
     ctx.moveTo(x, y + h);
     ctx.lineTo(x + 8, y + h);
@@ -1727,6 +1759,7 @@ const GanttView = {
     ctx.closePath();
     ctx.fill();
 
+    // End-cap triangle (kanan bawah)
     ctx.beginPath();
     ctx.moveTo(x + w, y + h);
     ctx.lineTo(x + w - 8, y + h);
@@ -1744,8 +1777,8 @@ const GanttView = {
     ctx.closePath();
     ctx.fillStyle = fill;
     ctx.fill();
-    ctx.strokeStyle = '#fff';
-    ctx.lineWidth = 1;
+    ctx.strokeStyle = '#e6edf7';
+    ctx.lineWidth = 1.5;
     ctx.stroke();
   },
 
