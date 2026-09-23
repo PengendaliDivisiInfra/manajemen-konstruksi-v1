@@ -3,310 +3,14 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Manajemen Konstruksi v1 — RAB vs RAP SDA</title>
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' fill='white'/%3E%3Crect width='92' height='92' x='4' y='4' fill='none' stroke='%23ED1C24' stroke-width='6'/%3E%3Cpath d='M12 18h11v20l25-20h11v64H48V46L23 66V18z' fill='%2300A1E9'/%3E%3Cpolygon points='49,18 64,18 88,44 88,58' fill='%2300A1E9'/%3E%3Cpolygon points='69,50 88,71 88,82' fill='%2300A1E9'/%3E%3C/svg%3E" />
+<title>Manajemen Konstruksi v1 — Schedule Edition</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' fill='%231f4e79'/%3E%3Ctext x='50' y='68' font-size='52' font-weight='bold' text-anchor='middle' fill='white' font-family='Arial'%3EMK%3C/text%3E%3C/svg%3E" />
+<link rel="stylesheet" href="Style Schedule.css" />
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-<style>
-:root{
-  --bg:#0b1220; --panel:#111c33; --panel2:#152341; --line:#24365c;
-  --txt:#e6edf7; --muted:#8fa3c4; --acc:#2f81f7; --acc2:#1abc9c;
-  --warn:#f59e0b; --danger:#ef4444; --ok:#22c55e;
-  --radius:10px;
-}
-*{box-sizing:border-box;margin:0;padding:0}
-body{
-  font-family:'Segoe UI',Roboto,-apple-system,sans-serif;
-  background:radial-gradient(1200px 600px at 10% -10%,#152341 0%,var(--bg) 60%);
-  color:var(--txt); font-size:14px; min-height:100vh;
-}
-a{color:var(--acc);text-decoration:none}
-/* ===== TOPBAR ===== */
-.topbar{
-  display:flex;align-items:center;justify-content:space-between;gap:16px;
-  padding:14px 22px;background:rgba(17,28,51,.9);backdrop-filter:blur(8px);
-  border-bottom:1px solid var(--line);position:sticky;top:0;z-index:50;
-}
-.brand{display:flex;align-items:center;gap:14px}
-.logo{
-  width:44px;height:44px;border-radius:12px;display:grid;place-items:center;
-  background:linear-gradient(135deg,var(--acc),var(--acc2));
-  font-weight:800;letter-spacing:.5px;color:#06101f;font-size:16px;
-}
-.brand h1{font-size:16px;font-weight:700;letter-spacing:.3px}
-.brand h1 span{color:var(--acc2)}
-.brand p{font-size:11.5px;color:var(--muted);margin-top:2px}
-.topbar-right{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
-.topbar-right label{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.6px}
-/* ===== TABS ===== */
-.tabs{
-  display:flex;gap:4px;padding:10px 22px 0;overflow-x:auto;
-  border-bottom:1px solid var(--line);background:rgba(17,28,51,.55);
-  position:sticky;top:73px;z-index:40;
-}
-.tab{
-  padding:10px 16px;border-radius:8px 8px 0 0;font-size:13px;font-weight:600;
-  color:var(--muted);cursor:pointer;white-space:nowrap;border:1px solid transparent;
-  border-bottom:none;background:transparent;transition:.15s;
-}
-.tab:hover{color:var(--txt);background:rgba(47,129,247,.08)}
-.tab.active{color:#fff;background:var(--panel);border-color:var(--line)}
-
-.subtabs{display:flex;gap:6px;padding:6px 0 12px;flex-wrap:wrap;border-bottom:1px solid var(--line);margin-bottom:16px}
-.subtab{
-  padding:8px 14px;border-radius:8px;font-size:12.5px;font-weight:600;cursor:pointer;
-  background:#16233f;border:1px solid var(--line);color:var(--muted);transition:.15s;
-}
-.subtab:hover{color:var(--txt);background:#1d2f52}
-.subtab.active{background:linear-gradient(135deg,var(--acc),#1f6fe0);color:#fff;border-color:transparent}
-.subpanel{display:none}
-.subpanel.active{display:block;animation:fade .18s ease}
-.kv{display:grid;grid-template-columns:220px 1fr;gap:6px 16px;font-size:13px;padding:12px;background:#0c1729;border-radius:8px;border:1px solid var(--line)}
-.kv .k{color:var(--muted)}
-.kv .v{font-weight:600;font-variant-numeric:tabular-nums}
-.kv .v.big{font-size:16px}
-.recon-block{background:#0c1729;border:1px solid var(--line);border-radius:10px;padding:14px;margin-top:12px}
-.recon-block h4{font-size:13px;margin-bottom:10px;color:var(--acc2);letter-spacing:.4px;text-transform:uppercase}
-
-/* ===== MAIN ===== */
-main{padding:20px 22px 60px;max-width:1600px;margin:0 auto}
-.section{display:none}
-.section.active{display:block;animation:fade .18s ease}
-@keyframes fade{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
-.panel{
-  background:linear-gradient(180deg,var(--panel),var(--panel2));
-  border:1px solid var(--line);border-radius:var(--radius);padding:18px;margin-bottom:18px;
-}
-.panel-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px;flex-wrap:wrap}
-.panel-head h2{font-size:15px;font-weight:700;letter-spacing:.3px}
-.panel-head p{font-size:12px;color:var(--muted);margin-top:3px}
-.row{display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end}
-.grid{display:grid;gap:16px}
-.g4{grid-template-columns:repeat(auto-fit,minmax(230px,1fr))}
-.g2{grid-template-columns:repeat(auto-fit,minmax(380px,1fr))}
-/* ===== FORM ===== */
-label.f{display:block;font-size:11px;color:var(--muted);margin-bottom:5px;text-transform:uppercase;letter-spacing:.5px}
-input,select,textarea{
-  width:100%;padding:9px 11px;background:#0c1729;border:1px solid var(--line);
-  border-radius:8px;color:var(--txt);font-size:13px;font-family:inherit;outline:none;transition:.15s;
-}
-input:focus,select:focus,textarea:focus{border-color:var(--acc);box-shadow:0 0 0 3px rgba(47,129,247,.15)}
-input[readonly]{background:#0a1424;color:var(--muted)}
-.field{min-width:150px;flex:1}
-/* ===== BUTTON ===== */
-.btn{
-  padding:9px 15px;border-radius:8px;border:1px solid var(--line);background:#16233f;
-  color:var(--txt);font-size:12.5px;font-weight:600;cursor:pointer;transition:.15s;
-  display:inline-flex;align-items:center;gap:6px;white-space:nowrap;
-}
-.btn:hover{background:#1d2f52;border-color:#33507f}
-.btn-primary{background:linear-gradient(135deg,var(--acc),#1f6fe0);border-color:transparent;color:#fff}
-.btn-primary:hover{filter:brightness(1.1)}
-.btn-ok{background:linear-gradient(135deg,#16a34a,#0f8a3f);border-color:transparent;color:#fff}
-.btn-danger{background:linear-gradient(135deg,#dc2626,#b91c1c);border-color:transparent;color:#fff}
-.btn-ghost{background:transparent}
-.btn-sm{padding:5px 9px;font-size:11.5px;border-radius:6px}
-/* ===== TABLE ===== */
-.tw{overflow:auto;border:1px solid var(--line);border-radius:var(--radius);max-height:65vh}
-table{width:100%;border-collapse:collapse;font-size:12.5px;min-width:760px}
-thead th{
-  background:#0e1a30;color:var(--muted);font-size:10.5px;text-transform:uppercase;
-  letter-spacing:.6px;padding:10px 11px;text-align:left;position:sticky;top:0;z-index:5;
-  border-bottom:1px solid var(--line);white-space:nowrap;
-}
-tbody td{padding:9px 11px;border-bottom:1px solid rgba(36,54,92,.55);vertical-align:middle}
-tbody tr:hover{background:rgba(47,129,247,.06)}
-tbody tr.lvl1{background:rgba(47,129,247,.07);font-weight:700}
-tbody tr.lvl2 td:first-child{padding-left:24px}
-tbody tr.lvl3 td:first-child{padding-left:44px}
-.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
-.center{text-align:center}
-/* ===== BADGE ===== */
-.badge{padding:3px 9px;border-radius:20px;font-size:10.5px;font-weight:700;letter-spacing:.4px;display:inline-block}
-.b-upah{background:rgba(47,129,247,.18);color:#7cb3ff}
-.b-bahan{background:rgba(26,188,156,.18);color:#4fe0c0}
-.b-alat{background:rgba(245,158,11,.18);color:#ffc861}
-.b-ok{background:rgba(34,197,94,.18);color:#4ade80}
-.b-warn{background:rgba(245,158,11,.18);color:#fbbf24}
-.b-danger{background:rgba(239,68,68,.18);color:#f87171}
-/* ===== KPI CARDS ===== */
-.kpi{
-  background:linear-gradient(160deg,var(--panel),#0d1728);
-  border:1px solid var(--line);border-radius:var(--radius);padding:16px;position:relative;overflow:hidden;
-}
-.kpi::after{content:'';position:absolute;top:0;left:0;width:4px;height:100%;background:var(--acc)}
-.kpi.k2::after{background:var(--acc2)} .kpi.k3::after{background:var(--warn)}
-.kpi.k4::after{background:var(--danger)} .kpi.k5::after{background:var(--ok)}
-.kpi .lbl{font-size:10.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.7px}
-.kpi .val{font-size:20px;font-weight:800;margin-top:8px;font-variant-numeric:tabular-nums}
-.kpi .sub{font-size:11px;color:var(--muted);margin-top:5px}
-.pos{color:#4ade80}.neg{color:#f87171}
-/* ===== ALERT ===== */
-.alert{
-  padding:11px 14px;border-radius:9px;font-size:12.5px;margin-bottom:9px;
-  border-left:4px solid var(--danger);background:rgba(239,68,68,.09);display:flex;gap:10px;
-}
-.alert.warn{border-color:var(--warn);background:rgba(245,158,11,.09)}
-.alert.ok{border-color:var(--ok);background:rgba(34,197,94,.09)}
-/* ===== MODAL ===== */
-.overlay{
-  position:fixed;inset:0;background:rgba(4,9,18,.78);backdrop-filter:blur(3px);
-  display:none;align-items:flex-start;justify-content:center;z-index:200;padding:40px 16px;overflow:auto;
-}
-.overlay.show{display:flex}
-.modal{
-  background:linear-gradient(180deg,#13203a,#0e1830);border:1px solid var(--line);
-  border-radius:14px;width:100%;max-width:820px;box-shadow:0 30px 80px rgba(0,0,0,.6);
-  animation:pop .18s ease;
-}
-@keyframes pop{from{opacity:0;transform:scale(.97) translateY(-6px)}to{opacity:1;transform:none}}
-.modal-head{padding:16px 20px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center}
-.modal-head h3{font-size:14.5px}
-.modal-body{padding:20px;max-height:66vh;overflow:auto}
-.modal-foot{padding:14px 20px;border-top:1px solid var(--line);display:flex;justify-content:flex-end;gap:10px}
-.x{background:none;border:none;color:var(--muted);font-size:22px;cursor:pointer;line-height:1}
-.x:hover{color:var(--danger)}
-/* ===== MISC ===== */
-.empty{padding:40px;text-align:center;color:var(--muted);font-size:13px}
-.hint{font-size:11px;color:var(--muted);margin-top:6px;line-height:1.5}
-.sep{height:1px;background:var(--line);margin:16px 0}
-canvas{max-height:320px}
-::-webkit-scrollbar{width:9px;height:9px}
-::-webkit-scrollbar-track{background:#0a1424}
-::-webkit-scrollbar-thumb{background:#2a3f68;border-radius:5px}
-::-webkit-scrollbar-thumb:hover{background:#3a5590}
-.toast{
-  position:fixed;bottom:24px;right:24px;padding:13px 20px;border-radius:10px;
-  background:#16233f;border:1px solid var(--line);border-left:4px solid var(--ok);
-  color:var(--txt);font-size:13px;font-weight:600;z-index:500;display:none;
-  box-shadow:0 12px 30px rgba(0,0,0,.5);
-}
-.toast.show{display:block;animation:pop .2s}
-
-/* =====================================================================
-   LEMBAR AHSP PUPR
-   ===================================================================== */
-.ahsp-sheet{
-  background:#ffffff;color:#1a1a1a;padding:26px 30px;border-radius:8px;
-  font-family:'Segoe UI',Arial,sans-serif;
-}
-.ahsp-sheet h2{
-  text-align:center;font-size:16px;font-weight:800;letter-spacing:.5px;
-  padding-bottom:8px;border-bottom:2px solid #1f4e79;color:#1f4e79;margin-bottom:16px;
-}
-.ahsp-meta{
-  display:grid;grid-template-columns:180px 12px 1fr;gap:4px 6px;
-  font-size:12.5px;margin-bottom:16px;color:#1a1a1a;
-}
-.ahsp-meta .k{font-weight:600}
-.ahsp-meta .v{font-weight:400}
-
-.ahsp-tbl{
-  width:100%;border-collapse:collapse;font-size:12px;color:#1a1a1a;
-}
-.ahsp-tbl th, .ahsp-tbl td{
-  border:1px solid #888;padding:5px 8px;vertical-align:middle;
-}
-.ahsp-tbl thead th{
-  background:#1f4e79;color:#fff;text-align:center;font-weight:700;
-  font-size:11px;letter-spacing:.4px;padding:8px 6px;
-}
-.ahsp-tbl tbody td.num{text-align:right;font-variant-numeric:tabular-nums}
-.ahsp-tbl tbody td.ctr{text-align:center}
-.ahsp-tbl tr.subhead td{
-  background:#dbe5f1;font-weight:700;letter-spacing:.5px;font-size:11.5px;
-}
-.ahsp-tbl tr.subtotal td{
-  background:#f0f4f8;font-weight:700;
-}
-.ahsp-tbl tr.roman td{
-  font-weight:700;background:#eef3fa;
-}
-.ahsp-tbl tr.grand-total td{
-  background:#1f4e79;color:#fff;font-weight:800;font-size:12.5px;
-}
-.ahsp-tbl tbody tr:hover{background:#f8fafc}
-
-.ahsp-note{
-  margin-top:14px;font-size:10.5px;color:#555;font-style:italic;
-  border-top:1px dashed #ccc;padding-top:8px;
-}
-
-.ahsp-actions{margin-top:14px;display:flex;gap:10px;justify-content:flex-end}
-
-/* =====================================================================
-   PRINT MEDIA — Laporan Formal
-   ===================================================================== */
-@media print {
-  /* Sembunyikan UI */
-  .topbar, .tabs, .no-print, .toast, .overlay,
-  .panel-head .row, #reconSubtabs, .btn, .badge,
-  .kpi::after, canvas { display:none !important; }
-
-  /* Reset layout */
-  body{
-    background:#fff !important;color:#000 !important;
-    font-family:'Segoe UI',Arial,sans-serif;font-size:11px;
-  }
-  main{padding:0 !important;max-width:100% !important}
-  .section{display:none !important}
-  .section.active{display:block !important}
-  .panel{
-    background:#fff !important;border:none !important;
-    padding:0 !important;margin:0 0 8px 0 !important;
-    box-shadow:none !important;
-  }
-
-  /* Print area */
-  .print-area{
-    padding:0 !important;background:#fff !important;color:#000 !important;
-  }
-  .ahsp-sheet{
-    padding:0 !important;background:#fff !important;color:#000 !important;
-    border-radius:0 !important;
-  }
-
-  /* Table print styling */
-  .ahsp-tbl{font-size:10px}
-  .ahsp-tbl th, .ahsp-tbl td{border:1px solid #333 !important;padding:3px 5px}
-  .ahsp-tbl thead th{
-    background:#1f4e79 !important;color:#fff !important;
-    -webkit-print-color-adjust:exact;print-color-adjust:exact;
-  }
-  .ahsp-tbl tr.subhead td,
-  .ahsp-tbl tr.subtotal td,
-  .ahsp-tbl tr.roman td,
-  .ahsp-tbl tr.grand-total td{
-    -webkit-print-color-adjust:exact;print-color-adjust:exact;
-  }
-  .ahsp-tbl tr.grand-total td{background:#1f4e79 !important;color:#fff !important}
-
-  /* Page break control */
-  .ahsp-tbl tr{page-break-inside:avoid}
-  .ahsp-tbl thead{display:table-header-group}
-  .ahsp-tbl tfoot{display:table-footer-group}
-  .ahsp-meta{page-break-inside:avoid}
-  .ahsp-note{page-break-inside:avoid}
-
-  /* Formal header */
-  .print-header{
-    display:block !important;
-    text-align:center;margin-bottom:14px;
-    border-bottom:2px solid #000;padding-bottom:8px;
-  }
-  .print-header h1{font-size:14px;font-weight:800;letter-spacing:.4px}
-  .print-header h2{font-size:12px;font-weight:700;margin-top:4px;border:none;padding:0;color:#000}
-  .print-header p{font-size:10px;color:#333;margin-top:2px}
-
-  @page{ size:A4 portrait; margin:12mm 12mm 14mm 12mm; }
-}
-
-/* Default: print-header disembunyikan di layar */
-.print-header{display:none}
-
-</style>
 </head>
 <body>
 
+<!-- ===================== TOPBAR ===================== -->
 <header class="topbar">
   <div class="brand">
     <div class="logo">MK</div>
@@ -326,25 +30,26 @@ canvas{max-height:320px}
   </div>
 </header>
 
+<!-- ===================== TABS ===================== -->
 <nav class="tabs">
   <div class="tab active" data-tab="dashboard">📊 Dashboard</div>
   <div class="tab" data-tab="resources">🧱 Master Resources</div>
   <div class="tab" data-tab="ahsp">📐 AHSP &amp; Koefisien</div>
   <div class="tab" data-tab="wbs">🗂 WBS / BQ</div>
+  <div class="tab" data-tab="schedule">📅 Master Schedule</div>
+  <div class="tab" data-tab="calendar">🗓 Kalender Kerja</div>
+  <div class="tab" data-tab="holidays">🎉 Hari Libur</div>
   <div class="tab" data-tab="analysis">🔍 Analisis Deviasi</div>
   <div class="tab" data-tab="progress">📈 Progress &amp; S-Curve</div>
-  
-  <!-- ⬇️ TAMBAHKAN BARIS INI ⬇️ -->
   <div class="tab" data-tab="recon">🔀 Rekonsiliasi RAB→RAP</div>
-  <!-- ⬆️ SAMPAI SINI ⬆️ -->
   <div class="tab" data-tab="lembar">📋 Lembar AHSP PUPR</div>
-
   <div class="tab" data-tab="projects">🏗 Proyek</div>
   <div class="tab" data-tab="settings">⚙ Pengaturan</div>
 </nav>
 
 <main>
-  <!-- DASHBOARD -->
+
+  <!-- ===================== DASHBOARD ===================== -->
   <section class="section active" id="sec-dashboard">
     <div class="grid g4" id="kpiWrap"></div>
     <div class="grid g2" style="margin-top:18px">
@@ -363,11 +68,11 @@ canvas{max-height:320px}
     </div>
   </section>
 
-  <!-- RESOURCES -->
+  <!-- ===================== RESOURCES ===================== -->
   <section class="section" id="sec-resources">
     <div class="panel">
       <div class="panel-head">
-        <div><h2>Master Resources</h2><p>Upah, Bahan, dan Alat Berat (beserta parameter kapasitas produksi)</p></div>
+        <div><h2>Master Resources</h2><p>Upah, Bahan, dan Alat Berat</p></div>
         <div class="row">
           <select id="fResJenis" style="width:150px">
             <option value="">Semua Jenis</option>
@@ -383,18 +88,18 @@ canvas{max-height:320px}
     </div>
   </section>
 
-  <!-- AHSP -->
+  <!-- ===================== AHSP ===================== -->
   <section class="section" id="sec-ahsp">
     <div class="panel">
       <div class="panel-head">
-        <div><h2>Template AHSP (Master)</h2><p>Rumus koefisien standar Permen PUPR — Sumber Daya Air</p></div>
+        <div><h2>Template AHSP (Master)</h2><p>Rumus koefisien standar Permen PUPR</p></div>
         <button class="btn btn-primary" id="btnAddAhsp">+ AHSP</button>
       </div>
       <div class="tw"><table id="tblAhsp"></table></div>
     </div>
     <div class="panel">
       <div class="panel-head">
-        <div><h2>Koefisien Proyek (Clone per Proyek)</h2><p>Ubah koefisien khusus RAP tanpa merusak template master</p></div>
+        <div><h2>Koefisien Proyek (Clone per Proyek)</h2><p>Ubah koefisien khusus RAP</p></div>
         <div class="row">
           <select id="ahspProjSel" style="width:200px"></select>
           <select id="ahspSel" style="width:280px"></select>
@@ -403,28 +108,99 @@ canvas{max-height:320px}
         </div>
       </div>
       <div class="tw"><table id="tblKoef"></table></div>
-      <p class="hint">Kolom <b>Koef. RAP</b> dapat diubah manual untuk menyesuaikan kondisi lapangan (mis. sirkulasi lumpur tinggi → waktu siklus alat bertambah). Biaya RAP dihitung bersih tanpa profit internal.</p>
     </div>
   </section>
 
-  <!-- WBS -->
+  <!-- ===================== WBS ===================== -->
   <section class="section" id="sec-wbs">
     <div class="panel">
       <div class="panel-head">
-        <div><h2>WBS / Bill of Quantity</h2><p>Pemetaan volume berbasis lokasi / saluran / stationing (STA)</p></div>
+        <div><h2>WBS / Bill of Quantity</h2><p>Pemetaan volume berbasis STA dengan Schedule Fields</p></div>
         <div class="row">
           <button class="btn btn-primary" id="btnAddWbs">+ Item WBS</button>
           <button class="btn" id="btnAddWbsGroup">+ Grup</button>
+          <button class="btn btn-ok" id="btnRunCPMWBS">⚡ Recalculate CPM</button>
         </div>
       </div>
       <div class="tw"><table id="tblWbs"></table></div>
     </div>
   </section>
 
-  <!-- ANALYSIS -->
+  <!-- ===================== MASTER SCHEDULE ===================== -->
+  <section class="section" id="sec-schedule">
+    <div class="panel">
+      <div class="panel-head">
+        <div><h2>Master Schedule — CPM &amp; Resource Loading</h2><p>Auto-scheduling MS Project style</p></div>
+        <div class="row">
+          <button class="btn" id="btnRunCPM">🔄 Recalculate CPM</button>
+          <select id="schedGranularity" style="width:150px">
+            <option value="daily">Harian</option>
+            <option value="weekly" selected>Mingguan</option>
+            <option value="monthly">Bulanan</option>
+          </select>
+          <button class="btn" id="btnExportSchedule">⬇ Export CSV</button>
+        </div>
+      </div>
+      <div class="grid g4" id="schedKPI"></div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head">
+        <div><h2>Time-Phased Resource Loading</h2><p>Kebutuhan Upah, Bahan &amp; Alat per periode (read-only terhadap RAB/RAP)</p></div>
+      </div>
+      <div class="tw" style="max-height:45vh"><table id="tblResourceLoad"></table></div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head">
+        <div><h2>🔥 Critical Path</h2><p>Item dengan Total Float = 0</p></div>
+      </div>
+      <div class="tw"><table id="tblCritical"></table></div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head">
+        <div><h2>📊 Grafik Resource Loading</h2><p>Distribusi biaya per periode</p></div>
+      </div>
+      <canvas id="chartResourceLoad" style="max-height:340px"></canvas>
+    </div>
+  </section>
+
+  <!-- ===================== WORKING CALENDAR ===================== -->
+  <section class="section" id="sec-calendar">
+    <div class="panel">
+      <div class="panel-head">
+        <div><h2>Kalender Kerja</h2><p>Konfigurasi hari kerja untuk perhitungan CPM</p></div>
+        <button class="btn btn-primary" id="btnAddCalendar">+ Kalender</button>
+      </div>
+      <div class="tw"><table id="tblCalendars"></table></div>
+      <p class="hint">
+        <b>Work Days</b>: 0=Minggu, 1=Senin, 2=Selasa, 3=Rabu, 4=Kamis, 5=Jumat, 6=Sabtu.
+        Pisahkan dengan koma (misal: <code>1,2,3,4,5</code> untuk Senin–Jumat).
+        Kalender <b>default</b> digunakan bila proyek tidak menentukan kalender khusus.
+      </p>
+    </div>
+  </section>
+
+  <!-- ===================== HOLIDAYS ===================== -->
+  <section class="section" id="sec-holidays">
+    <div class="panel">
+      <div class="panel-head">
+        <div><h2>Hari Libur Nasional / Daerah</h2><p>Tanggal yang dikecualikan dari hari kerja</p></div>
+        <div class="row">
+          <select id="fHolCal" style="width:220px"></select>
+          <button class="btn btn-primary" id="btnAddHoliday">+ Hari Libur</button>
+        </div>
+      </div>
+      <div class="tw"><table id="tblHolidays"></table></div>
+    </div>
+  </section>
+
+  <!-- ===================== ANALYSIS ===================== -->
   <section class="section" id="sec-analysis">
     <div class="panel">
-      <div class="panel-head"><div><h2>Analisis Deviasi RAB vs RAP</h2><p>Selisih (Volume RAB × HPS RAB) − (Volume Riil × HPS RAP)</p></div>
+      <div class="panel-head">
+        <div><h2>Analisis Deviasi RAB vs RAP</h2><p>Selisih (Volume RAB × HPS RAB) − (Volume Riil × HPS RAP)</p></div>
         <button class="btn btn-primary" id="btnPrintAnalysis">🖨 Cetak</button>
       </div>
       <div class="tw"><table id="tblAnalysis"></table></div>
@@ -435,138 +211,94 @@ canvas{max-height:320px}
     </div>
   </section>
 
-  <!-- PROGRESS -->
+  <!-- ===================== PROGRESS ===================== -->
   <section class="section" id="sec-progress">
     <div class="panel">
       <div class="panel-head">
-        <div><h2>Input Progress Mingguan</h2><p>Volume aktual terpasang per item WBS per minggu</p></div>
+        <div><h2>Input Progress Mingguan</h2><p>Volume aktual terpasang per item WBS</p></div>
         <button class="btn btn-primary" id="btnAddProg">+ Progress</button>
       </div>
       <div class="tw"><table id="tblProg"></table></div>
     </div>
   </section>
 
-    <!-- REKONSILIASI RAB->RAP -->
+  <!-- ===================== REKONSILIASI ===================== -->
   <section class="section" id="sec-recon">
     <div class="panel">
       <div class="panel-head">
-        <div>
-          <h2>Rekonsiliasi RAB → RAP (Quantity Surveyor Workspace)</h2>
-          <p>Analisis konversi material, penggantian metode, dan breakdown komponen</p>
-        </div>
+        <div><h2>Rekonsiliasi RAB → RAP</h2><p>Quantity Surveyor Workspace</p></div>
         <div class="row">
           <button class="btn btn-primary" id="btnNewRecon">+ Rekonsiliasi Baru</button>
           <button class="btn" id="btnExportRecon">⬇ Export CSV</button>
         </div>
       </div>
-
       <div class="subtabs" id="reconSubtabs">
-        <button class="subtab active" data-sub="conv">📐 Kasus 1 — Konversi Material (KG↔M3)</button>
+        <button class="subtab active" data-sub="conv">📐 Kasus 1 — Konversi Material</button>
         <button class="subtab" data-sub="mix">🧪 Kasus 2 — Readymix vs Site Mix</button>
         <button class="subtab" data-sub="bekist">🪵 Kasus 3 — Breakdown Bekisting</button>
-        <button class="subtab" data-sub="rekap">📊 Rekap Rekonsiliasi</button>
+        <button class="subtab" data-sub="rekap">📊 Rekap</button>
       </div>
-
       <div class="subpanel active" id="sub-conv">
         <div class="row">
-          <div class="field" style="flex:2"><label class="f">Material</label>
-            <select id="convMat"></select>
-          </div>
-          <div class="field"><label class="f">Volume RAB</label>
-            <input id="convVRAB" type="number" step="0.01" value="1000" />
-          </div>
-          <div class="field"><label class="f">Satuan RAB</label>
-            <select id="convSatRAB"><option>kg</option><option>ton</option><option>m3</option></select>
-          </div>
-          <div class="field"><label class="f">Berat Jenis (ton/m3)</label>
-            <input id="convBJ" type="number" step="0.01" value="1.60" />
-          </div>
-          <div class="field"><label class="f">Harga Sat RAB (Rp/kg)</label>
-            <input id="convHRAB" type="number" step="1" value="295" />
-          </div>
-          <div class="field"><label class="f">Harga Sat RAP (Rp/m3)</label>
-            <input id="convHRAP" type="number" step="1" value="462500" />
-          </div>
-          <button class="btn btn-ok" id="btnConvCalc">= Hitung Konversi</button>
+          <div class="field" style="flex:2"><label class="f">Material</label><select id="convMat"></select></div>
+          <div class="field"><label class="f">Volume RAB</label><input id="convVRAB" type="number" step="0.01" value="1000" /></div>
+          <div class="field"><label class="f">Satuan RAB</label><select id="convSatRAB"><option>kg</option><option>ton</option><option>m3</option></select></div>
+          <div class="field"><label class="f">Berat Jenis (ton/m3)</label><input id="convBJ" type="number" step="0.01" value="1.60" /></div>
+          <div class="field"><label class="f">Harga Sat RAB</label><input id="convHRAB" type="number" step="1" value="295" /></div>
+          <div class="field"><label class="f">Harga Sat RAP</label><input id="convHRAP" type="number" step="1" value="462500" /></div>
+          <button class="btn btn-ok" id="btnConvCalc">= Hitung</button>
         </div>
         <div class="sep"></div>
-        <div id="convResult" class="empty">Isi form di atas lalu klik Hitung Konversi.</div>
+        <div id="convResult" class="empty">Isi form lalu klik Hitung.</div>
       </div>
-
       <div class="subpanel" id="sub-mix">
         <div class="row">
-          <div class="field"><label class="f">Mutu Beton</label>
-            <select id="mixMutu"></select>
-          </div>
-          <div class="field"><label class="f">Volume Beton (m3)</label>
-            <input id="mixVol" type="number" step="0.01" value="100" />
-          </div>
-          <div class="field"><label class="f">Harga Readymix RAB (Rp/m3)</label>
-            <input id="mixHRM" type="number" step="1" value="1050000" />
-          </div>
-          <div class="field"><label class="f">Waste Factor (%)</label>
-            <input id="mixWaste" type="number" step="0.1" value="3" />
-          </div>
-          <button class="btn btn-ok" id="btnMixCalc">= Hitung Site Mix</button>
+          <div class="field"><label class="f">Mutu Beton</label><select id="mixMutu"></select></div>
+          <div class="field"><label class="f">Volume (m3)</label><input id="mixVol" type="number" step="0.01" value="100" /></div>
+          <div class="field"><label class="f">Harga Readymix (Rp/m3)</label><input id="mixHRM" type="number" step="1" value="1050000" /></div>
+          <div class="field"><label class="f">Waste (%)</label><input id="mixWaste" type="number" step="0.1" value="3" /></div>
+          <button class="btn btn-ok" id="btnMixCalc">= Hitung</button>
         </div>
-        <p class="hint">Harga material & upah otomatis diambil dari Master Resources. Sesuaikan bila perlu di tab 🧱 Master Resources.</p>
         <div class="sep"></div>
         <div id="mixResult" class="empty">Pilih mutu, isi volume, lalu klik Hitung.</div>
       </div>
-
       <div class="subpanel" id="sub-bekist">
         <div class="row">
-          <div class="field"><label class="f">Volume Bekisting (m2)</label>
-            <input id="bekVol" type="number" step="0.01" value="100" />
-          </div>
-          <div class="field"><label class="f">Tipe Multiplex</label>
-            <select id="bekTipe"><option value="multiplex_9mm">Multiplex 9 mm</option><option value="multiplex_12mm">Multiplex 12 mm</option></select>
-          </div>
-          <div class="field"><label class="f">Faktor Re-use Multiplex</label>
-            <input id="bekReuseMp" type="number" step="1" value="5" />
-          </div>
-          <div class="field"><label class="f">Faktor Re-use Kayu</label>
-            <input id="bekReuseKy" type="number" step="1" value="6" />
-          </div>
-          <div class="field"><label class="f">Harga RAB Bekisting (Rp/m2)</label>
-            <input id="bekHRAB" type="number" step="1" value="185000" />
-          </div>
-          <button class="btn btn-ok" id="btnBekCalc">= Breakdown Bekisting</button>
+          <div class="field"><label class="f">Volume (m2)</label><input id="bekVol" type="number" step="0.01" value="100" /></div>
+          <div class="field"><label class="f">Tipe Multiplex</label><select id="bekTipe"><option value="multiplex_9mm">Multiplex 9 mm</option><option value="multiplex_12mm">Multiplex 12 mm</option></select></div>
+          <div class="field"><label class="f">Re-use Multiplex</label><input id="bekReuseMp" type="number" step="1" value="5" /></div>
+          <div class="field"><label class="f">Re-use Kayu</label><input id="bekReuseKy" type="number" step="1" value="6" /></div>
+          <div class="field"><label class="f">Harga RAB (Rp/m2)</label><input id="bekHRAB" type="number" step="1" value="185000" /></div>
+          <button class="btn btn-ok" id="btnBekCalc">= Breakdown</button>
         </div>
         <div class="sep"></div>
-        <div id="bekResult" class="empty">Isi form lalu klik Breakdown Bekisting.</div>
+        <div id="bekResult" class="empty">Isi form lalu klik Breakdown.</div>
       </div>
-
       <div class="subpanel" id="sub-rekap">
         <div class="tw"><table id="tblRecon"></table></div>
       </div>
     </div>
   </section>
 
-    <!-- LEMBAR AHSP PUPR -->
+  <!-- ===================== LEMBAR AHSP PUPR ===================== -->
   <section class="section" id="sec-lembar">
     <div class="panel no-print">
       <div class="panel-head">
-        <div>
-          <h2>Lembar Analisis Harga Satuan Pekerjaan (AHSP) — Permen PUPR</h2>
-          <p>Tampilan baku sesuai format Kementerian PUPR dengan kalkulasi otomatis</p>
-        </div>
+        <div><h2>Lembar AHSP — Permen PUPR</h2><p>Tampilan baku Kementerian PUPR</p></div>
         <div class="row">
           <select id="lembarProjSel" style="width:180px"></select>
           <select id="lembarAhspSel" style="width:340px"></select>
-          <button class="btn" id="btnLembarExportCSV">⬇ Export CSV</button>
+          <button class="btn" id="btnLembarExportCSV">⬇ CSV</button>
           <button class="btn btn-primary" id="btnLembarPrint">🖨 Cetak / PDF</button>
         </div>
       </div>
     </div>
-
-    <!-- Area yang akan dicetak -->
     <div class="panel print-area" id="ahspLembarWrap">
-      <div class="empty">Pilih proyek dan item AHSP untuk menampilkan lembar.</div>
+      <div class="empty">Pilih proyek dan item AHSP.</div>
     </div>
   </section>
 
-  <!-- PROJECTS -->
+  <!-- ===================== PROJECTS ===================== -->
   <section class="section" id="sec-projects">
     <div class="panel">
       <div class="panel-head">
@@ -577,7 +309,7 @@ canvas{max-height:320px}
     </div>
   </section>
 
-  <!-- SETTINGS -->
+  <!-- ===================== SETTINGS ===================== -->
   <section class="section" id="sec-settings">
     <div class="panel">
       <div class="panel-head"><div><h2>Integrasi Google Spreadsheet</h2><p>Sinkronisasi dua arah via Apps Script Web App</p></div></div>
@@ -589,7 +321,7 @@ canvas{max-height:320px}
         <button class="btn btn-ok" id="btnPush">⬆ Push ke Sheet</button>
         <button class="btn" id="btnPull">⬇ Pull dari Sheet</button>
       </div>
-      <p class="hint">Tempelkan URL hasil Deploy Apps Script (akses: Anyone). Lihat panduan pemasangan di bawah.</p>
+      <p class="hint">Tempelkan URL hasil Deploy Apps Script (akses: Anyone).</p>
       <div class="sep"></div>
       <div class="row">
         <div class="field"><label class="f">Overhead &amp; Margin Default (%)</label><input id="setOh" type="number" step="0.01" /></div>
@@ -603,11 +335,16 @@ canvas{max-height:320px}
       </div>
     </div>
   </section>
+
 </main>
 
+<!-- ===================== MODAL ===================== -->
 <div class="overlay" id="overlay">
   <div class="modal">
-    <div class="modal-head"><h3 id="mTitle">Form</h3><button class="x" id="mClose">&times;</button></div>
+    <div class="modal-head">
+      <h3 id="mTitle">Form</h3>
+      <button class="x" id="mClose">&times;</button>
+    </div>
     <div class="modal-body" id="mBody"></div>
     <div class="modal-foot">
       <button class="btn" id="mCancel">Batal</button>
@@ -616,27 +353,31 @@ canvas{max-height:320px}
   </div>
 </div>
 
+<!-- ===================== TOAST ===================== -->
 <div class="toast" id="toast"></div>
+
+<!-- ===================== SCRIPTS ===================== -->
+<script src="Schedule.js"></script>
 
 <script>
 /* =====================================================================
-   MANAJEMEN KONSTRUKSI v1 — CORE ENGINE
+   CORE APP — DB Layer, Seed, Calc, Render UI, Event Wiring
    ===================================================================== */
 const STORE_KEY = 'mk_v1_db_v1';
 const SET_KEY   = 'mk_v1_settings_v1';
 
-/* ===== RECON MASTER DATA — HARUS DI ATAS ===== */
+/* ---------- RECON MASTER DATA ---------- */
 const BJ_DEFAULT = [
-  {kode:'BJ-01', nama:'Pasir Beton',       bj:1.60, sat_rap:'m3'},
-  {kode:'BJ-02', nama:'Pasir Pasang',      bj:1.50, sat_rap:'m3'},
+  {kode:'BJ-01', nama:'Pasir Beton',         bj:1.60, sat_rap:'m3'},
+  {kode:'BJ-02', nama:'Pasir Pasang',        bj:1.50, sat_rap:'m3'},
   {kode:'BJ-03', nama:'Kerikil / Split 2-3', bj:1.45, sat_rap:'m3'},
-  {kode:'BJ-04', nama:'Batu Belah 15/20',  bj:1.65, sat_rap:'m3'},
-  {kode:'BJ-05', nama:'Agregat B (Base)',  bj:1.55, sat_rap:'m3'},
-  {kode:'BJ-06', nama:'Tanah Biasa',       bj:1.50, sat_rap:'m3'},
-  {kode:'BJ-07', nama:'Tanah Liat',        bj:1.80, sat_rap:'m3'},
-  {kode:'BJ-08', nama:'Semen PC (loose)',  bj:1.25, sat_rap:'m3'},
-  {kode:'BJ-09', nama:'Aspal',             bj:2.30, sat_rap:'m3'},
-  {kode:'BJ-10', nama:'Besi Beton (rol)',  bj:7850, sat_rap:'m3'}
+  {kode:'BJ-04', nama:'Batu Belah 15/20',    bj:1.65, sat_rap:'m3'},
+  {kode:'BJ-05', nama:'Agregat B (Base)',    bj:1.55, sat_rap:'m3'},
+  {kode:'BJ-06', nama:'Tanah Biasa',         bj:1.50, sat_rap:'m3'},
+  {kode:'BJ-07', nama:'Tanah Liat',          bj:1.80, sat_rap:'m3'},
+  {kode:'BJ-08', nama:'Semen PC (loose)',    bj:1.25, sat_rap:'m3'},
+  {kode:'BJ-09', nama:'Aspal',               bj:2.30, sat_rap:'m3'},
+  {kode:'BJ-10', nama:'Besi Beton (rol)',    bj:7850, sat_rap:'m3'}
 ];
 
 const BETON_PRESETS_DEFAULT = [
@@ -663,7 +404,6 @@ const BEKISTING_BREAKDOWN_DEFAULT = {
   pekerja       : {nama:'Pekerja',            koef:0.50,  satuan:'OH',  reuse:1},
   mandor        : {nama:'Mandor',             koef:0.035, satuan:'OH',  reuse:1}
 };
-/* ===== AKHIR RECON MASTER DATA ===== */
 
 /* ---------- UTILITIES ---------- */
 const $  = s => document.querySelector(s);
@@ -684,12 +424,10 @@ function toast(msg, ok=true){
   t._tm = setTimeout(()=>t.classList.remove('show'), 2600);
 }
 
-/* =====================================================================
-   DATA LAYER
-   ===================================================================== */
+/* ---------- DATA LAYER ---------- */
 let DB = null;
 let SET = { overhead: 10, ppn: 11, sheetUrl: '' };
-let STATE = { activeProject: '', chartS: null, chartC: null };
+let STATE = { activeProject: '', chartS: null, chartC: null, chartRL: null };
 
 function emptyDB(){
   return {
@@ -700,28 +438,33 @@ function emptyDB(){
     project_ahsp_details: [],
     project_wbs: [],
     progress: [],
-    // === TAMBAHAN MODUL REKONSILIASI ===
     bj_material: [],
     beton_presets: [],
     bekisting_breakdown: [],
-    reconciliation: []
+    reconciliation: [],
+    working_calendars: [],
+    holidays: []
   };
 }
 
 function saveDB(){
-  try { localStorage.setItem(STORE_KEY, JSON.stringify(DB)); } catch(e){ console.error(e); }
+  try {
+    localStorage.setItem(STORE_KEY, JSON.stringify(DB));
+    if (typeof AUTOSAVE !== 'undefined') AUTOSAVE.schedule('global_db', () => DB);
+  } catch(e){ console.error(e); }
 }
+
 function loadDB(){
   try {
     const raw = localStorage.getItem(STORE_KEY);
-    if (raw) {
+    if (raw){
       DB = JSON.parse(raw);
-      // Backward compat: pastikan semua struktur baru tersedia
       ['master_resources','ahsp_headers','ahsp_details_master','projects',
-       'project_ahsp_details','project_wbs','progress'].forEach(k=>{
+       'project_ahsp_details','project_wbs','progress'].forEach(k => {
         if (!DB[k]) DB[k] = [];
       });
-      ['bj_material','beton_presets','bekisting_breakdown','reconciliation'].forEach(k=>{
+      ['bj_material','beton_presets','bekisting_breakdown','reconciliation',
+       'working_calendars','holidays'].forEach(k => {
         if (!DB[k]) DB[k] = [];
       });
       return true;
@@ -729,14 +472,13 @@ function loadDB(){
   } catch(e){ console.error(e); }
   return false;
 }
+
 function saveSET(){ try{ localStorage.setItem(SET_KEY, JSON.stringify(SET)); }catch(e){} }
 function loadSET(){
   try{ const r = localStorage.getItem(SET_KEY); if(r) SET = Object.assign(SET, JSON.parse(r)); }catch(e){}
 }
 
-/* =====================================================================
-   SEED DATA — Contoh Proyek SDA
-   ===================================================================== */
+/* ---------- SEED DATA ---------- */
 function seedData(){
   DB = emptyDB();
 
@@ -744,7 +486,6 @@ function seedData(){
   const res = [];
   const addRes = o => { o.id = uid('res'); res.push(o); return o; };
 
-  // Upah
   const rPekerja  = addRes({kode:'L.01', nama:'Pekerja',                 jenis:'upah', satuan:'OH', harga_rab:95000,  harga_rap:85000});
   const rTukang   = addRes({kode:'L.02', nama:'Tukang Batu',             jenis:'upah', satuan:'OH', harga_rab:135000, harga_rap:120000});
   const rTukangB  = addRes({kode:'L.03', nama:'Tukang Besi',             jenis:'upah', satuan:'OH', harga_rab:140000, harga_rap:125000});
@@ -752,7 +493,6 @@ function seedData(){
   const rOperator = addRes({kode:'L.05', nama:'Operator Alat Berat',     jenis:'upah', satuan:'OH', harga_rab:185000, harga_rap:165000});
   const rPembantu = addRes({kode:'L.06', nama:'Pembantu Operator',       jenis:'upah', satuan:'OH', harga_rab:110000, harga_rap:95000});
 
-  // Bahan
   const rSemen   = addRes({kode:'M.01', nama:'Semen Portland (PC)',      jenis:'bahan', satuan:'kg',  harga_rab:1450,  harga_rap:1320});
   const rPasir   = addRes({kode:'M.02', nama:'Pasir Beton',              jenis:'bahan', satuan:'m3',  harga_rab:295000, harga_rap:265000});
   const rKerikil = addRes({kode:'M.03', nama:'Kerikil / Split 2-3 cm',   jenis:'bahan', satuan:'m3',  harga_rab:385000, harga_rap:350000});
@@ -761,20 +501,19 @@ function seedData(){
   const rAir     = addRes({kode:'M.06', nama:'Air Kerja',                jenis:'bahan', satuan:'liter',harga_rab:25,    harga_rap:20});
   const rKayu    = addRes({kode:'M.07', nama:'Kayu Perancah / Bekisting',jenis:'bahan', satuan:'m3',  harga_rab:2450000,harga_rap:2200000});
 
-  // Alat Berat — dengan parameter kapasitas produksi
   const rExc = addRes({
     kode:'E.01', nama:'Excavator PC-200 (0,8 m³)', jenis:'alat', satuan:'jam',
     harga_rab:485000, harga_rap:425000, hitung_q:1, jenis_alat:'excavator',
     kapasitas_bucket:0.8, faktor_bucket:0.90, faktor_efisiensi:0.75,
     waktu_siklus:24, faktor_koreksi:1.00, faktor_konversi:1.00,
-    ket_koreksi:'Kondisi normal / kering'
+    ket_koreksi:'Kondisi normal'
   });
   const rBuldo = addRes({
     kode:'E.02', nama:'Bulldozer D6 (Komatsu)', jenis:'alat', satuan:'jam',
     harga_rab:520000, harga_rap:465000, hitung_q:1, jenis_alat:'bulldozer',
     kapasitas_bucket:3.4, faktor_bucket:0.85, faktor_efisiensi:0.75,
     waktu_siklus:45, faktor_koreksi:1.00, faktor_konversi:1.25,
-    ket_koreksi:'Kondisi normal / kering'
+    ket_koreksi:'Kondisi normal'
   });
   const rDT = addRes({
     kode:'E.03', nama:'Dump Truck 8 m³', jenis:'alat', satuan:'jam',
@@ -822,43 +561,38 @@ function seedData(){
   const A7 = addAhsp('1.5.1','Pekerjaan Dewatering / Pompa Air','jam','Pekerjaan Persiapan',8);
   DB.ahsp_headers = ahsp;
 
-  /* ---- AHSP DETAILS MASTER (koefisien standar) ---- */
+  /* ---- AHSP DETAILS MASTER ---- */
   const det = [];
   const addDet = (ahspId, resId, k, ket) => det.push({
     id:uid('dt'), ahsp_id:ahspId, resource_id:resId, koefisien:k, keterangan:ket||''
   });
 
-  // 1.1.1 Galian Tanah
   addDet(A1.id, rExc.id,   0, 'Koef. otomatis dari Q alat');
-  addDet(A1.id, rPekerja.id,0.35, 'Finishing manual dasar');
+  addDet(A1.id, rPekerja.id,0.35, 'Finishing manual');
   addDet(A1.id, rMandor.id, 0.035,'Pengawasan');
 
-  // 1.1.2 Timbunan
   addDet(A2.id, rBuldo.id,  0, 'Koef. otomatis dari Q alat');
   addDet(A2.id, rVibro.id,  0, 'Koef. otomatis dari Q alat');
   addDet(A2.id, rDT.id,     0, 'Koef. otomatis dari Q alat');
   addDet(A2.id, rPekerja.id,0.20,'Perataan manual');
   addDet(A2.id, rMandor.id, 0.02,'Pengawasan');
-  addDet(A2.id, rAir.id,    120,'Penyiraman pemadatan');
+  addDet(A2.id, rAir.id,    120,'Penyiraman');
 
-  // 1.2.1 Beton K-225
   addDet(A3.id, rSemen.id,   371, 'Komposisi 1 m³ beton');
-  addDet(A3.id, rPasir.id,   0.52,'Komposisi 1 m³ beton');
-  addDet(A3.id, rKerikil.id, 0.78,'Komposisi 1 m³ beton');
-  addDet(A3.id, rAir.id,     215, 'Faktor air semen 0,58');
+  addDet(A3.id, rPasir.id,   0.52,'Komposisi');
+  addDet(A3.id, rKerikil.id, 0.78,'Komposisi');
+  addDet(A3.id, rAir.id,     215, 'FAS 0,58');
   addDet(A3.id, rMixer.id,   0,   'Koef. otomatis dari Q alat');
-  addDet(A3.id, rPekerja.id, 1.30,'Penuangan & perataan');
+  addDet(A3.id, rPekerja.id, 1.30,'Penuangan');
   addDet(A3.id, rTukang.id,  0.35,'Finishing');
   addDet(A3.id, rMandor.id,  0.06,'Pengawasan');
 
-  // 1.2.2 Pembesian
-  addDet(A4.id, rBesi.id,    1.05,'Termasuk 5% waste ikatan');
+  addDet(A4.id, rBesi.id,    1.05,'Termasuk waste 5%');
   addDet(A4.id, rTukangB.id, 0.025,'Perakitan');
   addDet(A4.id, rPekerja.id, 0.015,'Bantu angkat');
   addDet(A4.id, rMandor.id,  0.003,'Pengawasan');
 
-  // 1.3.1 Pasangan Batu
-  addDet(A5.id, rBatu.id,    1.20,'Volume batu termasuk siar');
+  addDet(A5.id, rBatu.id,    1.20,'Volume termasuk siar');
   addDet(A5.id, rSemen.id,   163, 'Mortar 1:4');
   addDet(A5.id, rPasir.id,   0.43,'Mortar 1:4');
   addDet(A5.id, rAir.id,     90,  'Air kerja');
@@ -866,15 +600,13 @@ function seedData(){
   addDet(A5.id, rPekerja.id, 2.40,'Angkut & bantu');
   addDet(A5.id, rMandor.id,  0.12,'Pengawasan');
 
-  // 1.4.1 Bekisting
-  addDet(A6.id, rKayu.id,    0.045,'Kayu perancah + paku');
-  addDet(A6.id, rTukang.id,  0.35, 'Pemasangan & bongkar');
-  addDet(A6.id, rPekerja.id, 0.50, 'Bantu angkat');
+  addDet(A6.id, rKayu.id,    0.045,'Kayu + paku');
+  addDet(A6.id, rTukang.id,  0.35, 'Pasang & bongkar');
+  addDet(A6.id, rPekerja.id, 0.50, 'Bantu');
   addDet(A6.id, rMandor.id,  0.035,'Pengawasan');
 
-  // 1.5.1 Dewatering
   addDet(A7.id, rPompa.id,   1.00, 'Sewa per jam');
-  addDet(A7.id, rOperator.id,0.12, 'Operator pompa');
+  addDet(A7.id, rOperator.id,0.12, 'Operator');
   addDet(A7.id, rPembantu.id,0.12, 'Pembantu');
 
   DB.ahsp_details_master = det;
@@ -890,6 +622,10 @@ function seedData(){
     ppn: 11,
     overhead: 10,
     durasi_minggu: 16,
+    durasi_hari: 112,
+    durasi_kerja: 80,
+    durasi_mode: 'working',
+    calendar_id: 'wcal_std_001',
     tgl_mulai: '2024-06-03',
     tgl_selesai: '2024-09-22',
     status: 'Berjalan'
@@ -898,17 +634,17 @@ function seedData(){
 
   cloneAhspToProject(proj.id);
 
-  /* ---- WBS ---- */
-  const gTanah = {id:uid('wbs'), project_id:proj.id, kode_wbs:'I', uraian:'PEKERJAAN PERSIAPAN & TANAH', sta:'-', satuan:'', volume_rab:0, volume_rap:0, ahsp_id:'', parent_id:'', harga_rab:0, harga_rap:0, is_group:1, urut:1};
-  const gBeton = {id:uid('wbs'), project_id:proj.id, kode_wbs:'II', uraian:'PEKERJAAN BETON & PASANGAN', sta:'-', satuan:'', volume_rab:0, volume_rap:0, ahsp_id:'', parent_id:'', harga_rab:0, harga_rap:0, is_group:1, urut:2};
+  /* ---- WBS with Schedule Fields ---- */
+  const gTanah = {id:uid('wbs'), project_id:proj.id, kode_wbs:'I', uraian:'PEKERJAAN PERSIAPAN & TANAH', sta:'-', satuan:'', volume_rab:0, volume_rap:0, ahsp_id:'', parent_id:'', is_group:1, urut:1};
+  const gBeton = {id:uid('wbs'), project_id:proj.id, kode_wbs:'II', uraian:'PEKERJAAN BETON & PASANGAN', sta:'-', satuan:'', volume_rab:0, volume_rap:0, ahsp_id:'', parent_id:'', is_group:1, urut:2};
 
-  const w1 = {id:uid('wbs'), project_id:proj.id, kode_wbs:'I.1', uraian:'Galian tanah biasa saluran', sta:'STA 0+000 - 0+850', satuan:'m3', volume_rab:3820, volume_rap:4180, ahsp_id:A1.id, parent_id:gTanah.id, urut:3};
-  const w2 = {id:uid('wbs'), project_id:proj.id, kode_wbs:'I.2', uraian:'Timbunan & pemadatan tanggul', sta:'STA 0+000 - 0+850', satuan:'m3', volume_rab:2150, volume_rap:2320, ahsp_id:A2.id, parent_id:gTanah.id, urut:4};
-  const w3 = {id:uid('wbs'), project_id:proj.id, kode_wbs:'I.3', uraian:'Dewatering selama pelaksanaan', sta:'STA 0+000 - 0+850', satuan:'jam', volume_rab:1200, volume_rap:1460, ahsp_id:A7.id, parent_id:gTanah.id, urut:5};
-  const w4 = {id:uid('wbs'), project_id:proj.id, kode_wbs:'II.1', uraian:'Beton struktur K-225 lining saluran', sta:'STA 0+000 - 0+850', satuan:'m3', volume_rab:685, volume_rap:700, ahsp_id:A3.id, parent_id:gBeton.id, urut:6};
-  const w5 = {id:uid('wbs'), project_id:proj.id, kode_wbs:'II.2', uraian:'Pembesian beton bertulang', sta:'STA 0+000 - 0+850', satuan:'kg', volume_rab:54800, volume_rap:55600, ahsp_id:A4.id, parent_id:gBeton.id, urut:7};
-  const w6 = {id:uid('wbs'), project_id:proj.id, kode_wbs:'II.3', uraian:'Pasangan batu belah 1:4', sta:'STA 0+000 - 0+850', satuan:'m3', volume_rab:412, volume_rap:430, ahsp_id:A5.id, parent_id:gBeton.id, urut:8};
-  const w7 = {id:uid('wbs'), project_id:proj.id, kode_wbs:'II.4', uraian:'Bekisting / perancah', sta:'STA 0+000 - 0+850', satuan:'m2', volume_rab:1840, volume_rap:1920, ahsp_id:A6.id, parent_id:gBeton.id, urut:9};
+  const w1 = {id:uid('wbs'), project_id:proj.id, kode_wbs:'I.1', uraian:'Galian tanah biasa saluran', sta:'STA 0+000 - 0+850', satuan:'m3', volume_rab:3820, volume_rap:4180, ahsp_id:A1.id, parent_id:gTanah.id, urut:3, duration:14, predecessor:'', pred_type:'FS', lag_days:0};
+  const w2 = {id:uid('wbs'), project_id:proj.id, kode_wbs:'I.2', uraian:'Timbunan & pemadatan tanggul', sta:'STA 0+000 - 0+850', satuan:'m3', volume_rab:2150, volume_rap:2320, ahsp_id:A2.id, parent_id:gTanah.id, urut:4, duration:10, predecessor:w1.id, pred_type:'FS', lag_days:0};
+  const w3 = {id:uid('wbs'), project_id:proj.id, kode_wbs:'I.3', uraian:'Dewatering selama pelaksanaan', sta:'STA 0+000 - 0+850', satuan:'jam', volume_rab:1200, volume_rap:1460, ahsp_id:A7.id, parent_id:gTanah.id, urut:5, duration:60, predecessor:'', pred_type:'FS', lag_days:0};
+  const w4 = {id:uid('wbs'), project_id:proj.id, kode_wbs:'II.1', uraian:'Beton struktur K-225 lining', sta:'STA 0+000 - 0+850', satuan:'m3', volume_rab:685, volume_rap:700, ahsp_id:A3.id, parent_id:gBeton.id, urut:6, duration:30, predecessor:w2.id, pred_type:'FS', lag_days:0};
+  const w5 = {id:uid('wbs'), project_id:proj.id, kode_wbs:'II.2', uraian:'Pembesian beton bertulang', sta:'STA 0+000 - 0+850', satuan:'kg', volume_rab:54800, volume_rap:55600, ahsp_id:A4.id, parent_id:gBeton.id, urut:7, duration:25, predecessor:w4.id, pred_type:'SS', lag_days:-5};
+  const w6 = {id:uid('wbs'), project_id:proj.id, kode_wbs:'II.3', uraian:'Pasangan batu belah 1:4', sta:'STA 0+000 - 0+850', satuan:'m3', volume_rab:412, volume_rap:430, ahsp_id:A5.id, parent_id:gBeton.id, urut:8, duration:18, predecessor:w4.id, pred_type:'FS', lag_days:3};
+  const w7 = {id:uid('wbs'), project_id:proj.id, kode_wbs:'II.4', uraian:'Bekisting / perancah', sta:'STA 0+000 - 0+850', satuan:'m2', volume_rab:1840, volume_rap:1920, ahsp_id:A6.id, parent_id:gBeton.id, urut:9, duration:22, predecessor:w4.id, pred_type:'FS', lag_days:0};
 
   DB.project_wbs = [gTanah, gBeton, w1, w2, w3, w4, w5, w6, w7];
 
@@ -927,20 +663,23 @@ function seedData(){
     mkProg(w7.id, m, 160 + (m*22));
   }
   DB.progress = prog;
-    /* ---- RECON MASTER DATA ---- */
+
+  /* ---- RECON & CALENDAR ---- */
   DB.bj_material         = JSON.parse(JSON.stringify(BJ_DEFAULT));
   DB.beton_presets       = JSON.parse(JSON.stringify(BETON_PRESETS_DEFAULT));
   DB.bekisting_breakdown = JSON.parse(JSON.stringify(BEKISTING_BREAKDOWN_DEFAULT));
   DB.reconciliation      = [];
 
+  seedCalendarDefaults();
+
+  // Initial CPM
+  DB.projects.forEach(p => runCPM(p.id));
+
   saveDB();
 }
 
-/* =====================================================================
-   KALKULASI ENGINE
-   ===================================================================== */
+/* ---------- CALC ENGINE ---------- */
 const Calc = {
-  /** Q untuk RAB — menggunakan parameter KONTRAK asli (locked) */
   QRAB(alat){
     if (!alat || alat.jenis !== 'alat') return 0;
     const V  = num(alat.kapasitas_bucket);
@@ -952,8 +691,6 @@ const Calc = {
     if (V <= 0 || Ts <= 0) return 0;
     return (V * Fb * Fa * 3600) / (Ts * Fk * Fv);
   },
-
-  /** Q untuk RAP — memakai parameter LAPANGAN bila ada (fallback ke kontrak) */
   QRAP(alat){
     if (!alat || alat.jenis !== 'alat') return 0;
     const V  = num(alat.kapasitas_bucket);
@@ -965,11 +702,7 @@ const Calc = {
     if (V <= 0 || Ts <= 0) return 0;
     return (V * Fb * Fa * 3600) / (Ts * Fk * Fv);
   },
-
-  /** Alias backward compat — sebagian kode lama masih memanggil Calc.Q */
   Q(alat){ return this.QRAB(alat); },
-
-  /** Koefisien RAB — SELALU dari Q kontrak (locked, tidak terpengaruh parameter lapangan) */
   koefRAB(det, res){
     if (res && res.jenis === 'alat' && num(res.hitung_q) === 1){
       const q = this.QRAB(res);
@@ -977,8 +710,6 @@ const Calc = {
     }
     return num(det.koefisien_master);
   },
-
-  /** Koefisien RAP — prioritas: override manual → Q lapangan → master */
   koefRAP(det, res){
     if (det.koefisien_rap !== undefined && det.koefisien_rap !== null && det.koefisien_rap !== ''){
       return num(det.koefisien_rap);
@@ -989,60 +720,48 @@ const Calc = {
     }
     return this.koefRAB(det, res);
   },
-
-  /** Biaya satuan RAB = Σ(koef × harga_RAB) × (1 + overhead%) */
   hargaSatuanRAB(projectId, ahspId){
-    const a = DB.ahsp_headers.find(x=>x.id===ahspId);
+    const a = DB.ahsp_headers.find(x => x.id === ahspId);
     if (!a) return 0;
-    const dets = DB.project_ahsp_details.filter(d=>d.project_id===projectId && d.ahsp_id===ahspId);
+    const dets = DB.project_ahsp_details.filter(d => d.project_id === projectId && d.ahsp_id === ahspId);
     let base = 0;
-    dets.forEach(d=>{
-      const r = DB.master_resources.find(x=>x.id===d.resource_id);
+    dets.forEach(d => {
+      const r = DB.master_resources.find(x => x.id === d.resource_id);
       if (!r) return;
       const k = this.koefRAB(d, r);
-      const h = (d.harga_rab !== undefined && d.harga_rab !== null && d.harga_rab !== '')
-              ? num(d.harga_rab) : num(r.harga_rab);
+      const h = num(d.harga_rab);
       base += k * h;
     });
-    const oh = (a.overhead !== undefined && a.overhead !== null) ? num(a.overhead) : num(SET.overhead);
+    const oh = num(a.overhead);
     return base * (1 + oh/100);
   },
-
-  /** Biaya satuan RAP = Σ(koef_disesuaikan × harga_riil_vendor) — bersih tanpa profit */
   hargaSatuanRAP(projectId, ahspId){
-    const dets = DB.project_ahsp_details.filter(d=>d.project_id===projectId && d.ahsp_id===ahspId);
+    const dets = DB.project_ahsp_details.filter(d => d.project_id === projectId && d.ahsp_id === ahspId);
     let base = 0;
-    dets.forEach(d=>{
-      const r = DB.master_resources.find(x=>x.id===d.resource_id);
+    dets.forEach(d => {
+      const r = DB.master_resources.find(x => x.id === d.resource_id);
       if (!r) return;
       const k = this.koefRAP(d, r);
-      const h = (d.harga_rap !== undefined && d.harga_rap !== null && d.harga_rap !== '')
-              ? num(d.harga_rap) : num(r.harga_rap);
+      const h = num(d.harga_rap);
       base += k * h;
     });
     return base;
   },
-
-  /** Komposisi biaya per kategori (upah/bahan/alat) */
   komposisi(projectId, ahspId, mode){
     const out = {upah:0, bahan:0, alat:0};
-    const dets = DB.project_ahsp_details.filter(d=>d.project_id===projectId && d.ahsp_id===ahspId);
-    dets.forEach(d=>{
-      const r = DB.master_resources.find(x=>x.id===d.resource_id);
+    const dets = DB.project_ahsp_details.filter(d => d.project_id === projectId && d.ahsp_id === ahspId);
+    dets.forEach(d => {
+      const r = DB.master_resources.find(x => x.id === d.resource_id);
       if (!r) return;
-      const k = mode==='rab' ? this.koefRAB(d,r) : this.koefRAP(d,r);
-      const h = mode==='rab'
-        ? ((d.harga_rab!==undefined&&d.harga_rab!==null&&d.harga_rab!=='')?num(d.harga_rab):num(r.harga_rab))
-        : ((d.harga_rap!==undefined&&d.harga_rap!==null&&d.harga_rap!=='')?num(d.harga_rap):num(r.harga_rap));
-      out[r.jenis] += k*h;
+      const k = mode === 'rab' ? this.koefRAB(d, r) : this.koefRAP(d, r);
+      const h = mode === 'rab' ? num(d.harga_rab) : num(d.harga_rap);
+      out[r.jenis] += k * h;
     });
     return out;
   },
-
-  /** Baris-baris WBS dengan seluruh nilai terhitung */
   wbsRows(projectId){
-    const wbs = DB.project_wbs.filter(w=>w.project_id===projectId).sort((a,b)=>(a.urut||0)-(b.urut||0));
-    return wbs.map(w=>{
+    const wbs = DB.project_wbs.filter(w => w.project_id === projectId).sort((a,b) => (a.urut||0) - (b.urut||0));
+    return wbs.map(w => {
       const isGroup = !!w.is_group;
       const hsRAB = isGroup ? 0 : this.hargaSatuanRAB(projectId, w.ahsp_id);
       const hsRAP = isGroup ? 0 : this.hargaSatuanRAP(projectId, w.ahsp_id);
@@ -1057,16 +776,14 @@ const Calc = {
         total_rab: totRAB,
         total_rap: totRAP,
         deviasi: totRAB - totRAP,
-        deviasi_pct: totRAB > 0 ? ((totRAB-totRAP)/totRAB*100) : 0
+        deviasi_pct: totRAB > 0 ? ((totRAB - totRAP)/totRAB * 100) : 0
       };
     });
   },
-
-  /** Total agregat proyek */
   totals(projectId){
-    const rows = this.wbsRows(projectId).filter(r=>!r.isGroup);
+    const rows = this.wbsRows(projectId).filter(r => !r.isGroup);
     const t = {rab:0, rap:0, dev:0, upahRAB:0, bahanRAB:0, alatRAB:0, upahRAP:0, bahanRAP:0, alatRAP:0};
-    rows.forEach(r=>{
+    rows.forEach(r => {
       t.rab += r.total_rab;
       t.rap += r.total_rap;
       const kRAB = this.komposisi(projectId, r.ahsp_id, 'rab');
@@ -1084,27 +801,23 @@ const Calc = {
     t.rab_netto = t.rab / (1 + num(SET.ppn)/100);
     return t;
   },
-
-  /** Kurva S — rencana linier vs aktual dari input progress */
   scurve(projectId){
-    const proj = DB.projects.find(p=>p.id===projectId);
+    const proj = DB.projects.find(p => p.id === projectId);
     if (!proj) return {labels:[], planned:[], actual:[]};
     const durasi = Math.max(1, Math.round(num(proj.durasi_minggu)||1));
-    const rows = this.wbsRows(projectId).filter(r=>!r.isGroup);
-    const totalRAB = rows.reduce((s,r)=>s+r.total_rab,0) || 1;
-    const planned = [];
-    const actual  = [];
-    const labels  = [];
-    for (let w=1; w<=durasi; w++){
-      labels.push('M'+w);
+    const rows = this.wbsRows(projectId).filter(r => !r.isGroup);
+    const totalRAB = rows.reduce((s, r) => s + r.total_rab, 0) || 1;
+    const planned = [], actual = [], labels = [];
+    for (let w = 1; w <= durasi; w++){
+      labels.push('M' + w);
       let pCum = 0, aCum = 0;
-      rows.forEach(r=>{
+      rows.forEach(r => {
         const bobot = r.total_rab / totalRAB;
         const fracPlan = Math.min(1, w/durasi);
         pCum += bobot * fracPlan;
         const volProg = DB.progress
-          .filter(p=>p.project_id===projectId && p.wbs_id===r.id && num(p.minggu)<=w)
-          .reduce((s,p)=>s+num(p.volume),0);
+          .filter(p => p.project_id === projectId && p.wbs_id === r.id && num(p.minggu) <= w)
+          .reduce((s, p) => s + num(p.volume), 0);
         const volTarget = num(r.volume_rab) || 1;
         aCum += bobot * Math.min(1, volProg/volTarget);
       });
@@ -1115,20 +828,16 @@ const Calc = {
   }
 };
 
-/* =====================================================================
-   PROJECT HELPERS
-   ===================================================================== */
+/* ---------- PROJECT HELPERS ---------- */
 function cloneAhspToProject(projectId){
-  // Hapus kloning lama
-  DB.project_ahsp_details = DB.project_ahsp_details.filter(d=>d.project_id!==projectId);
-
-  DB.ahsp_headers.forEach(a=>{
-    DB.ahsp_details_master.filter(d=>d.ahsp_id===a.id).forEach(d=>{
-      const r = DB.master_resources.find(x=>x.id===d.resource_id);
+  DB.project_ahsp_details = DB.project_ahsp_details.filter(d => d.project_id !== projectId);
+  DB.ahsp_headers.forEach(a => {
+    DB.ahsp_details_master.filter(d => d.ahsp_id === a.id).forEach(d => {
+      const r = DB.master_resources.find(x => x.id === d.resource_id);
       let koefMaster = num(d.koefisien);
-      if (r && r.jenis==='alat' && num(r.hitung_q)===1){
-        const q = Calc.Q(r);
-        if (q>0) koefMaster = 1/q;
+      if (r && r.jenis === 'alat' && num(r.hitung_q) === 1){
+        const q = Calc.QRAB(r);
+        if (q > 0) koefMaster = 1/q;
       }
       DB.project_ahsp_details.push({
         id: uid('pad'),
@@ -1136,7 +845,7 @@ function cloneAhspToProject(projectId){
         ahsp_id: a.id,
         resource_id: d.resource_id,
         koefisien_master: koefMaster,
-        koefisien_rap: null,   // null = inherit dari Q lapangan
+        koefisien_rap: null,
         harga_rab: r ? num(r.harga_rab) : 0,
         harga_rap: r ? num(r.harga_rap) : 0,
         keterangan: d.keterangan || ''
@@ -1146,59 +855,162 @@ function cloneAhspToProject(projectId){
 }
 
 function activeProj(){
-  return DB.projects.find(p=>p.id===STATE.activeProject) || null;
+  return DB.projects.find(p => p.id === STATE.activeProject) || null;
 }
 
-/* =====================================================================
-   RENDER — GLOBAL
-   ===================================================================== */
+/* ---------- RENDER GLOBAL ---------- */
 function renderProjectSelector(){
   const sel = $('#activeProject');
   sel.innerHTML = DB.projects.length
-    ? DB.projects.map(p=>`<option value="${p.id}">${esc(p.kode)} — ${esc(p.nama)}</option>`).join('')
+    ? DB.projects.map(p => `<option value="${p.id}">${esc(p.kode)} — ${esc(p.nama)}</option>`).join('')
     : '<option value="">(Belum ada proyek)</option>';
   if (!STATE.activeProject && DB.projects.length) STATE.activeProject = DB.projects[0].id;
   if (STATE.activeProject) sel.value = STATE.activeProject;
 }
 
 function switchTab(name){
-  $$('.tab').forEach(t=>t.classList.toggle('active', t.dataset.tab===name));
-  $$('.section').forEach(s=>s.classList.toggle('active', s.id==='sec-'+name));
-  if (name==='dashboard') renderDashboard();
-  if (name==='resources') renderResources();
-  if (name==='ahsp')      renderAhspTab();
-  if (name==='wbs')       renderWbs();
-  if (name==='analysis')  renderAnalysis();
-  if (name==='progress')  renderProgress();
-  if (name==='projects')  renderProjects();
-  if (name==='settings')  renderSettings();
-  if (name==='recon')     { if (!DB.bj_material) seedReconMasterData(); renderReconRekap(); }
-  if (name==='lembar')    { initLembar(); }
+  $$('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === name));
+  $$('.section').forEach(s => s.classList.toggle('active', s.id === 'sec-' + name));
+  if (name === 'dashboard') renderDashboard();
+  if (name === 'resources') renderResources();
+  if (name === 'ahsp')      renderAhspTab();
+  if (name === 'wbs')       renderWbs();
+  if (name === 'schedule')  renderSchedule();
+  if (name === 'calendar')  renderCalendars();
+  if (name === 'holidays')  renderHolidays();
+  if (name === 'analysis')  renderAnalysis();
+  if (name === 'progress')  renderProgress();
+  if (name === 'projects')  renderProjects();
+  if (name === 'settings')  renderSettings();
+  if (name === 'recon')     { if (!DB.bj_material) seedReconMasterData(); renderReconRekap(); }
+  if (name === 'lembar')    { initLembar(); }
 }
 
-/* =====================================================================
-   RENDER — RESOURCES
-   ===================================================================== */
+function renderAll(){
+  renderProjectSelector();
+  const cur = $$('.tab').find(t => t.classList.contains('active'))?.dataset.tab || 'dashboard';
+  switchTab(cur);
+}
+
+/* ---------- RENDER DASHBOARD ---------- */
+function renderDashboard(){
+  const pid = STATE.activeProject;
+  const proj = activeProj();
+  if (!pid || !proj){
+    $('#kpiWrap').innerHTML = `<div class="kpi"><div class="lbl">Status</div><div class="val">Belum ada proyek</div></div>`;
+    $('#alertWrap').innerHTML = `<div class="alert ok">Silakan buat proyek pada tab <b>Proyek</b>.</div>`;
+    return;
+  }
+  const t = Calc.totals(pid);
+  const nilaiKontrak = num(proj.nilai_kontrak);
+  const nilaiKontrakNetto = nilaiKontrak / (1 + num(SET.ppn)/100);
+
+  $('#kpiWrap').innerHTML = `
+    <div class="kpi">
+      <div class="lbl">Nilai Kontrak</div>
+      <div class="val">${rp(nilaiKontrak)}</div>
+      <div class="sub">Netto: ${rp(nilaiKontrakNetto)} (PPN ${fmt(SET.ppn,2)}%)</div>
+    </div>
+    <div class="kpi k2">
+      <div class="lbl">Total RAB</div>
+      <div class="val">${rp(t.rab)}</div>
+      <div class="sub">${((t.rab/(nilaiKontrakNetto||1))*100).toFixed(2)}% dari kontrak netto</div>
+    </div>
+    <div class="kpi k3">
+      <div class="lbl">Total RAP</div>
+      <div class="val">${rp(t.rap)}</div>
+      <div class="sub">Bersih tanpa profit</div>
+    </div>
+    <div class="kpi ${t.dev>=0?'k5':'k4'}">
+      <div class="lbl">Margin / Deviasi</div>
+      <div class="val ${t.dev>=0?'pos':'neg'}">${rp(t.dev)}</div>
+      <div class="sub ${t.dev>=0?'pos':'neg'}">${fmt(t.margin_pct,2)}% dari RAB</div>
+    </div>
+    <div class="kpi ${t.rap<=nilaiKontrakNetto?'k5':'k4'}">
+      <div class="lbl">Sisa Terhadap Kontrak</div>
+      <div class="val ${(nilaiKontrakNetto-t.rap)>=0?'pos':'neg'}">${rp(nilaiKontrakNetto - t.rap)}</div>
+      <div class="sub">${t.rap<=nilaiKontrakNetto?'✅ Di bawah pagu':'⚠ Melebihi pagu'}</div>
+    </div>
+  `;
+
+  const rows = Calc.wbsRows(pid).filter(r => !r.isGroup);
+  const alerts = [];
+  rows.forEach(r => {
+    if (r.total_rap > r.total_rab){
+      alerts.push(`<div class="alert"><span>🔴</span><div><b>${esc(r.kode_wbs)} — ${esc(r.uraian)}</b><br>RAP ${rp(r.total_rap)} melebihi RAB ${rp(r.total_rab)}.</div></div>`);
+    } else if (r.deviasi_pct < 5 && r.total_rab > 0){
+      alerts.push(`<div class="alert warn"><span>🟡</span><div><b>${esc(r.kode_wbs)} — ${esc(r.uraian)}</b><br>Margin tipis: ${fmt(r.deviasi_pct,2)}%.</div></div>`);
+    }
+  });
+  if (t.rap > nilaiKontrakNetto){
+    alerts.unshift(`<div class="alert"><span>🚨</span><div><b>PERINGATAN</b><br>Total RAP ${rp(t.rap)} melampaui kontrak netto ${rp(nilaiKontrakNetto)}.</div></div>`);
+  }
+  if (t.margin_pct < 5 && t.rab > 0){
+    alerts.unshift(`<div class="alert warn"><span>⚠</span><div><b>Margin proyek rendah</b> — ${fmt(t.margin_pct,2)}%. Target 8–12%.</div></div>`);
+  }
+  $('#alertWrap').innerHTML = alerts.length ? alerts.join('') :
+    `<div class="alert ok"><span>✅</span><div><b>Semua item dalam batas aman.</b></div></div>`;
+
+  // Chart S-Curve
+  const sc = Calc.scurve(pid);
+  if (STATE.chartS) STATE.chartS.destroy();
+  const ctxS = $('#chartScurve').getContext('2d');
+  STATE.chartS = new Chart(ctxS, {
+    type:'line',
+    data:{ labels: sc.labels, datasets:[
+      {label:'Rencana (%)', data:sc.planned, borderColor:'#2f81f7', backgroundColor:'rgba(47,129,247,.14)', fill:true, tension:.35, borderWidth:2.5, pointRadius:2.5},
+      {label:'Aktual (%)',  data:sc.actual,  borderColor:'#1abc9c', backgroundColor:'rgba(26,188,156,.14)', fill:true, tension:.35, borderWidth:2.5, pointRadius:2.5}
+    ]},
+    options:{ responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{labels:{color:'#e6edf7', font:{size:11}}},
+        tooltip:{callbacks:{label:c => c.dataset.label + ': ' + fmt(c.parsed.y,2) + '%'}} },
+      scales:{
+        x:{ticks:{color:'#8fa3c4'}, grid:{color:'rgba(36,54,92,.5)'}},
+        y:{ticks:{color:'#8fa3c4', callback:v => v + '%'}, grid:{color:'rgba(36,54,92,.5)'}, beginAtZero:true, max:100}
+      }
+    }
+  });
+
+  // Chart Komposisi
+  if (STATE.chartC) STATE.chartC.destroy();
+  const ctxC = $('#chartCost').getContext('2d');
+  STATE.chartC = new Chart(ctxC, {
+    type:'bar',
+    data:{ labels:['Upah','Bahan','Alat'], datasets:[
+      {label:'RAB', data:[t.upahRAB,t.bahanRAB,t.alatRAB], backgroundColor:'rgba(47,129,247,.75)', borderRadius:6},
+      {label:'RAP', data:[t.upahRAP,t.bahanRAP,t.alatRAP], backgroundColor:'rgba(26,188,156,.75)', borderRadius:6}
+    ]},
+    options:{ responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{labels:{color:'#e6edf7', font:{size:11}}},
+        tooltip:{callbacks:{label:c => c.dataset.label + ': ' + rp(c.parsed.y)}} },
+      scales:{
+        x:{ticks:{color:'#8fa3c4'}, grid:{display:false}},
+        y:{ticks:{color:'#8fa3c4', callback:v => 'Rp ' + (v/1e6).toFixed(0) + 'jt'}, grid:{color:'rgba(36,54,92,.5)'}}
+      }
+    }
+  });
+}
+
+/* ---------- RENDER RESOURCES ---------- */
 function renderResources(){
   const fj = $('#fResJenis').value;
-  const q  = ($('#fResSearch').value||'').toLowerCase();
+  const q  = ($('#fResSearch').value || '').toLowerCase();
   let rows = DB.master_resources.slice();
-  if (fj) rows = rows.filter(r=>r.jenis===fj);
-  if (q)  rows = rows.filter(r=>(r.kode+' '+r.nama).toLowerCase().includes(q));
+  if (fj) rows = rows.filter(r => r.jenis === fj);
+  if (q)  rows = rows.filter(r => (r.kode + ' ' + r.nama).toLowerCase().includes(q));
 
   const badge = j => `<span class="badge b-${j}">${j.toUpperCase()}</span>`;
   const head = `<thead><tr>
     <th>Kode</th><th>Nama</th><th>Jenis</th><th>Satuan</th>
     <th class="num">Harga RAB</th><th class="num">Harga RAP</th>
-    <th class="num">Q (per jam)</th><th>Parameter Alat</th><th class="center">Aksi</th>
+    <th class="num">Q (per jam)</th><th>Parameter</th><th class="center">Aksi</th>
   </tr></thead>`;
-
-  const body = rows.map(r=>{
+  const body = rows.map(r => {
     let qVal = '—', param = '—';
-    if (r.jenis==='alat'){
-      const q = Calc.Q(r);
-      qVal = (num(r.hitung_q)===1 && q>0) ? fmt(q,3) : 'manual';
-      param = `V:${fmt(r.kapasitas_bucket,2)} m³ · Fb:${fmt(r.faktor_bucket,2)} · Fa:${fmt(r.faktor_efisiensi,2)} · Ts:${fmt(r.waktu_siklus,0)}s · Fk:${fmt(r.faktor_koreksi,2)}`;
+    if (r.jenis === 'alat'){
+      const q = Calc.QRAB(r);
+      qVal = (num(r.hitung_q) === 1 && q > 0) ? fmt(q,3) : 'manual';
+      param = `V:${fmt(r.kapasitas_bucket,2)} · Fb:${fmt(r.faktor_bucket,2)} · Fa:${fmt(r.faktor_efisiensi,2)} · Ts:${fmt(r.waktu_siklus,0)}s · Fk:${fmt(r.faktor_koreksi,2)}`;
     }
     return `<tr>
       <td><b>${esc(r.kode)}</b></td>
@@ -1215,20 +1027,20 @@ function renderResources(){
       </td>
     </tr>`;
   }).join('');
-
   $('#tblRes').innerHTML = head + `<tbody>${body || `<tr><td colspan="9" class="empty">Tidak ada data.</td></tr>`}</tbody>`;
 
-  $$('[data-edit-res]').forEach(b=>b.onclick=()=>formResource(b.dataset.editRes));
-  $$('[data-del-res]').forEach(b=>b.onclick=()=>{
-    if(!confirm('Hapus resource ini?')) return;
-    DB.master_resources = DB.master_resources.filter(x=>x.id!==b.dataset.delRes);
+  $$('[data-edit-res]').forEach(b => b.onclick = () => formResource(b.dataset.editRes));
+  $$('[data-del-res]').forEach(b => b.onclick = () => {
+    if (!confirm('Hapus resource ini?')) return;
+    DB.master_resources = DB.master_resources.filter(x => x.id !== b.dataset.delRes);
     saveDB(); renderResources(); toast('Resource dihapus');
   });
 }
 
+/* ---------- FORM RESOURCE ---------- */
 function formResource(id){
-  const r = id ? DB.master_resources.find(x=>x.id===id) : null;
-  const isAlat = r ? r.jenis==='alat' : false;
+  const r = id ? DB.master_resources.find(x => x.id === id) : null;
+  const isAlat = r ? r.jenis === 'alat' : false;
   const body = `
     <div class="row">
       <div class="field"><label class="f">Kode</label><input id="fr_kode" value="${esc(r?.kode||'')}" /></div>
@@ -1244,48 +1056,47 @@ function formResource(id){
     </div>
     <div class="row" style="margin-top:12px">
       <div class="field"><label class="f">Harga RAB</label><input id="fr_hrab" type="number" value="${num(r?.harga_rab)}" /></div>
-      <div class="field"><label class="f">Harga RAP (Riil Vendor)</label><input id="fr_hrap" type="number" value="${num(r?.harga_rap)}" /></div>
+      <div class="field"><label class="f">Harga RAP (Riil)</label><input id="fr_hrap" type="number" value="${num(r?.harga_rap)}" /></div>
     </div>
     <div id="alatBox" style="display:${isAlat?'block':'none'}">
       <div class="sep"></div>
-      <p class="hint" style="margin-bottom:10px"><b>Parameter Kapasitas Produksi Alat (RAB)</b> — Q = (V × Fb × Fa × 3600) / (Ts × Fk × Fv)</p>
+      <p class="hint"><b>Parameter Kapasitas Produksi (RAB)</b> — Q = (V × Fb × Fa × 3600) / (Ts × Fk × Fv)</p>
       <div class="row">
-        <div class="field"><label class="f">Hitung Q Otomatis</label>
-          <select id="fr_hq"><option value="1" ${num(r?.hitung_q)===1?'selected':''}>Ya</option><option value="0" ${num(r?.hitung_q)!==1?'selected':''}>Tidak (manual)</option></select>
+        <div class="field"><label class="f">Hitung Q</label>
+          <select id="fr_hq"><option value="1" ${num(r?.hitung_q)===1?'selected':''}>Ya</option><option value="0" ${num(r?.hitung_q)!==1?'selected':''}>Tidak</option></select>
         </div>
         <div class="field"><label class="f">Jenis Alat</label>
           <select id="fr_ja">
             ${['excavator','bulldozer','dump_truck','vibratory_roller','mixer','pompa','crane','lainnya']
-              .map(j=>`<option value="${j}" ${r?.jenis_alat===j?'selected':''}>${j}</option>`).join('')}
+              .map(j => `<option value="${j}" ${r?.jenis_alat===j?'selected':''}>${j}</option>`).join('')}
           </select>
         </div>
-        <div class="field"><label class="f">Kapasitas Bucket V (m³)</label><input id="fr_v" type="number" step="0.01" value="${num(r?.kapasitas_bucket)}" /></div>
-        <div class="field"><label class="f">Faktor Bucket Fb</label><input id="fr_fb" type="number" step="0.01" value="${num(r?.faktor_bucket)||1}" /></div>
+        <div class="field"><label class="f">V (m³)</label><input id="fr_v" type="number" step="0.01" value="${num(r?.kapasitas_bucket)}" /></div>
+        <div class="field"><label class="f">Fb</label><input id="fr_fb" type="number" step="0.01" value="${num(r?.faktor_bucket)||1}" /></div>
       </div>
       <div class="row" style="margin-top:12px">
-        <div class="field"><label class="f">Faktor Efisiensi Fa</label><input id="fr_fa" type="number" step="0.01" value="${num(r?.faktor_efisiensi)||0.75}" /></div>
-        <div class="field"><label class="f">Waktu Siklus Ts (detik)</label><input id="fr_ts" type="number" step="0.1" value="${num(r?.waktu_siklus)||30}" /></div>
-        <div class="field"><label class="f">Faktor Koreksi Fk (basah/lumpur)</label><input id="fr_fk" type="number" step="0.01" value="${num(r?.faktor_koreksi)||1}" /></div>
-        <div class="field"><label class="f">Faktor Konversi Fv</label><input id="fr_fv" type="number" step="0.01" value="${num(r?.faktor_konversi)||1}" /></div>
+        <div class="field"><label class="f">Fa</label><input id="fr_fa" type="number" step="0.01" value="${num(r?.faktor_efisiensi)||0.75}" /></div>
+        <div class="field"><label class="f">Ts (detik)</label><input id="fr_ts" type="number" step="0.1" value="${num(r?.waktu_siklus)||30}" /></div>
+        <div class="field"><label class="f">Fk</label><input id="fr_fk" type="number" step="0.01" value="${num(r?.faktor_koreksi)||1}" /></div>
+        <div class="field"><label class="f">Fv</label><input id="fr_fv" type="number" step="0.01" value="${num(r?.faktor_konversi)||1}" /></div>
       </div>
       <div class="row" style="margin-top:12px">
-        <div class="field" style="flex:2"><label class="f">Keterangan Kondisi</label><input id="fr_ket" value="${esc(r?.ket_koreksi||'')}" placeholder="mis. Kondisi lumpur tinggi" /></div>
+        <div class="field" style="flex:2"><label class="f">Keterangan</label><input id="fr_ket" value="${esc(r?.ket_koreksi||'')}" /></div>
       </div>
-
       <div class="sep"></div>
-      <p class="hint" style="margin-bottom:10px"><b>Parameter Lapangan (RAP)</b> — hanya memengaruhi Koefisien &amp; Harga Satuan RAP, <b>tidak mengubah RAB Kontrak</b></p>
+      <p class="hint"><b>Parameter Lapangan (RAP)</b> — Hanya memengaruhi RAP</p>
       <div class="row">
-        <div class="field"><label class="f">Ts Lapangan (detik)</label><input id="fr_ts_lap" type="number" step="0.1" value="${num(r?.ts_lapangan)}" placeholder="kosong = sama dengan kontrak" /></div>
-        <div class="field"><label class="f">Fk Lapangan (basah/lumpur)</label><input id="fr_fk_lap" type="number" step="0.01" value="${num(r?.fk_lapangan)}" placeholder="kosong = sama dengan kontrak" /></div>
-        <div class="field"><label class="f">Fa Lapangan</label><input id="fr_fa_lap" type="number" step="0.01" value="${num(r?.fa_lapangan)}" placeholder="kosong = sama dengan kontrak" /></div>
+        <div class="field"><label class="f">Ts Lapangan</label><input id="fr_ts_lap" type="number" step="0.1" value="${num(r?.ts_lapangan)}" /></div>
+        <div class="field"><label class="f">Fk Lapangan</label><input id="fr_fk_lap" type="number" step="0.01" value="${num(r?.fk_lapangan)}" /></div>
+        <div class="field"><label class="f">Fa Lapangan</label><input id="fr_fa_lap" type="number" step="0.01" value="${num(r?.fa_lapangan)}" /></div>
       </div>
       <div class="row" style="margin-top:12px">
-        <div class="field" style="flex:2"><label class="f">Catatan Kondisi Lapangan</label><input id="fr_ket_lap" value="${esc(r?.ket_lapangan||'')}" placeholder="mis. Lumpur tinggi, genangan air" /></div>
+        <div class="field" style="flex:2"><label class="f">Catatan Lapangan</label><input id="fr_ket_lap" value="${esc(r?.ket_lapangan||'')}" /></div>
       </div>
     </div>
   `;
 
-  openModal(id?'Edit Resource':'Tambah Resource', body, ()=>{
+  openModal(id?'Edit Resource':'Tambah Resource', body, () => {
     const jenis = $('#fr_jenis').value;
     const obj = {
       id: r?.id || uid('res'),
@@ -1297,7 +1108,7 @@ function formResource(id){
       harga_rap: num($('#fr_hrap').value)
     };
     if (!obj.kode || !obj.nama){ toast('Kode & Nama wajib diisi', false); return false; }
-    if (jenis==='alat'){
+    if (jenis === 'alat'){
       Object.assign(obj, {
         hitung_q: num($('#fr_hq').value),
         jenis_alat: $('#fr_ja').value,
@@ -1314,30 +1125,29 @@ function formResource(id){
         ket_lapangan: $('#fr_ket_lap').value.trim()
       });
     }
-    if (r) Object.assign(r, obj);
-    else DB.master_resources.push(obj);
+    if (r) Object.assign(r, obj); else DB.master_resources.push(obj);
+    AUTOSAVE.clear('form_resource_' + (id || 'new'));
     saveDB(); renderResources(); toast('Resource disimpan');
   });
 
   $('#fr_jenis').onchange = e => {
-    $('#alatBox').style.display = e.target.value==='alat' ? 'block' : 'none';
+    $('#alatBox').style.display = e.target.value === 'alat' ? 'block' : 'none';
   };
+
+  AUTOSAVE.attachForm('form_resource_' + (id || 'new'));
 }
 
-/* =====================================================================
-   RENDER — AHSP
-   ===================================================================== */
+/* ---------- RENDER AHSP ---------- */
 function renderAhspTab(){
-  // Tabel header AHSP
   const head = `<thead><tr>
-    <th>Kode</th><th>Uraian Pekerjaan</th><th>Satuan</th><th>Kategori</th>
-    <th class="num">Overhead (%)</th><th class="num">Jml Komponen</th><th class="center">Aksi</th>
+    <th>Kode</th><th>Uraian</th><th>Satuan</th><th>Kategori</th>
+    <th class="num">Overhead (%)</th><th class="num">Komponen</th><th class="center">Aksi</th>
   </tr></thead>`;
-  const body = DB.ahsp_headers.map(a=>{
-    const n = DB.ahsp_details_master.filter(d=>d.ahsp_id===a.id).length;
+  const body = DB.ahsp_headers.map(a => {
+    const n = DB.ahsp_details_master.filter(d => d.ahsp_id === a.id).length;
     return `<tr>
       <td><b>${esc(a.kode)}</b></td><td>${esc(a.nama)}</td><td>${esc(a.satuan)}</td>
-      <td>${esc(a.kategori||'-')}</td>
+      <td>${esc(a.kategori || '-')}</td>
       <td class="num">${fmt(a.overhead,2)}</td>
       <td class="num">${n}</td>
       <td class="center">
@@ -1348,27 +1158,25 @@ function renderAhspTab(){
   }).join('');
   $('#tblAhsp').innerHTML = head + `<tbody>${body || `<tr><td colspan="7" class="empty">Belum ada AHSP.</td></tr>`}</tbody>`;
 
-  $$('[data-edit-ahsp]').forEach(b=>b.onclick=()=>formAhsp(b.dataset.editAhsp));
-  $$('[data-del-ahsp]').forEach(b=>b.onclick=()=>{
-    if(!confirm('Hapus AHSP ini beserta komponennya?')) return;
+  $$('[data-edit-ahsp]').forEach(b => b.onclick = () => formAhsp(b.dataset.editAhsp));
+  $$('[data-del-ahsp]').forEach(b => b.onclick = () => {
+    if (!confirm('Hapus AHSP ini?')) return;
     const id = b.dataset.delAhsp;
-    DB.ahsp_headers = DB.ahsp_headers.filter(x=>x.id!==id);
-    DB.ahsp_details_master = DB.ahsp_details_master.filter(x=>x.ahsp_id!==id);
-    DB.project_ahsp_details = DB.project_ahsp_details.filter(x=>x.ahsp_id!==id);
+    DB.ahsp_headers = DB.ahsp_headers.filter(x => x.id !== id);
+    DB.ahsp_details_master = DB.ahsp_details_master.filter(x => x.ahsp_id !== id);
+    DB.project_ahsp_details = DB.project_ahsp_details.filter(x => x.ahsp_id !== id);
     saveDB(); renderAhspTab(); toast('AHSP dihapus');
   });
 
-  // Selector proyek & AHSP
   const ps = $('#ahspProjSel');
-  ps.innerHTML = DB.projects.map(p=>`<option value="${p.id}" ${p.id===STATE.activeProject?'selected':''}>${esc(p.kode)}</option>`).join('');
+  ps.innerHTML = DB.projects.map(p => `<option value="${p.id}" ${p.id === STATE.activeProject?'selected':''}>${esc(p.kode)}</option>`).join('');
   if (!ps.value && DB.projects.length) ps.value = DB.projects[0].id;
 
   const as = $('#ahspSel');
-  as.innerHTML = DB.ahsp_headers.map(a=>`<option value="${a.id}">${esc(a.kode)} — ${esc(a.nama)}</option>`).join('');
+  as.innerHTML = DB.ahsp_headers.map(a => `<option value="${a.id}">${esc(a.kode)} — ${esc(a.nama)}</option>`).join('');
 
-  ps.onchange = () => { renderKoefTable(); };
-  as.onchange = () => { renderKoefTable(); };
-
+  ps.onchange = () => renderKoefTable();
+  as.onchange = () => renderKoefTable();
   renderKoefTable();
 }
 
@@ -1377,8 +1185,8 @@ function renderKoefTable(){
   const aid = $('#ahspSel').value;
   if (!pid || !aid){ $('#tblKoef').innerHTML = `<tbody><tr><td class="empty">Pilih proyek dan AHSP.</td></tr></tbody>`; return; }
 
-  const a = DB.ahsp_headers.find(x=>x.id===aid);
-  const dets = DB.project_ahsp_details.filter(d=>d.project_id===pid && d.ahsp_id===aid);
+  const a = DB.ahsp_headers.find(x => x.id === aid);
+  const dets = DB.project_ahsp_details.filter(d => d.project_id === pid && d.ahsp_id === aid);
 
   const head = `<thead><tr>
     <th>Kode</th><th>Komponen</th><th>Jenis</th><th>Satuan</th>
@@ -1388,17 +1196,17 @@ function renderKoefTable(){
   </tr></thead>`;
 
   let totRAB = 0, totRAP = 0;
-  const rows = dets.map(d=>{
-    const r = DB.master_resources.find(x=>x.id===d.resource_id);
+  const rows = dets.map(d => {
+    const r = DB.master_resources.find(x => x.id === d.resource_id);
     if (!r) return '';
     const kRAB = Calc.koefRAB(d, r);
     const kRAP = Calc.koefRAP(d, r);
     const hRAB = num(d.harga_rab);
     const hRAP = num(d.harga_rap);
-    const sRAB = kRAB*hRAB, sRAP = kRAP*hRAP;
+    const sRAB = kRAB * hRAB, sRAP = kRAP * hRAP;
     totRAB += sRAB; totRAP += sRAP;
-    const qInfo = (r.jenis==='alat' && num(r.hitung_q)===1)
-      ? `<div style="font-size:10px;color:var(--muted)">Q=${fmt(Calc.Q(r),3)} /jam</div>` : '';
+    const qInfo = (r.jenis === 'alat' && num(r.hitung_q) === 1)
+      ? `<div style="font-size:10px;color:var(--muted)">Q=${fmt(Calc.QRAB(r),3)}/jam</div>` : '';
     return `<tr>
       <td>${esc(r.kode)}</td>
       <td>${esc(r.nama)}${qInfo}</td>
@@ -1414,36 +1222,33 @@ function renderKoefTable(){
   }).join('');
 
   const oh = num(a?.overhead);
-  const finalRAB = totRAB * (1+oh/100);
-  const finalRAP = totRAP;
-
+  const finalRAB = totRAB * (1 + oh/100);
   const foot = `<tfoot>
     <tr style="background:#0e1a30;font-weight:700">
       <td colspan="8" style="text-align:right;padding:10px">Subtotal Komponen</td>
       <td class="num">${rp(totRAB)}</td><td class="num">${rp(totRAP)}</td>
     </tr>
     <tr style="background:#0e1a30;font-weight:700">
-      <td colspan="8" style="text-align:right;padding:10px">+ Overhead &amp; Margin ${fmt(oh,2)}% (RAB)</td>
-      <td class="num">${rp(finalRAB)}</td><td class="num">${rp(finalRAP)} <span style="font-size:10px;color:var(--muted)">(bersih)</span></td>
+      <td colspan="8" style="text-align:right;padding:10px">+ Overhead ${fmt(oh,2)}%</td>
+      <td class="num">${rp(finalRAB)}</td><td class="num">${rp(totRAP)}</td>
     </tr>
   </tfoot>`;
 
   $('#tblKoef').innerHTML = head + `<tbody>${rows || `<tr><td colspan="10" class="empty">Tidak ada komponen.</td></tr>`}</tbody>` + foot;
 
-  // Live update subtotal
-  $$('#tblKoef input').forEach(inp=>{
+  $$('#tblKoef input').forEach(inp => {
     inp.oninput = () => {
       const id = inp.dataset.krap || inp.dataset.hrab || inp.dataset.hrap;
-      const d = DB.project_ahsp_details.find(x=>x.id===id);
+      const d = DB.project_ahsp_details.find(x => x.id === id);
       if (!d) return;
       if (inp.dataset.krap) d.koefisien_rap = num(inp.value);
       if (inp.dataset.hrab) d.harga_rab = num(inp.value);
       if (inp.dataset.hrap) d.harga_rap = num(inp.value);
-      const r = DB.master_resources.find(x=>x.id===d.resource_id);
-      const sRAB = Calc.koefRAB(d,r)*num(d.harga_rab);
-      const sRAP = Calc.koefRAP(d,r)*num(d.harga_rap);
+      const r = DB.master_resources.find(x => x.id === d.resource_id);
+      const sRAB = Calc.koefRAB(d, r) * num(d.harga_rab);
+      const sRAP = Calc.koefRAP(d, r) * num(d.harga_rap);
       const e1 = document.querySelector(`[data-srab="${d.id}"]`);
-      const e2 = document.querySelector(`[data-srap="${d.id}"]`);
+      const e2 = document.querySelector[`data-srap="${d.id}"]`] || document.querySelector(`[data-srap="${d.id}"]`);
       if (e1) e1.textContent = rp(sRAB);
       if (e2) e2.textContent = rp(sRAP);
     };
@@ -1451,25 +1256,26 @@ function renderKoefTable(){
 }
 
 function formAhsp(id){
-  const a = id ? DB.ahsp_headers.find(x=>x.id===id) : null;
+  const a = id ? DB.ahsp_headers.find(x => x.id === id) : null;
   const body = `
     <div class="row">
-      <div class="field"><label class="f">Kode AHSP</label><input id="fa_kode" value="${esc(a?.kode||'')}" placeholder="1.1.1" /></div>
-      <div class="field" style="flex:3"><label class="f">Uraian Pekerjaan</label><input id="fa_nama" value="${esc(a?.nama||'')}" /></div>
+      <div class="field"><label class="f">Kode</label><input id="fa_kode" value="${esc(a?.kode||'')}" /></div>
+      <div class="field" style="flex:3"><label class="f">Uraian</label><input id="fa_nama" value="${esc(a?.nama||'')}" /></div>
     </div>
     <div class="row" style="margin-top:12px">
       <div class="field"><label class="f">Satuan</label><input id="fa_satuan" value="${esc(a?.satuan||'m3')}" /></div>
       <div class="field"><label class="f">Kategori</label><input id="fa_kat" value="${esc(a?.kategori||'')}" /></div>
-      <div class="field"><label class="f">Overhead &amp; Margin (%)</label><input id="fa_oh" type="number" step="0.01" value="${num(a?.overhead ?? SET.overhead)}" /></div>
+      <div class="field"><label class="f">Overhead (%)</label><input id="fa_oh" type="number" step="0.01" value="${num(a?.overhead ?? SET.overhead)}" /></div>
       <div class="field"><label class="f">Biaya Umum (%)</label><input id="fa_umum" type="number" step="0.01" value="${num(a?.biaya_umum ?? 2)}" /></div>
-      <div class="field"><label class="f">Biaya Keuntungan (%)</label><input id="fa_margin" type="number" step="0.01" value="${num(a?.margin ?? 4)}" /></div>      
+      <div class="field"><label class="f">Margin (%)</label><input id="fa_margin" type="number" step="0.01" value="${num(a?.margin ?? 4)}" /></div>
     </div>
     <div class="sep"></div>
-    <p class="hint" style="margin-bottom:8px"><b>Komponen Penyusun</b> — pilih resource dan isi koefisien. Biarkan koefisien 0 untuk alat ber-Q otomatis.</p>
+    <p class="hint"><b>Komponen Penyusun</b></p>
     <div id="kompWrap"></div>
     <button class="btn btn-sm" id="btnAddKomp" style="margin-top:10px">+ Tambah Komponen</button>
   `;
-  openModal(id?'Edit AHSP':'Tambah AHSP', body, ()=>{
+
+  openModal(id?'Edit AHSP':'Tambah AHSP', body, () => {
     const kode = $('#fa_kode').value.trim();
     const nama = $('#fa_nama').value.trim();
     if (!kode || !nama){ toast('Kode & uraian wajib diisi', false); return false; }
@@ -1483,12 +1289,10 @@ function formAhsp(id){
       margin: num($('#fa_margin').value),
       sumber: 'Permen PUPR SDA'
     };
-    
     if (a) Object.assign(a, obj); else DB.ahsp_headers.push(obj);
 
-    // Simpan komponen master
-    DB.ahsp_details_master = DB.ahsp_details_master.filter(d=>d.ahsp_id!==ahspId);
-    $$('#kompWrap .komp-row').forEach(row=>{
+    DB.ahsp_details_master = DB.ahsp_details_master.filter(d => d.ahsp_id !== ahspId);
+    $$('#kompWrap .komp-row').forEach(row => {
       const rid = row.querySelector('.k-res').value;
       if (!rid) return;
       const koef = num(row.querySelector('.k-koef').value);
@@ -1498,14 +1302,15 @@ function formAhsp(id){
       });
     });
 
-    // Re-clone ke semua proyek
-    DB.projects.forEach(p=>cloneAhspToProject(p.id));
-
+    DB.projects.forEach(p => cloneAhspToProject(p.id));
+    AUTOSAVE.clear('form_ahsp_' + (id || 'new'));
     saveDB(); renderAhspTab(); renderResources(); toast('AHSP disimpan');
   });
 
   const drawKomp = (det) => {
-    const opts = DB.master_resources.map(r=>`<option value="${r.id}" ${det?.resource_id===r.id?'selected':''}>${esc(r.kode)} — ${esc(r.nama)} (${r.jenis}, ${r.satuan})</option>`).join('');
+    const opts = DB.master_resources.map(r =>
+      `<option value="${r.id}" ${det?.resource_id === r.id?'selected':''}>${esc(r.kode)} — ${esc(r.nama)} (${r.jenis}, ${r.satuan})</option>`
+    ).join('');
     const div = document.createElement('div');
     div.className = 'komp-row row';
     div.style.marginBottom = '8px';
@@ -1519,71 +1324,84 @@ function formAhsp(id){
     $('#kompWrap').appendChild(div);
   };
 
-  const existing = id ? DB.ahsp_details_master.filter(d=>d.ahsp_id===id) : [];
-  if (existing.length) existing.forEach(d=>drawKomp(d));
+  const existing = id ? DB.ahsp_details_master.filter(d => d.ahsp_id === id) : [];
+  if (existing.length) existing.forEach(d => drawKomp(d));
   else drawKomp(null);
   $('#btnAddKomp').onclick = () => drawKomp(null);
+
+  AUTOSAVE.attachForm('form_ahsp_' + (id || 'new'));
 }
 
-/* =====================================================================
-   RENDER — WBS
-   ===================================================================== */
+/* ---------- RENDER WBS ---------- */
 function renderWbs(){
   const pid = STATE.activeProject;
   if (!pid){ $('#tblWbs').innerHTML = `<tbody><tr><td class="empty">Belum ada proyek aktif.</td></tr></tbody>`; return; }
-  const rows = Calc.wbsRows(pid);
 
+  runCPM(pid);
+  saveDB();
+
+  const rows = Calc.wbsRows(pid);
   const head = `<thead><tr>
-    <th>Kode</th><th>Uraian Pekerjaan</th><th>STA / Lokasi</th><th>Satuan</th>
+    <th>Kode</th><th>Uraian</th><th>STA</th>
     <th class="num">Vol RAB</th><th class="num">Vol RAP</th>
-    <th class="num">HPS RAB</th><th class="num">HPS RAP</th>
-    <th class="num">Total RAB</th><th class="num">Total RAP</th>
-    <th class="num">Deviasi</th><th class="center">Aksi</th>
+    <th class="num">Total RAB</th><th class="num">Total RAP</th><th class="num">Dev</th>
+    <th class="center">Pred</th><th class="center">Dur</th>
+    <th class="center">Start</th><th class="center">Finish</th>
+    <th class="center">Float</th><th class="center">Kritis</th>
+    <th class="center">Aksi</th>
   </tr></thead>`;
 
   const lvlOf = (w) => {
     if (w.isGroup) return 'lvl1';
     if (w.parent_id){
-      const parent = rows.find(x=>x.id===w.parent_id);
+      const parent = rows.find(x => x.id === w.parent_id);
       if (parent && parent.isGroup) return 'lvl2';
       return 'lvl3';
     }
     return 'lvl1';
   };
 
-  const body = rows.map(w=>{
+  const body = rows.map(w => {
     const cls = lvlOf(w);
-    const devCls = w.deviasi >= 0 ? 'pos' : 'neg';
+    const raw = DB.project_wbs.find(x => x.id === w.id) || {};
+
     if (w.isGroup){
-      // hitung total grup dari anak-anaknya
-      const children = rows.filter(x=>x.parent_id===w.id);
-      const tRAB = children.reduce((s,c)=>s+c.total_rab,0);
-      const tRAP = children.reduce((s,c)=>s+c.total_rap,0);
-      const dev  = tRAB - tRAP;
+      const children = rows.filter(x => x.parent_id === w.id);
+      const tRAB = children.reduce((s,c) => s + c.total_rab, 0);
+      const tRAP = children.reduce((s,c) => s + c.total_rap, 0);
       return `<tr class="${cls}">
         <td>${esc(w.kode_wbs)}</td>
-        <td colspan="8">${esc(w.uraian)}</td>
-        <td class="num">${rp(tRAB)}</td>
-        <td class="num">${rp(tRAP)}</td>
-        <td class="num ${dev>=0?'pos':'neg'}">${rp(dev)}</td>
+        <td colspan="13">${esc(w.uraian)}</td>
         <td class="center">
           <button class="btn btn-sm" data-edit-wbs="${w.id}">✎</button>
           <button class="btn btn-sm btn-danger" data-del-wbs="${w.id}">✕</button>
         </td>
       </tr>`;
     }
+
+    const critical = num(raw.is_critical) === 1;
+    const critBadge = critical ? `<span class="badge b-danger">KRITIS</span>` : `<span class="badge b-ok">OK</span>`;
+    const predLabel = raw.predecessor
+      ? (DB.project_wbs.find(x => x.id === raw.predecessor)?.kode_wbs || '?') + ' ' + (raw.pred_type || 'FS')
+      : '—';
+
+    const devCls = w.deviasi >= 0 ? 'pos' : 'neg';
+
     return `<tr class="${cls}">
       <td>${esc(w.kode_wbs)}</td>
       <td>${esc(w.uraian)}</td>
-      <td style="font-size:11px;color:var(--muted)">${esc(w.sta||'-')}</td>
-      <td>${esc(w.satuan)}</td>
+      <td style="font-size:11px;color:var(--muted)">${esc(w.sta || '-')}</td>
       <td class="num">${fmt(w.volume_rab,2)}</td>
       <td class="num">${fmt(w.volume_rap,2)}</td>
-      <td class="num">${rp(w.harga_satuan_rab)}</td>
-      <td class="num">${rp(w.harga_satuan_rap)}</td>
       <td class="num">${rp(w.total_rab)}</td>
       <td class="num">${rp(w.total_rap)}</td>
       <td class="num ${devCls}">${rp(w.deviasi)}</td>
+      <td class="center" style="font-size:11px">${esc(predLabel)}</td>
+      <td class="center">${num(raw.duration)||1}h</td>
+      <td class="center" style="font-size:11px">${esc(raw.start_date||'-')}</td>
+      <td class="center" style="font-size:11px">${esc(raw.finish_date||'-')}</td>
+      <td class="center">${fmt(num(raw.total_float),0)}h</td>
+      <td class="center">${critBadge}</td>
       <td class="center">
         <button class="btn btn-sm" data-edit-wbs="${w.id}">✎</button>
         <button class="btn btn-sm btn-danger" data-del-wbs="${w.id}">✕</button>
@@ -1594,101 +1412,158 @@ function renderWbs(){
   const total = Calc.totals(pid);
   const foot = `<tfoot>
     <tr style="background:#0e1a30;font-weight:800">
-      <td colspan="8" style="text-align:right;padding:12px">TOTAL</td>
+      <td colspan="5" style="text-align:right;padding:12px">TOTAL</td>
       <td class="num">${rp(total.rab)}</td>
       <td class="num">${rp(total.rap)}</td>
       <td class="num ${total.dev>=0?'pos':'neg'}">${rp(total.dev)}</td>
-      <td></td>
+      <td colspan="6"></td><td></td>
     </tr>
   </tfoot>`;
 
-  $('#tblWbs').innerHTML = head + `<tbody>${body||`<tr><td colspan="12" class="empty">Belum ada item WBS.</td></tr>`}</tbody>` + foot;
+  $('#tblWbs').innerHTML = head + `<tbody>${body || `<tr><td colspan="15" class="empty">Belum ada item WBS.</td></tr>`}</tbody>` + foot;
 
-  $$('[data-edit-wbs]').forEach(b=>b.onclick=()=>formWbs(b.dataset.editWbs));
-  $$('[data-del-wbs]').forEach(b=>b.onclick=()=>{
-    if(!confirm('Hapus item WBS ini?')) return;
+  $$('[data-edit-wbs]').forEach(b => b.onclick = () => formWbs(b.dataset.editWbs));
+  $$('[data-del-wbs]').forEach(b => b.onclick = () => {
+    if (!confirm('Hapus item WBS ini?')) return;
     const id = b.dataset.delWbs;
-    DB.project_wbs = DB.project_wbs.filter(x=>x.id!==id && x.parent_id!==id);
-    DB.progress = DB.progress.filter(p=>p.wbs_id!==id);
+    DB.project_wbs = DB.project_wbs.filter(x => x.id !== id && x.parent_id !== id);
+    DB.progress = DB.progress.filter(p => p.wbs_id !== id);
+    runCPM(pid);
     saveDB(); renderWbs(); toast('Item WBS dihapus');
   });
 }
 
+/* ---------- FORM WBS ---------- */
 function formWbs(id, forceGroup){
   const pid = STATE.activeProject;
   if (!pid){ toast('Pilih proyek terlebih dahulu', false); return; }
-  const w = id ? DB.project_wbs.find(x=>x.id===id) : null;
+  const w = id ? DB.project_wbs.find(x => x.id === id) : null;
   const isGroup = forceGroup || (w ? !!w.is_group : false);
+  const proj = activeProj();
 
-  const ahspOpts = DB.ahsp_headers.map(a=>`<option value="${a.id}" ${w?.ahsp_id===a.id?'selected':''}>${esc(a.kode)} — ${esc(a.nama)} (${esc(a.satuan)})</option>`).join('');
-  const grupOpts = `<option value="">— Tidak ada (Root) —</option>` +
-    DB.project_wbs.filter(x=>x.project_id===pid && x.is_group && x.id!==id)
-      .map(g=>`<option value="${g.id}" ${w?.parent_id===g.id?'selected':''}>${esc(g.kode_wbs)} — ${esc(g.uraian)}</option>`).join('');
+  const ahspOpts = DB.ahsp_headers.map(a =>
+    `<option value="${a.id}" ${w?.ahsp_id === a.id?'selected':''}>${esc(a.kode)} — ${esc(a.nama)} (${esc(a.satuan)})</option>`
+  ).join('');
+  const grupOpts = `<option value="">— Root —</option>` +
+    DB.project_wbs.filter(x => x.project_id === pid && x.is_group && x.id !== id)
+      .map(g => `<option value="${g.id}" ${w?.parent_id === g.id?'selected':''}>${esc(g.kode_wbs)} — ${esc(g.uraian)}</option>`).join('');
+  const predOpts = `<option value="">— Mulai bebas —</option>` +
+    DB.project_wbs.filter(x => x.project_id === pid && !x.is_group && x.id !== id)
+      .map(x => `<option value="${x.id}" ${w?.predecessor === x.id?'selected':''}>${esc(x.kode_wbs)} — ${esc(x.uraian)}</option>`).join('');
+  const calOpts = (DB.working_calendars || []).map(c =>
+    `<option value="${c.id}" ${(w?.calendar_id || proj?.calendar_id) === c.id?'selected':''}>${esc(c.kode)} — ${esc(c.nama)}</option>`
+  ).join('');
 
   const body = `
     <div class="row">
-      <div class="field"><label class="f">Kode WBS</label><input id="fw_kode" value="${esc(w?.kode_wbs||'')}" placeholder="I.1" /></div>
-      <div class="field" style="flex:3"><label class="f">Uraian Pekerjaan</label><input id="fw_uraian" value="${esc(w?.uraian||'')}" /></div>
+      <div class="field"><label class="f">Kode</label><input id="fw_kode" value="${esc(w?.kode_wbs||'')}" /></div>
+      <div class="field" style="flex:3"><label class="f">Uraian</label><input id="fw_uraian" value="${esc(w?.uraian||'')}" /></div>
     </div>
     <div class="row" style="margin-top:12px">
-      <div class="field"><label class="f">STA / Lokasi</label><input id="fw_sta" value="${esc(w?.sta||'')}" placeholder="STA 0+000 - 0+850" /></div>
-      <div class="field"><label class="f">Induk Grup</label><select id="fw_parent">${grupOpts}</select></div>
+      <div class="field"><label class="f">STA</label><input id="fw_sta" value="${esc(w?.sta||'')}" /></div>
+      <div class="field"><label class="f">Grup</label><select id="fw_parent">${grupOpts}</select></div>
       <div class="field"><label class="f">Tipe</label>
         <select id="fw_group" ${forceGroup?'disabled':''}>
-          <option value="0" ${!isGroup?'selected':''}>Item Pekerjaan</option>
-          <option value="1" ${isGroup?'selected':''}>Grup / Header</option>
+          <option value="0" ${!isGroup?'selected':''}>Item</option>
+          <option value="1" ${isGroup?'selected':''}>Grup</option>
         </select>
       </div>
     </div>
     <div id="itemBox" style="display:${isGroup?'none':'block'}">
       <div class="sep"></div>
       <div class="row">
-        <div class="field" style="flex:3"><label class="f">Kode Analisis AHSP</label><select id="fw_ahsp">${ahspOpts}</select></div>
+        <div class="field" style="flex:3"><label class="f">Kode AHSP</label><select id="fw_ahsp">${ahspOpts}</select></div>
         <div class="field"><label class="f">Satuan</label><input id="fw_satuan" value="${esc(w?.satuan||'')}" readonly /></div>
       </div>
       <div class="row" style="margin-top:12px">
-        <div class="field"><label class="f">Volume Kontrak / RAB</label><input id="fw_vrab" type="number" step="0.01" value="${num(w?.volume_rab)}" /></div>
-        <div class="field"><label class="f">Volume Aktual Lapangan / MC-0 (RAP)</label><input id="fw_vrap" type="number" step="0.01" value="${num(w?.volume_rap)}" /></div>
+        <div class="field"><label class="f">Volume RAB</label><input id="fw_vrab" type="number" step="0.01" value="${num(w?.volume_rab)}" /></div>
+        <div class="field"><label class="f">Volume RAP</label><input id="fw_vrap" type="number" step="0.01" value="${num(w?.volume_rap)}" /></div>
       </div>
       <div class="row" style="margin-top:12px">
-        <div class="field"><label class="f">HPS Satuan RAB (otomatis)</label><input id="fw_hrab" readonly /></div>
-        <div class="field"><label class="f">HPS Satuan RAP (otomatis)</label><input id="fw_hrap" readonly /></div>
+        <div class="field"><label class="f">HPS RAB</label><input id="fw_hrab" readonly /></div>
+        <div class="field"><label class="f">HPS RAP</label><input id="fw_hrap" readonly /></div>
       </div>
-      <p class="hint">Harga satuan dihitung otomatis dari komposisi AHSP proyek ini.</p>
+
+      <div class="sep"></div>
+      <p class="hint" style="color:var(--acc2)"><b>⚙ Master Schedule</b> — Field ini hanya memengaruhi jadwal, tidak mengubah RAB/RAP</p>
+      <div class="row">
+        <div class="field" style="flex:3"><label class="f">Predecessor</label><select id="fw_pred">${predOpts}</select></div>
+        <div class="field"><label class="f">Tipe</label>
+          <select id="fw_pred_type">
+            <option value="FS" ${w?.pred_type==='FS'?'selected':''}>FS</option>
+            <option value="SS" ${w?.pred_type==='SS'?'selected':''}>SS</option>
+            <option value="FF" ${w?.pred_type==='FF'?'selected':''}>FF</option>
+            <option value="SF" ${w?.pred_type==='SF'?'selected':''}>SF</option>
+          </select>
+        </div>
+        <div class="field"><label class="f">Lag (hari)</label><input id="fw_lag" type="number" step="1" value="${num(w?.lag_days)||0}" /></div>
+      </div>
+      <div class="row" style="margin-top:12px">
+        <div class="field"><label class="f">Durasi (hari kerja)</label><input id="fw_dur" type="number" step="1" min="1" value="${num(w?.duration)||1}" /></div>
+        <div class="field"><label class="f">Kalender</label><select id="fw_cal">${calOpts}</select></div>
+      </div>
+      <div class="row" style="margin-top:12px">
+        <div class="field"><label class="f">Constraint</label>
+          <select id="fw_ct">
+            <option value="">— Tidak ada —</option>
+            ${Object.keys(CONSTRAINT_TYPES).map(k =>
+              `<option value="${k}" ${w?.constraint_type === k?'selected':''}>${k} — ${CONSTRAINT_TYPES[k]}</option>`
+            ).join('')}
+          </select>
+        </div>
+        <div class="field"><label class="f">Constraint Date</label><input id="fw_cd" type="date" value="${esc(w?.constraint_date||'')}" /></div>
+      </div>
+      <div class="row" style="margin-top:12px">
+        <div class="field"><label class="f">Start (auto)</label><input id="fw_start" readonly /></div>
+        <div class="field"><label class="f">Finish (auto)</label><input id="fw_finish" readonly /></div>
+        <div class="field"><label class="f">Kritis?</label><input id="fw_crit" readonly /></div>
+      </div>
     </div>
   `;
 
-  openModal(id?'Edit Item WBS':(isGroup?'Tambah Grup WBS':'Tambah Item WBS'), body, ()=>{
+  openModal(id?'Edit Item WBS':(isGroup?'Tambah Grup':'Tambah Item WBS'), body, () => {
     const kode = $('#fw_kode').value.trim();
     const uraian = $('#fw_uraian').value.trim();
-    if (!kode || !uraian){ toast('Kode & uraian wajib diisi', false); return false; }
+    if (!kode || !uraian){ toast('Kode & uraian wajib', false); return false; }
     const grp = forceGroup ? 1 : num($('#fw_group').value);
     const obj = {
       id: w?.id || uid('wbs'),
       project_id: pid,
-      kode_wbs: kode,
-      uraian,
+      kode_wbs: kode, uraian,
       sta: $('#fw_sta').value.trim(),
       parent_id: $('#fw_parent').value,
       is_group: grp,
-      urut: w?.urut ?? (DB.project_wbs.filter(x=>x.project_id===pid).length + 1)
+      urut: w?.urut ?? (DB.project_wbs.filter(x => x.project_id === pid).length + 1)
     };
     if (!grp){
       obj.ahsp_id = $('#fw_ahsp').value;
       obj.satuan  = $('#fw_satuan').value;
       obj.volume_rab = num($('#fw_vrab').value);
       obj.volume_rap = num($('#fw_vrap').value);
+
+      writeScheduleField(obj, 'predecessor', $('#fw_pred').value);
+      writeScheduleField(obj, 'pred_type', $('#fw_pred_type').value);
+      writeScheduleField(obj, 'lag_days', num($('#fw_lag').value));
+      writeScheduleField(obj, 'duration', num($('#fw_dur').value) || 1);
+      writeScheduleField(obj, 'calendar_id', $('#fw_cal').value);
+      writeScheduleField(obj, 'constraint_type', $('#fw_ct').value);
+      writeScheduleField(obj, 'constraint_date', $('#fw_cd').value);
     } else {
-      obj.ahsp_id=''; obj.satuan=''; obj.volume_rab=0; obj.volume_rap=0;
+      obj.ahsp_id = ''; obj.satuan = ''; obj.volume_rab = 0; obj.volume_rap = 0;
+      writeScheduleField(obj, 'predecessor', '');
+      writeScheduleField(obj, 'duration', 0);
     }
     if (w) Object.assign(w, obj); else DB.project_wbs.push(obj);
-    saveDB(); renderWbs(); toast('Item WBS disimpan');
+
+    runCPM(pid);
+    AUTOSAVE.clear('form_wbs_' + (id || 'new'));
+    saveDB(); renderWbs(); toast('WBS disimpan & jadwal dihitung ulang');
   });
 
   if (!isGroup){
     const sync = () => {
       const aid = $('#fw_ahsp').value;
-      const a = DB.ahsp_headers.find(x=>x.id===aid);
+      const a = DB.ahsp_headers.find(x => x.id === aid);
       if (a) $('#fw_satuan').value = a.satuan;
       $('#fw_hrab').value = rp(Calc.hargaSatuanRAB(pid, aid));
       $('#fw_hrap').value = rp(Calc.hargaSatuanRAP(pid, aid));
@@ -1696,34 +1571,42 @@ function formWbs(id, forceGroup){
     $('#fw_ahsp').onchange = sync;
     sync();
     $('#fw_group').onchange = e => {
-      $('#itemBox').style.display = num(e.target.value)===1 ? 'none' : 'block';
+      $('#itemBox').style.display = num(e.target.value) === 1 ? 'none' : 'block';
     };
+    const previewCPM = () => {
+      const dur = num($('#fw_dur').value) || 1;
+      const proj = activeProj();
+      const startBase = proj?.tgl_mulai || today();
+      const endBase = new Date(new Date(startBase).getTime() + dur * 86400000);
+      $('#fw_start').value = startBase;
+      $('#fw_finish').value = endBase.toISOString().slice(0, 10);
+      $('#fw_crit').value = '— (simpan untuk menghitung)';
+    };
+    $('#fw_dur').oninput = previewCPM;
+    previewCPM();
   }
+
+  AUTOSAVE.attachForm('form_wbs_' + (id || 'new'));
 }
 
-/* =====================================================================
-   RENDER — ANALYSIS
-   ===================================================================== */
+/* ---------- RENDER ANALYSIS ---------- */
 function renderAnalysis(){
   const pid = STATE.activeProject;
-  if (!pid){ $('#tblAnalysis').innerHTML = `<tbody><tr><td class="empty">Belum ada proyek aktif.</td></tr></tbody>`; return; }
+  if (!pid){ return; }
 
-  const rows = Calc.wbsRows(pid).filter(r=>!r.isGroup);
+  const rows = Calc.wbsRows(pid).filter(r => !r.isGroup);
   const head = `<thead><tr>
-    <th>Kode</th><th>Uraian</th><th>STA</th><th>Satuan</th>
+    <th>Kode</th><th>Uraian</th><th>Satuan</th>
     <th class="num">Vol RAB</th><th class="num">HPS RAB</th><th class="num">Nilai RAB</th>
     <th class="num">Vol RAP</th><th class="num">HPS RAP</th><th class="num">Nilai RAP</th>
     <th class="num">Deviasi (Rp)</th><th class="num">Deviasi (%)</th><th class="center">Status</th>
   </tr></thead>`;
 
-  const body = rows.map(r=>{
-    const st = r.deviasi >= 0
-      ? `<span class="badge b-ok">AMAN</span>`
-      : `<span class="badge b-danger">OVER</span>`;
+  const body = rows.map(r => {
+    const st = r.deviasi >= 0 ? `<span class="badge b-ok">AMAN</span>` : `<span class="badge b-danger">OVER</span>`;
     return `<tr>
       <td><b>${esc(r.kode_wbs)}</b></td>
       <td>${esc(r.uraian)}</td>
-      <td style="font-size:11px;color:var(--muted)">${esc(r.sta||'-')}</td>
       <td>${esc(r.satuan)}</td>
       <td class="num">${fmt(r.volume_rab,2)}</td>
       <td class="num">${rp(r.harga_satuan_rab)}</td>
@@ -1739,16 +1622,14 @@ function renderAnalysis(){
 
   const t = Calc.totals(pid);
   const foot = `<tfoot><tr style="background:#0e1a30;font-weight:800">
-    <td colspan="6" style="text-align:right;padding:12px">TOTAL</td>
+    <td colspan="5" style="text-align:right;padding:12px">TOTAL</td>
     <td class="num">${rp(t.rab)}</td><td></td><td></td>
     <td class="num">${rp(t.rap)}</td>
     <td class="num ${t.dev>=0?'pos':'neg'}">${rp(t.dev)}</td>
     <td class="num ${t.dev>=0?'pos':'neg'}">${fmt(t.margin_pct,2)}%</td><td></td>
   </tr></tfoot>`;
+  $('#tblAnalysis').innerHTML = head + `<tbody>${body || `<tr><td colspan="12" class="empty">Belum ada data.</td></tr>`}</tbody>` + foot;
 
-  $('#tblAnalysis').innerHTML = head + `<tbody>${body||`<tr><td colspan="13" class="empty">Belum ada data.</td></tr>`}</tbody>` + foot;
-
-  /* ---- REKAP ---- */
   const proj = activeProj();
   const nilaiKontrak = num(proj?.nilai_kontrak);
   const nilaiKontrakNetto = nilaiKontrak / (1 + num(SET.ppn)/100);
@@ -1759,50 +1640,46 @@ function renderAnalysis(){
     ['Nilai Kontrak Netto (DPP)', nilaiKontrakNetto],
     ['PPN ' + fmt(SET.ppn,2) + '%', ppnKontrak],
     ['—', ''],
-    ['Total RAB (Biaya Pelaksanaan)', t.rab],
-    ['Total RAP (Biaya Riil Lapangan)', t.rap],
-    ['Selisih / Deviasi (RAB − RAP)', t.dev],
-    ['Margin Keuntungan (%)', fmt(t.margin_pct,2)+' %'],
+    ['Total RAB', t.rab],
+    ['Total RAP', t.rap],
+    ['Deviasi (RAB − RAP)', t.dev],
+    ['Margin (%)', fmt(t.margin_pct,2)+' %'],
     ['—',''],
-    ['Komponen Upah — RAB', t.upahRAB],
-    ['Komponen Bahan — RAB', t.bahanRAB],
-    ['Komponen Alat — RAB', t.alatRAB],
+    ['Upah — RAB', t.upahRAB],
+    ['Bahan — RAB', t.bahanRAB],
+    ['Alat — RAB', t.alatRAB],
     ['—',''],
-    ['Komponen Upah — RAP', t.upahRAP],
-    ['Komponen Bahan — RAP', t.bahanRAP],
-    ['Komponen Alat — RAP', t.alatRAP],
+    ['Upah — RAP', t.upahRAP],
+    ['Bahan — RAP', t.bahanRAP],
+    ['Alat — RAP', t.alatRAP],
     ['—',''],
-    ['Sisa Terhadap Nilai Kontrak (Netto)', nilaiKontrakNetto - t.rap],
-    ['Status', (t.rap <= nilaiKontrakNetto) ? 'AMAN — RAP ≤ Nilai Kontrak' : 'BAHAYA — RAP MELEBIHI NILAI KONTRAK']
+    ['Sisa Kontrak (Netto)', nilaiKontrakNetto - t.rap],
+    ['Status', (t.rap <= nilaiKontrakNetto) ? 'AMAN' : 'BAHAYA']
   ];
 
-  const rk = rekap.map(([k,v])=>{
-    if (k==='—') return `<tr><td colspan="2" style="height:6px;background:#0b1220"></td></tr>`;
+  const rk = rekap.map(([k, v]) => {
+    if (k === '—') return `<tr><td colspan="2" style="height:6px;background:#0b1220"></td></tr>`;
     const val = typeof v === 'number' ? rp(v) : v;
-    const cls = (k.includes('Deviasi')||k.includes('Margin'))
-      ? (t.dev>=0 ? 'pos' : 'neg') : (k==='Status' ? (t.rap<=nilaiKontrakNetto?'pos':'neg') : '');
+    const cls = (k.includes('Deviasi') || k.includes('Margin'))
+      ? (t.dev >= 0 ? 'pos' : 'neg') : (k === 'Status' ? (t.rap <= nilaiKontrakNetto ? 'pos' : 'neg') : '');
     return `<tr><td style="font-weight:600">${esc(k)}</td><td class="num ${cls}">${val}</td></tr>`;
   }).join('');
-
   $('#tblRekap').innerHTML = `<thead><tr><th>Uraian</th><th class="num">Nilai</th></tr></thead><tbody>${rk}</tbody>`;
 }
 
-/* =====================================================================
-   RENDER — PROGRESS
-   ===================================================================== */
+/* ---------- RENDER PROGRESS ---------- */
 function renderProgress(){
   const pid = STATE.activeProject;
-  if (!pid){ $('#tblProg').innerHTML = `<tbody><tr><td class="empty">Belum ada proyek aktif.</td></tr></tbody>`; return; }
-  const items = DB.project_wbs.filter(w=>w.project_id===pid && !w.is_group);
-  const rows = DB.progress.filter(p=>p.project_id===pid).sort((a,b)=>num(a.minggu)-num(b.minggu));
+  if (!pid){ return; }
+  const items = DB.project_wbs.filter(w => w.project_id === pid && !w.is_group);
+  const rows = DB.progress.filter(p => p.project_id === pid).sort((a,b) => num(a.minggu) - num(b.minggu));
 
   const head = `<thead><tr>
     <th>Minggu</th><th>Kode WBS</th><th>Uraian</th><th>Satuan</th>
-    <th class="num">Volume</th><th>Tanggal Input</th><th class="center">Aksi</th>
+    <th class="num">Volume</th><th>Tanggal</th><th class="center">Aksi</th>
   </tr></thead>`;
-
-  const body = rows.map(p=>{
-    const w = items.find(x=>x.id===p.wbs_id);
+  const body = rows.map(p => {
+    const w = items.find(x => x.id === p.wbs_id);
     return `<tr>
       <td class="center"><b>M${esc(p.minggu)}</b></td>
       <td>${esc(w?.kode_wbs||'-')}</td>
@@ -1816,34 +1693,33 @@ function renderProgress(){
       </td>
     </tr>`;
   }).join('');
+  $('#tblProg').innerHTML = head + `<tbody>${body || `<tr><td colspan="7" class="empty">Belum ada progress.</td></tr>`}</tbody>`;
 
-  $('#tblProg').innerHTML = head + `<tbody>${body||`<tr><td colspan="7" class="empty">Belum ada progress.</td></tr>`}</tbody>`;
-
-  $$('[data-edit-pg]').forEach(b=>b.onclick=()=>formProgress(b.dataset.editPg));
-  $$('[data-del-pg]').forEach(b=>b.onclick=()=>{
-    if(!confirm('Hapus data progress ini?')) return;
-    DB.progress = DB.progress.filter(x=>x.id!==b.dataset.delPg);
+  $$('[data-edit-pg]').forEach(b => b.onclick = () => formProgress(b.dataset.editPg));
+  $$('[data-del-pg]').forEach(b => b.onclick = () => {
+    if (!confirm('Hapus progress ini?')) return;
+    DB.progress = DB.progress.filter(x => x.id !== b.dataset.delPg);
     saveDB(); renderProgress(); toast('Progress dihapus');
   });
 }
 
 function formProgress(id){
   const pid = STATE.activeProject;
-  const p = id ? DB.progress.find(x=>x.id===id) : null;
-  const items = DB.project_wbs.filter(w=>w.project_id===pid && !w.is_group);
-  const opts = items.map(w=>`<option value="${w.id}" ${p?.wbs_id===w.id?'selected':''}>${esc(w.kode_wbs)} — ${esc(w.uraian)}</option>`).join('');
+  const p = id ? DB.progress.find(x => x.id === id) : null;
+  const items = DB.project_wbs.filter(w => w.project_id === pid && !w.is_group);
+  const opts = items.map(w => `<option value="${w.id}" ${p?.wbs_id === w.id?'selected':''}>${esc(w.kode_wbs)} — ${esc(w.uraian)}</option>`).join('');
   const proj = activeProj();
   const maxM = Math.max(1, Math.round(num(proj?.durasi_minggu)||1));
 
   const body = `
     <div class="row">
       <div class="field" style="flex:3"><label class="f">Item WBS</label><select id="fp_wbs">${opts}</select></div>
-      <div class="field"><label class="f">Minggu Ke-</label><input id="fp_m" type="number" min="1" max="${maxM}" value="${num(p?.minggu)||1}" /></div>
+      <div class="field"><label class="f">Minggu ke-</label><input id="fp_m" type="number" min="1" max="${maxM}" value="${num(p?.minggu)||1}" /></div>
       <div class="field"><label class="f">Volume</label><input id="fp_v" type="number" step="0.01" value="${num(p?.volume)}" /></div>
       <div class="field"><label class="f">Tanggal</label><input id="fp_t" type="date" value="${esc(p?.tanggal||today())}" /></div>
     </div>
   `;
-  openModal(id?'Edit Progress':'Tambah Progress', body, ()=>{
+  openModal(id?'Edit Progress':'Tambah Progress', body, () => {
     const obj = {
       id: p?.id || uid('pg'),
       project_id: pid,
@@ -1854,19 +1730,19 @@ function formProgress(id){
     };
     if (!obj.wbs_id){ toast('Pilih item WBS', false); return false; }
     if (p) Object.assign(p, obj); else DB.progress.push(obj);
+    AUTOSAVE.clear('form_progress_' + (id || 'new'));
     saveDB(); renderProgress(); toast('Progress disimpan');
   });
+  AUTOSAVE.attachForm('form_progress_' + (id || 'new'));
 }
 
-/* =====================================================================
-   RENDER — PROJECTS
-   ===================================================================== */
+/* ---------- RENDER PROJECTS ---------- */
 function renderProjects(){
   const head = `<thead><tr>
-    <th>Kode</th><th>Nama Proyek</th><th>Lokasi</th><th>Owner</th>
+    <th>Kode</th><th>Nama</th><th>Lokasi</th><th>Owner</th>
     <th class="num">Nilai Kontrak</th><th class="num">Durasi</th><th>Periode</th><th>Status</th><th class="center">Aksi</th>
   </tr></thead>`;
-  const body = DB.projects.map(p=>`<tr>
+  const body = DB.projects.map(p => `<tr>
     <td><b>${esc(p.kode)}</b></td>
     <td>${esc(p.nama)}</td>
     <td>${esc(p.lokasi||'-')}</td>
@@ -1874,68 +1750,96 @@ function renderProjects(){
     <td class="num">${rp(p.nilai_kontrak)}</td>
     <td class="num">${esc(p.durasi_minggu)} mgg</td>
     <td style="font-size:11px">${esc(p.tgl_mulai||'-')} s/d ${esc(p.tgl_selesai||'-')}</td>
-    <td><span class="badge ${p.status==='Selesai'?'b-ok':'b-warn'}">${esc(p.status||'-')}</span></td>
+    <td><span class="badge ${p.status === 'Selesai'?'b-ok':'b-warn'}">${esc(p.status||'-')}</span></td>
     <td class="center">
       <button class="btn btn-sm" data-edit-prj="${p.id}">✎</button>
       <button class="btn btn-sm btn-danger" data-del-prj="${p.id}">✕</button>
     </td>
   </tr>`).join('');
+  $('#tblProj').innerHTML = head + `<tbody>${body || `<tr><td colspan="9" class="empty">Belum ada proyek.</td></tr>`}</tbody>`;
 
-  $('#tblProj').innerHTML = head + `<tbody>${body||`<tr><td colspan="9" class="empty">Belum ada proyek.</td></tr>`}</tbody>`;
-
-  $$('[data-edit-prj]').forEach(b=>b.onclick=()=>formProject(b.dataset.editPrj));
-  $$('[data-del-prj]').forEach(b=>b.onclick=()=>{
-    if(!confirm('Hapus proyek ini beserta seluruh data terkait?')) return;
+  $$('[data-edit-prj]').forEach(b => b.onclick = () => formProject(b.dataset.editPrj));
+  $$('[data-del-prj]').forEach(b => b.onclick = () => {
+    if (!confirm('Hapus proyek ini beserta data terkait?')) return;
     const id = b.dataset.delPrj;
-    DB.projects = DB.projects.filter(x=>x.id!==id);
-    DB.project_ahsp_details = DB.project_ahsp_details.filter(x=>x.project_id!==id);
-    DB.project_wbs = DB.project_wbs.filter(x=>x.project_id!==id);
-    DB.progress = DB.progress.filter(x=>x.project_id!==id);
-    if (STATE.activeProject===id) STATE.activeProject = DB.projects[0]?.id || '';
+    DB.projects = DB.projects.filter(x => x.id !== id);
+    DB.project_ahsp_details = DB.project_ahsp_details.filter(x => x.project_id !== id);
+    DB.project_wbs = DB.project_wbs.filter(x => x.project_id !== id);
+    DB.progress = DB.progress.filter(x => x.project_id !== id);
+    if (STATE.activeProject === id) STATE.activeProject = DB.projects[0]?.id || '';
     saveDB(); renderAll(); toast('Proyek dihapus');
   });
 }
 
 function formProject(id){
-  const p = id ? DB.projects.find(x=>x.id===id) : null;
+  const p = id ? DB.projects.find(x => x.id === id) : null;
+  const calOpts = (DB.working_calendars || []).map(c =>
+    `<option value="${c.id}" ${p?.calendar_id === c.id?'selected':''}>${esc(c.kode)} — ${esc(c.nama)}</option>`
+  ).join('');
+
   const body = `
     <div class="row">
-      <div class="field"><label class="f">Kode Proyek</label><input id="fpj_kode" value="${esc(p?.kode||'')}" placeholder="SDA-2024-002" /></div>
+      <div class="field"><label class="f">Kode Proyek</label><input id="fpj_kode" value="${esc(p?.kode||'')}" /></div>
       <div class="field" style="flex:3"><label class="f">Nama Proyek</label><input id="fpj_nama" value="${esc(p?.nama||'')}" /></div>
     </div>
     <div class="row" style="margin-top:12px">
       <div class="field" style="flex:2"><label class="f">Lokasi</label><input id="fpj_lok" value="${esc(p?.lokasi||'')}" /></div>
-      <div class="field" style="flex:2"><label class="f">Owner / PPK</label><input id="fpj_own" value="${esc(p?.owner||'')}" /></div>
+      <div class="field" style="flex:2"><label class="f">Owner</label><input id="fpj_own" value="${esc(p?.owner||'')}" /></div>
     </div>
     <div class="row" style="margin-top:12px">
       <div class="field"><label class="f">Nilai Kontrak (incl. PPN)</label><input id="fpj_nk" type="number" value="${num(p?.nilai_kontrak)}" /></div>
-      <div class="field"><label class="f">Durasi (minggu)</label><input id="fpj_dur" type="number" value="${num(p?.durasi_minggu)||16}" /></div>
-      <div class="field"><label class="f">Status</label>
-        <select id="fpj_st">
-          ${['Perencanaan','Berjalan','Selesai','Ditunda'].map(s=>`<option value="${s}" ${p?.status===s?'selected':''}>${s}</option>`).join('')}
+      <div class="field"><label class="f">Kalender Kerja</label><select id="fpj_cal">${calOpts}</select></div>
+      <div class="field"><label class="f">Mode Durasi</label>
+        <select id="fpj_mode">
+          <option value="working" ${p?.durasi_mode === 'working'?'selected':''}>Hari Kerja (Weekend dikecualikan)</option>
+          <option value="calendar" ${p?.durasi_mode === 'calendar'?'selected':''}>Hari Kalender (24/7)</option>
         </select>
       </div>
     </div>
     <div class="row" style="margin-top:12px">
-      <div class="field"><label class="f">Tanggal Mulai</label><input id="fpj_tm" type="date" value="${esc(p?.tgl_mulai||today())}" /></div>
-      <div class="field"><label class="f">Tanggal Selesai</label><input id="fpj_ts" type="date" value="${esc(p?.tgl_selesai||today())}" /></div>
+      <div class="field"><label class="f">Tgl Mulai</label><input id="fpj_tm" type="date" value="${esc(p?.tgl_mulai||today())}" /></div>
+      <div class="field"><label class="f">Tgl Selesai</label><input id="fpj_ts" type="date" value="${esc(p?.tgl_selesai||today())}" /></div>
+      <div class="field"><label class="f">Status</label>
+        <select id="fpj_st">
+          ${['Perencanaan','Berjalan','Selesai','Ditunda'].map(s =>
+            `<option value="${s}" ${p?.status === s?'selected':''}>${s}</option>`
+          ).join('')}
+        </select>
+      </div>
     </div>
-    ${!p ? `<p class="hint" style="margin-top:12px">⚙ Saat disimpan, sistem akan otomatis <b>mengkloning seluruh template AHSP master</b> ke tabel <code>project_ahsp_details</code> untuk proyek ini.</p>` : ''}
+    <div class="row" style="margin-top:12px">
+      <div class="field"><label class="f">Durasi (hari)</label><input id="fpj_durh" readonly style="font-weight:700;color:var(--acc2)" /></div>
+      <div class="field"><label class="f">Durasi (minggu)</label><input id="fpj_durw" readonly style="font-weight:700;color:var(--acc2)" /></div>
+      <div class="field"><label class="f">Hari Kerja Efektif</label><input id="fpj_wd" readonly style="font-weight:700;color:var(--warn)" /></div>
+    </div>
+    ${!p ? `<p class="hint" style="margin-top:12px">⚙ Saat disimpan, sistem otomatis mengkloning template AHSP master ke <code>project_ahsp_details</code>.</p>` : ''}
   `;
-  openModal(id?'Edit Proyek':'Proyek Baru', body, ()=>{
+
+  openModal(id?'Edit Proyek':'Proyek Baru', body, () => {
     const kode = $('#fpj_kode').value.trim();
     const nama = $('#fpj_nama').value.trim();
     if (!kode || !nama){ toast('Kode & nama wajib diisi', false); return false; }
+    const tm = $('#fpj_tm').value;
+    const ts = $('#fpj_ts').value;
+    const calId = $('#fpj_cal').value;
+    const mode = $('#fpj_mode').value;
+    const cal = WorkingCalendar.get(calId);
+    const dur = hitungDurasiLengkap(tm, ts, cal, mode);
+
     const obj = {
       id: p?.id || uid('prj'),
       kode, nama,
       lokasi: $('#fpj_lok').value.trim(),
       owner: $('#fpj_own').value.trim(),
       nilai_kontrak: num($('#fpj_nk').value),
-      durasi_minggu: num($('#fpj_dur').value),
+      calendar_id: calId,
+      durasi_mode: mode,
+      durasi_hari: dur.durasi_hari,
+      durasi_minggu: dur.durasi_minggu,
+      durasi_kerja: dur.durasi_kerja,
       status: $('#fpj_st').value,
-      tgl_mulai: $('#fpj_tm').value,
-      tgl_selesai: $('#fpj_ts').value,
+      tgl_mulai: tm,
+      tgl_selesai: ts,
       ppn: num(SET.ppn),
       overhead: num(SET.overhead)
     };
@@ -1945,134 +1849,184 @@ function formProject(id){
       cloneAhspToProject(obj.id);
       STATE.activeProject = obj.id;
     }
-    saveDB(); renderAll(); toast('Proyek disimpan & AHSP dikloning');
+    runCPM(obj.id);
+    AUTOSAVE.clear('form_project_' + (id || 'new'));
+    saveDB(); renderAll(); toast('Proyek disimpan');
+  });
+
+  const recompute = () => {
+    const cal = WorkingCalendar.get($('#fpj_cal').value);
+    const mode = $('#fpj_mode').value;
+    const d = hitungDurasiLengkap($('#fpj_tm').value, $('#fpj_ts').value, cal, mode);
+    $('#fpj_durh').value = d.durasi_hari + ' hari';
+    $('#fpj_durw').value = d.durasi_minggu + ' minggu';
+    $('#fpj_wd').value   = d.durasi_kerja + ' hari kerja efektif';
+  };
+  ['fpj_tm','fpj_ts','fpj_cal','fpj_mode'].forEach(i => {
+    const el = document.getElementById(i);
+    if (el) el.onchange = recompute;
+  });
+  recompute();
+
+  AUTOSAVE.attachForm('form_project_' + (id || 'new'));
+}
+
+/* ---------- RENDER CALENDARS ---------- */
+function renderCalendars(){
+  const head = `<thead><tr>
+    <th>Kode</th><th>Nama</th><th>Work Days</th>
+    <th class="num">Jam/Hari</th><th>Start Hour</th>
+    <th>Keterangan</th><th class="center">Default</th><th class="center">Aksi</th>
+  </tr></thead>`;
+  const body = (DB.working_calendars || []).map(c => {
+    const wdText = String(c.work_days || '').split(',')
+      .map(d => ['Min','Sen','Sel','Rab','Kam','Jum','Sab'][parseInt(d,10)]).join(', ');
+    return `<tr>
+      <td><b>${esc(c.kode)}</b></td>
+      <td>${esc(c.nama)}</td>
+      <td style="font-size:11px">${wdText}</td>
+      <td class="num">${fmt(c.jam_per_hari,0)}</td>
+      <td>${esc(c.start_hour||'-')}</td>
+      <td style="font-size:11px;color:var(--muted)">${esc(c.keterangan||'-')}</td>
+      <td class="center">${num(c.is_default) === 1 ? '<span class="badge b-ok">DEFAULT</span>' : ''}</td>
+      <td class="center">
+        <button class="btn btn-sm" data-edit-cal="${c.id}">✎</button>
+        <button class="btn btn-sm btn-danger" data-del-cal="${c.id}">✕</button>
+      </td>
+    </tr>`;
+  }).join('');
+  $('#tblCalendars').innerHTML = head + `<tbody>${body || `<tr><td colspan="8" class="empty">Belum ada kalender.</td></tr>`}</tbody>`;
+
+  $$('[data-edit-cal]').forEach(b => b.onclick = () => formCalendar(b.dataset.editCal));
+  $$('[data-del-cal]').forEach(b => b.onclick = () => {
+    if (!confirm('Hapus kalender ini?')) return;
+    const id = b.dataset.delCal;
+    DB.working_calendars = DB.working_calendars.filter(x => x.id !== id);
+    saveDB(); renderCalendars(); toast('Kalender dihapus');
   });
 }
 
-/* =====================================================================
-   RENDER — DASHBOARD
-   ===================================================================== */
-function renderDashboard(){
-  const pid = STATE.activeProject;
-  const proj = activeProj();
-  if (!pid || !proj){
-    $('#kpiWrap').innerHTML = `<div class="kpi"><div class="lbl">Status</div><div class="val">Belum ada proyek</div></div>`;
-    $('#alertWrap').innerHTML = `<div class="alert ok">Silakan buat proyek terlebih dahulu pada tab <b>Proyek</b>.</div>`;
-    return;
-  }
-  const t = Calc.totals(pid);
-  const nilaiKontrak = num(proj.nilai_kontrak);
-  const nilaiKontrakNetto = nilaiKontrak / (1 + num(SET.ppn)/100);
-
-  $('#kpiWrap').innerHTML = `
-    <div class="kpi">
-      <div class="lbl">Nilai Kontrak</div>
-      <div class="val">${rp(nilaiKontrak)}</div>
-      <div class="sub">Netto: ${rp(nilaiKontrakNetto)} (PPN ${fmt(SET.ppn,2)}%)</div>
+function formCalendar(id){
+  const c = id ? DB.working_calendars.find(x => x.id === id) : null;
+  const body = `
+    <div class="row">
+      <div class="field"><label class="f">Kode</label><input id="fc_kode" value="${esc(c?.kode||'')}" /></div>
+      <div class="field" style="flex:3"><label class="f">Nama</label><input id="fc_nama" value="${esc(c?.nama||'')}" /></div>
     </div>
-    <div class="kpi k2">
-      <div class="lbl">Total RAB (HPS Pelaksanaan)</div>
-      <div class="val">${rp(t.rab)}</div>
-      <div class="sub">${((t.rab/(nilaiKontrakNetto||1))*100).toFixed(2)}% dari nilai kontrak netto</div>
+    <div class="row" style="margin-top:12px">
+      <div class="field"><label class="f">Work Days (0-6, koma)</label><input id="fc_wd" value="${esc(c?.work_days||'1,2,3,4,5')}" placeholder="0=Min, 1=Sen, ..., 6=Sab" /></div>
+      <div class="field"><label class="f">Jam/Hari</label><input id="fc_jam" type="number" value="${num(c?.jam_per_hari)||8}" /></div>
+      <div class="field"><label class="f">Start Hour</label><input id="fc_start" value="${esc(c?.start_hour||'08:00')}" /></div>
     </div>
-    <div class="kpi k3">
-      <div class="lbl">Total RAP (Biaya Riil)</div>
-      <div class="val">${rp(t.rap)}</div>
-      <div class="sub">Bersih tanpa profit internal</div>
-    </div>
-    <div class="kpi ${t.dev>=0?'k5':'k4'}">
-      <div class="lbl">Margin / Deviasi</div>
-      <div class="val ${t.dev>=0?'pos':'neg'}">${rp(t.dev)}</div>
-      <div class="sub ${t.dev>=0?'pos':'neg'}">${fmt(t.margin_pct,2)}% dari RAB</div>
-    </div>
-    <div class="kpi ${t.rap<=nilaiKontrakNetto?'k5':'k4'}">
-      <div class="lbl">Sisa Terhadap Kontrak</div>
-      <div class="val ${(nilaiKontrakNetto-t.rap)>=0?'pos':'neg'}">${rp(nilaiKontrakNetto - t.rap)}</div>
-      <div class="sub">${t.rap<=nilaiKontrakNetto?'✅ RAP masih di bawah pagu':'⚠ RAP melampaui pagu kontrak'}</div>
+    <div class="row" style="margin-top:12px">
+      <div class="field" style="flex:3"><label class="f">Keterangan</label><input id="fc_ket" value="${esc(c?.keterangan||'')}" /></div>
+      <div class="field"><label class="f">Default?</label>
+        <select id="fc_def">
+          <option value="0" ${num(c?.is_default)!==1?'selected':''}>Tidak</option>
+          <option value="1" ${num(c?.is_default)===1?'selected':''}>Ya</option>
+        </select>
+      </div>
     </div>
   `;
-
-  /* ---- ALERTS ---- */
-  const rows = Calc.wbsRows(pid).filter(r=>!r.isGroup);
-  const alerts = [];
-  rows.forEach(r=>{
-    if (r.total_rap > r.total_rab){
-      alerts.push(`<div class="alert"><span>🔴</span><div><b>${esc(r.kode_wbs)} — ${esc(r.uraian)}</b><br>
-        Biaya RAP ${rp(r.total_rap)} <b>melebihi</b> nilai RAB ${rp(r.total_rab)} (deviasi ${rp(r.deviasi)} / ${fmt(r.deviasi_pct,2)}%).</div></div>`);
-    } else if (r.deviasi_pct < 5 && r.total_rab > 0){
-      alerts.push(`<div class="alert warn"><span>🟡</span><div><b>${esc(r.kode_wbs)} — ${esc(r.uraian)}</b><br>
-        Margin tipis: hanya ${fmt(r.deviasi_pct,2)}% (${rp(r.deviasi)}). Perlu efisiensi.</div></div>`);
+  openModal(id?'Edit Kalender':'Tambah Kalender', body, () => {
+    const isDef = num($('#fc_def').value) === 1;
+    if (isDef){
+      DB.working_calendars.forEach(x => x.is_default = 0);
     }
-  });
-  if (t.rap > nilaiKontrakNetto){
-    alerts.unshift(`<div class="alert"><span>🚨</span><div><b>PERINGATAN PROYEK</b><br>
-      Total RAP ${rp(t.rap)} melampaui Nilai Kontrak Netto ${rp(nilaiKontrakNetto)} sebesar ${rp(t.rap-nilaiKontrakNetto)}.</div></div>`);
-  }
-  if (t.margin_pct < 5 && t.rab>0){
-    alerts.unshift(`<div class="alert warn"><span>⚠</span><div><b>Margin proyek rendah</b> — hanya ${fmt(t.margin_pct,2)}%. Target minimum umumnya 8–12%.</div></div>`);
-  }
-  $('#alertWrap').innerHTML = alerts.length ? alerts.join('') : `<div class="alert ok"><span>✅</span><div><b>Semua item dalam batas aman.</b> Tidak ada deviasi negatif terdeteksi.</div></div>`;
-
-  /* ---- CHART: S-CURVE ---- */
-  const sc = Calc.scurve(pid);
-  if (STATE.chartS) STATE.chartS.destroy();
-  const ctxS = $('#chartScurve').getContext('2d');
-  STATE.chartS = new Chart(ctxS, {
-    type:'line',
-    data:{
-      labels: sc.labels,
-      datasets:[
-        {label:'Rencana (%)', data:sc.planned, borderColor:'#2f81f7', backgroundColor:'rgba(47,129,247,.14)', fill:true, tension:.35, borderWidth:2.5, pointRadius:2.5},
-        {label:'Aktual (%)',  data:sc.actual,  borderColor:'#1abc9c', backgroundColor:'rgba(26,188,156,.14)', fill:true, tension:.35, borderWidth:2.5, pointRadius:2.5}
-      ]
-    },
-    options:{
-      responsive:true, maintainAspectRatio:false,
-      plugins:{ legend:{labels:{color:'#e6edf7', font:{size:11}}},
-        tooltip:{callbacks:{label:c=>c.dataset.label+': '+fmt(c.parsed.y,2)+'%'}} },
-      scales:{
-        x:{ticks:{color:'#8fa3c4'}, grid:{color:'rgba(36,54,92,.5)'}},
-        y:{ticks:{color:'#8fa3c4', callback:v=>v+'%'}, grid:{color:'rgba(36,54,92,.5)'}, beginAtZero:true, max:100}
-      }
-    }
-  });
-
-  /* ---- CHART: KOMPOSISI ---- */
-  if (STATE.chartC) STATE.chartC.destroy();
-  const ctxC = $('#chartCost').getContext('2d');
-  STATE.chartC = new Chart(ctxC, {
-    type:'bar',
-    data:{
-      labels:['Upah','Bahan','Alat'],
-      datasets:[
-        {label:'RAB', data:[t.upahRAB,t.bahanRAB,t.alatRAB], backgroundColor:'rgba(47,129,247,.75)', borderRadius:6},
-        {label:'RAP', data:[t.upahRAP,t.bahanRAP,t.alatRAP], backgroundColor:'rgba(26,188,156,.75)', borderRadius:6}
-      ]
-    },
-    options:{
-      responsive:true, maintainAspectRatio:false,
-      plugins:{ legend:{labels:{color:'#e6edf7', font:{size:11}}},
-        tooltip:{callbacks:{label:c=>c.dataset.label+': '+rp(c.parsed.y)}} },
-      scales:{
-        x:{ticks:{color:'#8fa3c4'}, grid:{display:false}},
-        y:{ticks:{color:'#8fa3c4', callback:v=>'Rp '+(v/1e6).toFixed(0)+'jt'}, grid:{color:'rgba(36,54,92,.5)'}}
-      }
-    }
+    const obj = {
+      id: c?.id || uid('wcal'),
+      kode: $('#fc_kode').value.trim(),
+      nama: $('#fc_nama').value.trim(),
+      work_days: $('#fc_wd').value.trim(),
+      jam_per_hari: num($('#fc_jam').value),
+      start_hour: $('#fc_start').value.trim(),
+      keterangan: $('#fc_ket').value.trim(),
+      is_default: isDef ? 1 : 0
+    };
+    if (!obj.kode || !obj.nama){ toast('Kode & nama wajib', false); return false; }
+    if (c) Object.assign(c, obj); else DB.working_calendars.push(obj);
+    saveDB(); renderCalendars(); toast('Kalender disimpan');
   });
 }
 
-/* =====================================================================
-   RENDER — SETTINGS
-   ===================================================================== */
+/* ---------- RENDER HOLIDAYS ---------- */
+function renderHolidays(){
+  const fcal = $('#fHolCal')?.value;
+  let rows = (DB.holidays || []).slice();
+  if (fcal) rows = rows.filter(h => h.calendar_id === fcal);
+  rows.sort((a,b) => (a.tanggal||'').localeCompare(b.tanggal||''));
+
+  const head = `<thead><tr>
+    <th>Tanggal</th><th>Nama</th><th>Jenis</th><th>Kalender</th><th class="center">Aksi</th>
+  </tr></thead>`;
+  const body = rows.map(h => {
+    const cal = DB.working_calendars.find(c => c.id === h.calendar_id);
+    const jenisBadge = h.jenis === 'nasional' ? 'b-danger' : 'b-warn';
+    return `<tr>
+      <td><b>${esc(h.tanggal)}</b></td>
+      <td>${esc(h.nama)}</td>
+      <td><span class="badge ${jenisBadge}">${esc(h.jenis||'nasional').toUpperCase()}</span></td>
+      <td style="font-size:11px">${esc(cal?.kode||'-')}</td>
+      <td class="center">
+        <button class="btn btn-sm" data-edit-hol="${h.id}">✎</button>
+        <button class="btn btn-sm btn-danger" data-del-hol="${h.id}">✕</button>
+      </td>
+    </tr>`;
+  }).join('');
+  $('#tblHolidays').innerHTML = head + `<tbody>${body || `<tr><td colspan="5" class="empty">Belum ada hari libur.</td></tr>`}</tbody>`;
+
+  $$('[data-edit-hol]').forEach(b => b.onclick = () => formHoliday(b.dataset.editHol));
+  $$('[data-del-hol]').forEach(b => b.onclick = () => {
+    if (!confirm('Hapus hari libur ini?')) return;
+    DB.holidays = DB.holidays.filter(x => x.id !== b.dataset.delHol);
+    saveDB(); renderHolidays(); toast('Hari libur dihapus');
+  });
+}
+
+function formHoliday(id){
+  const h = id ? DB.holidays.find(x => x.id === id) : null;
+  const calOpts = (DB.working_calendars || []).map(c =>
+    `<option value="${c.id}" ${(h?.calendar_id || 'wcal_std_001') === c.id?'selected':''}>${esc(c.kode)} — ${esc(c.nama)}</option>`
+  ).join('');
+
+  const body = `
+    <div class="row">
+      <div class="field"><label class="f">Tanggal</label><input id="fh_tgl" type="date" value="${esc(h?.tanggal||today())}" /></div>
+      <div class="field" style="flex:3"><label class="f">Nama Libur</label><input id="fh_nama" value="${esc(h?.nama||'')}" placeholder="mis. Hari Kemerdekaan RI" /></div>
+    </div>
+    <div class="row" style="margin-top:12px">
+      <div class="field"><label class="f">Jenis</label>
+        <select id="fh_jenis">
+          <option value="nasional" ${h?.jenis==='nasional'?'selected':''}>Nasional</option>
+          <option value="cuti" ${h?.jenis==='cuti'?'selected':''}>Cuti Bersama</option>
+          <option value="daerah" ${h?.jenis==='daerah'?'selected':''}>Daerah</option>
+        </select>
+      </div>
+      <div class="field" style="flex:2"><label class="f">Kalender</label><select id="fh_cal">${calOpts}</select></div>
+    </div>
+  `;
+  openModal(id?'Edit Hari Libur':'Tambah Hari Libur', body, () => {
+    const obj = {
+      id: h?.id || uid('hol'),
+      tanggal: $('#fh_tgl').value,
+      nama: $('#fh_nama').value.trim(),
+      jenis: $('#fh_jenis').value,
+      calendar_id: $('#fh_cal').value
+    };
+    if (!obj.nama){ toast('Nama wajib diisi', false); return false; }
+    if (h) Object.assign(h, obj); else DB.holidays.push(obj);
+    saveDB(); renderHolidays(); toast('Hari libur disimpan');
+  });
+}
+
+/* ---------- RENDER SETTINGS ---------- */
 function renderSettings(){
   $('#setUrl').value = SET.sheetUrl || '';
   $('#setOh').value  = SET.overhead;
   $('#setPpn').value = SET.ppn;
 }
 
-/* =====================================================================
-   MODAL
-   ===================================================================== */
+/* ---------- MODAL ---------- */
 let _submitHandler = null;
 function openModal(title, bodyHTML, onSubmit){
   $('#mTitle').textContent = title;
@@ -2086,7 +2040,7 @@ function closeModal(){
 }
 $('#mClose').onclick = closeModal;
 $('#mCancel').onclick = closeModal;
-$('#overlay').onclick = e => { if (e.target.id==='overlay') closeModal(); };
+$('#overlay').onclick = e => { if (e.target.id === 'overlay') closeModal(); };
 $('#mSubmit').onclick = () => {
   if (typeof _submitHandler === 'function'){
     const r = _submitHandler();
@@ -2095,19 +2049,84 @@ $('#mSubmit').onclick = () => {
   closeModal();
 };
 
-/* =====================================================================
-   RENDER ALL
-   ===================================================================== */
-function renderAll(){
-  renderProjectSelector();
-  const cur = $$('.tab').find(t=>t.classList.contains('active'))?.dataset.tab || 'dashboard';
-  switchTab(cur);
+/* ---------- RECON MASTER DATA ---------- */
+function seedReconMasterData(){
+  if (!DB.bj_material) DB.bj_material = JSON.parse(JSON.stringify(BJ_DEFAULT));
+  if (!DB.beton_presets) DB.beton_presets = JSON.parse(JSON.stringify(BETON_PRESETS_DEFAULT));
+  if (!DB.bekisting_breakdown) DB.bekisting_breakdown = JSON.parse(JSON.stringify(BEKISTING_BREAKDOWN_DEFAULT));
+  if (!DB.reconciliation) DB.reconciliation = [];
+  saveDB();
 }
 
-/* =====================================================================
-   EVENT WIRING
-   ===================================================================== */
-$$('.tab').forEach(t=>t.onclick = () => switchTab(t.dataset.tab));
+/* ---------- RECON (Simplified — full version in original) ---------- */
+function renderReconRekap(){
+  const items = DB.reconciliation || [];
+  if (!items.length){
+    $('#tblRecon').innerHTML = `<tbody><tr><td class="empty">Belum ada data rekonsiliasi.</td></tr></tbody>`;
+    return;
+  }
+  const head = `<thead><tr>
+    <th>Tanggal</th><th>Skenario</th><th>Uraian</th>
+    <th class="num">RAB</th><th class="num">RAP</th>
+    <th class="num">Varian</th><th class="center">Aksi</th>
+  </tr></thead>`;
+  const body = items.map(it => `<tr>
+    <td>${esc(it.tanggal)}</td>
+    <td><span class="badge b-warn">${esc(it.skenario)}</span></td>
+    <td>${esc(it.uraian)}</td>
+    <td class="num">${rp(it.totalRAB)}</td>
+    <td class="num">${rp(it.totalRAP)}</td>
+    <td class="num ${it.varianRp>=0?'pos':'neg'}">${rp(it.varianRp)}</td>
+    <td class="center">
+      <button class="btn btn-sm btn-danger" data-del-recon="${it.id}">✕</button>
+    </td>
+  </tr>`).join('');
+  $('#tblRecon').innerHTML = head + `<tbody>${body}</tbody>`;
+  $$('[data-del-recon]').forEach(b => b.onclick = () => {
+    if (!confirm('Hapus?')) return;
+    DB.reconciliation = DB.reconciliation.filter(x => x.id !== b.dataset.delRecon);
+    saveDB(); renderReconRekap(); toast('Dihapus');
+  });
+}
+
+function initRecon(){
+  const mc = $('#convMat');
+  if (mc) mc.innerHTML = DB.bj_material.map(x => `<option value="${esc(x.nama)}">${esc(x.kode)} — ${esc(x.nama)}</option>`).join('');
+  const mm = $('#mixMutu');
+  if (mm) mm.innerHTML = DB.beton_presets.map(x => `<option value="${esc(x.mutu)}">${esc(x.mutu)} — fc' ${fmt(x.fc,1)} MPa</option>`).join('');
+
+  $$('.subtab').forEach(t => t.onclick = () => {
+    $$('.subtab').forEach(x => x.classList.toggle('active', x === t));
+    $$('.subpanel').forEach(p => p.classList.toggle('active', p.id === 'sub-' + t.dataset.sub));
+  });
+
+  const btnConv = $('#btnConvCalc');
+  if (btnConv) btnConv.onclick = () => {
+    const vol = num($('#convVRAB').value);
+    const sat = $('#convSatRAB').value;
+    const bj  = num($('#convBJ').value) || 1.6;
+    const hRAB = num($('#convHRAB').value);
+    const hRAP = num($('#convHRAP').value);
+    let massaKg = 0;
+    if (sat === 'kg') massaKg = vol;
+    else if (sat === 'ton') massaKg = vol * 1000;
+    else if (sat === 'm3') massaKg = vol * bj * 1000;
+    const volM3 = massaKg / (bj * 1000);
+    const tRAB = massaKg * hRAB;
+    const tRAP = volM3 * hRAP;
+    $('#convResult').innerHTML = `
+      <div class="kv">
+        <div class="k">Massa</div><div class="v">${fmt(massaKg,2)} kg</div>
+        <div class="k">Volume Konversi</div><div class="v">${fmt(volM3,3)} m³</div>
+        <div class="k">Total RAB</div><div class="v">${rp(tRAB)}</div>
+        <div class="k">Total RAP</div><div class="v">${rp(tRAP)}</div>
+        <div class="k">Varian</div><div class="v ${(tRAB-tRAP)>=0?'pos':'neg'}">${rp(tRAB-tRAP)}</div>
+      </div>`;
+  };
+}
+
+/* ---------- EVENT WIRING ---------- */
+$$('.tab').forEach(t => t.onclick = () => switchTab(t.dataset.tab));
 
 $('#activeProject').onchange = e => { STATE.activeProject = e.target.value; renderAll(); };
 
@@ -2119,18 +2138,27 @@ $('#btnAddWbs').onclick   = () => formWbs(null, false);
 $('#btnAddWbsGroup').onclick = () => formWbs(null, true);
 $('#btnAddProg').onclick  = () => formProgress(null);
 $('#btnAddProj').onclick  = () => formProject(null);
+$('#btnAddCalendar').onclick = () => formCalendar(null);
+$('#btnAddHoliday').onclick  = () => formHoliday(null);
+
+$('#btnRunCPMWBS').onclick = () => {
+  const pid = STATE.activeProject;
+  if (!pid) return;
+  runCPM(pid);
+  saveDB(); renderWbs();
+  toast('CPM dihitung ulang');
+};
 
 $('#btnSyncAlat').onclick = () => {
   const pid = $('#ahspProjSel').value;
   if (!pid){ toast('Pilih proyek', false); return; }
-  if (!confirm('Sinkronkan ulang koefisien alat berdasarkan parameter Q terkini? Koefisien RAP manual akan direset.')) return;
+  if (!confirm('Sinkronkan ulang koefisien alat?')) return;
   cloneAhspToProject(pid);
-  saveDB(); renderKoefTable(); toast('Koefisien alat disinkronkan');
+  saveDB(); renderKoefTable(); toast('Disinkronkan');
 };
 
 $('#btnSaveKoef').onclick = () => {
-  // nilai sudah tersimpan live via oninput, pastikan persist
-  saveDB(); renderWbs(); renderAnalysis(); toast('Koefisien proyek disimpan');
+  saveDB(); renderWbs(); renderAnalysis(); toast('Koefisien disimpan');
 };
 
 $('#btnPrintAnalysis').onclick = () => window.print();
@@ -2142,15 +2170,15 @@ $('#btnSaveSet').onclick = () => {
   saveSET(); renderAll(); toast('Pengaturan disimpan');
 };
 
-/* ---- Export / Import ---- */
 $('#btnExport').onclick = () => {
   const blob = new Blob([JSON.stringify({db:DB, settings:SET}, null, 2)], {type:'application/json'});
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = 'manajemen-konstruksi-v1-'+today()+'.json';
+  a.download = 'manajemen-konstruksi-v1-' + today() + '.json';
   a.click();
   toast('Data diexport');
 };
+
 $('#btnImport').onclick = () => $('#fileImport').click();
 $('#fileImport').onchange = e => {
   const f = e.target.files[0]; if (!f) return;
@@ -2163,33 +2191,33 @@ $('#fileImport').onchange = e => {
       saveDB(); saveSET();
       STATE.activeProject = DB.projects[0]?.id || '';
       renderAll(); renderSettings();
-      toast('Data berhasil diimport');
+      toast('Data diimport');
     } catch(err){ toast('File tidak valid', false); }
   };
   reader.readAsText(f);
-  e.target.value='';
+  e.target.value = '';
 };
 
-/* ---- Reset / Seed ---- */
 $('#btnReset').onclick = () => {
-  if (!confirm('Hapus SELURUH data dan mulai dari nol?')) return;
+  if (!confirm('Hapus SELURUH data?')) return;
   DB = emptyDB();
   DB.projects = [];
-  saveDB(); STATE.activeProject=''; renderAll(); toast('Data direset');
+  saveDB(); STATE.activeProject = ''; renderAll(); toast('Data direset');
 };
+
 $('#btnSeed').onclick = () => {
-  if (!confirm('Muat data contoh? Data saat ini akan digantikan.')) return;
+  if (!confirm('Muat data contoh?')) return;
   seedData();
   STATE.activeProject = DB.projects[0]?.id || '';
   renderAll(); toast('Data contoh dimuat');
 };
 
-/* ---- Spreadsheet Sync ---- */
+/* ---------- SPREADSHEET SYNC ---------- */
 async function sheetRequest(action, payload){
   if (!SET.sheetUrl){ toast('URL Apps Script belum diatur', false); throw new Error('no url'); }
   const res = await fetch(SET.sheetUrl, {
     method:'POST',
-    headers:{'Content-Type':'text/plain;charset=utf-8'},  // hindari preflight
+    headers:{'Content-Type':'text/plain;charset=utf-8'},
     body: JSON.stringify({action, payload})
   });
   return res.json();
@@ -2198,17 +2226,17 @@ async function sheetRequest(action, payload){
 $('#btnPush').onclick = async () => {
   SET.sheetUrl = $('#setUrl').value.trim(); saveSET();
   try {
-    toast('Mengirim data ke Spreadsheet...');
+    toast('Mengirim data...');
     const out = await sheetRequest('push', {db:DB, settings:SET});
-    if (out.ok) toast('Berhasil push: '+out.message);
-    else toast('Gagal: '+out.message, false);
-  } catch(e){ toast('Koneksi gagal: '+e.message, false); }
+    if (out.ok) toast('Berhasil: ' + out.message);
+    else toast('Gagal: ' + out.message, false);
+  } catch(e){ toast('Koneksi gagal: ' + e.message, false); }
 };
 
 $('#btnPull').onclick = async () => {
   SET.sheetUrl = $('#setUrl').value.trim(); saveSET();
   try {
-    toast('Mengambil data dari Spreadsheet...');
+    toast('Mengambil data...');
     const out = await sheetRequest('pull', {});
     if (out.ok && out.db){
       DB = out.db;
@@ -2216,814 +2244,56 @@ $('#btnPull').onclick = async () => {
       saveDB(); saveSET();
       STATE.activeProject = DB.projects[0]?.id || '';
       renderAll(); renderSettings();
-      toast('Data berhasil ditarik dari Sheet');
-    } else toast('Gagal pull: '+(out.message||'unknown'), false);
-  } catch(e){ toast('Koneksi gagal: '+e.message, false); }
+      toast('Data ditarik dari Sheet');
+    } else toast('Gagal pull', false);
+  } catch(e){ toast('Koneksi gagal', false); }
 };
 
-function seedReconMasterData(){
-  if (!DB.bj_material) DB.bj_material = JSON.parse(JSON.stringify(BJ_DEFAULT));
-  if (!DB.beton_presets) DB.beton_presets = JSON.parse(JSON.stringify(BETON_PRESETS_DEFAULT));
-  if (!DB.bekisting_breakdown) DB.bekisting_breakdown = JSON.parse(JSON.stringify(BEKISTING_BREAKDOWN_DEFAULT));
-  if (!DB.reconciliation) DB.reconciliation = [];
-  saveDB();
-}
-
-/* ---------- HELPER: cari resource by keyword ---------- */
-function findRes(kw){
-  if (!DB || !DB.master_resources) return null;
-  const k = kw.toLowerCase();
-  return DB.master_resources.find(r => (r.nama+' '+r.kode).toLowerCase().includes(k));
-}
-function hargaRes(res, mode){
-  if (!res) return 0;
-  return mode === 'rap' ? num(res.harga_rap) : num(res.harga_rab);
-}
-
-/* ---------- CALC 1: KONVERSI MATERIAL ---------- */
-const ReconCalc = {
-  konversiMaterial({volumeRAB, satRAB, bj, hargaRAB}){
-    // Normalisasi volume RAB ke KG
-    let massaKg = 0;
-    if (satRAB === 'kg')      massaKg = volumeRAB;
-    else if (satRAB === 'ton') massaKg = volumeRAB * 1000;
-    else if (satRAB === 'm3')  massaKg = volumeRAB * bj * 1000;
-    const volumeM3 = massaKg / (bj * 1000);
-    const hargaPerM3 = hargaRAB * bj * 1000;
-    return {
-      massaKg, volumeM3, hargaPerM3,
-      totalRAB: massaKg * hargaRAB,
-      totalRAP: volumeM3 * hargaPerM3  // sama secara matematis
-    };
-  },
-
-  /* ---------- CALC 2: SITE MIX vs READYMIX ---------- */
-  siteMix(mutu, volume, hargaReadymix, wastePct){
-    const p = DB.beton_presets.find(x => x.mutu === mutu);
-    if (!p) return null;
-
-    // Cari resource (fallback ke nama umum)
-    const rSemen   = findRes('semen');
-    const rPasir   = findRes('pasir beton') || findRes('pasir');
-    const rSplit   = findRes('kerikil') || findRes('split');
-    const rAir     = findRes('air kerja') || findRes('air');
-    const rPekerja = findRes('pekerja');
-    const rTukang  = findRes('tukang batu');
-    const rMandor  = findRes('mandor');
-    const rMixer   = findRes('mixer');
-
-    // Koefisien upah & alat (mengacu Permen PUPR untuk pengecoran site mix per m3)
-    const koefUpah = {pekerja:1.30, tukang:0.35, mandor:0.06};
-
-    // Q mixer (m3/jam)
-    let qMixer = 0;
-    if (rMixer && num(rMixer.hitung_q) === 1) qMixer = Calc.Q(rMixer);
-    const koefMixer = qMixer > 0 ? 1/qMixer : 0.20; // fallback 0.20 jam/m3
-
-    const waste = 1 + num(wastePct)/100;
-
-    // Biaya per m3 (fresh, dengan waste)
-    const rincian = [
-      {komp:'Semen PC',       qty:p.semen*waste,  sat:'kg',  harga:hargaRes(rSemen,'rap'),  total:p.semen*waste*hargaRes(rSemen,'rap')},
-      {komp:'Pasir Beton',    qty:p.pasir*waste,  sat:'m3',  harga:hargaRes(rPasir,'rap'),  total:p.pasir*waste*hargaRes(rPasir,'rap')},
-      {komp:'Split 2-3',      qty:p.split*waste,  sat:'m3',  harga:hargaRes(rSplit,'rap'),  total:p.split*waste*hargaRes(rSplit,'rap')},
-      {komp:'Air Kerja',      qty:p.air*waste,    sat:'ltr', harga:hargaRes(rAir,'rap'),    total:p.air*waste*hargaRes(rAir,'rap')},
-      {komp:'Pekerja',        qty:koefUpah.pekerja, sat:'OH', harga:hargaRes(rPekerja,'rap'),total:koefUpah.pekerja*hargaRes(rPekerja,'rap')},
-      {komp:'Tukang Batu',    qty:koefUpah.tukang,  sat:'OH', harga:hargaRes(rTukang,'rap'), total:koefUpah.tukang*hargaRes(rTukang,'rap')},
-      {komp:'Mandor',         qty:koefUpah.mandor,  sat:'OH', harga:hargaRes(rMandor,'rap'), total:koefUpah.mandor*hargaRes(rMandor,'rap')},
-      {komp:'Concrete Mixer', qty:koefMixer,        sat:'jam',harga:hargaRes(rMixer,'rap'), total:koefMixer*hargaRes(rMixer,'rap')}
-    ];
-    const hargaPerM3 = rincian.reduce((s,x)=>s+x.total, 0);
-
-    return {
-      mutu, volume, wastePct:num(wastePct), komposisi:p,
-      rincian,
-      hargaPerM3,
-      totalRAB: volume * num(hargaReadymix),
-      totalRAP: volume * hargaPerM3,
-      varianRp: volume * num(hargaReadymix) - volume * hargaPerM3,
-      varianPct: num(hargaReadymix) > 0
-        ? ((num(hargaReadymix) - hargaPerM3) / num(hargaReadymix) * 100) : 0
-    };
-  },
-
-  /* ---------- CALC 3: BREAKDOWN BEKISTING ---------- */
-  bekisting(volume, tipeMp, reuseMp, reuseKy, hargaRAB){
-    const B = DB.bekisting_breakdown;
-    const rMultiplex = findRes('multiplex') || findRes('kayu perancah') || findRes('kayu');
-    const rKaso      = findRes('kaso') || findRes('kayu');
-    const rBalok     = findRes('balok') || rKaso;
-    const rPaku      = findRes('paku');
-    const rMinyak    = findRes('minyak');
-    const rTukang    = findRes('tukang batu') || findRes('tukang');
-    const rPekerja   = findRes('pekerja');
-    const rMandor    = findRes('mandor');
-
-    // Override reuse
-    B[tipeMp].reuse = num(reuseMp);
-    B.kaso.reuse     = num(reuseKy);
-
-    const baris = [];
-
-    // Material
-    const pushMat = (label, spec, res, overrideReuse) => {
-      const reuse = overrideReuse || spec.reuse || 1;
-      const koefEf = spec.koef / reuse;
-      const h = hargaRes(res, 'rap');
-      baris.push({
-        kategori:'Material',
-        komponen: label,
-        koefBruto: spec.koef,
-        reuse,
-        koefEfektif: koefEf,
-        satuan: spec.satuan,
-        harga: h,
-        total: koefEf * h
-      });
-    };
-
-    pushMat(B[tipeMp].nama, B[tipeMp], rMultiplex, num(reuseMp));
-    pushMat(B.kaso.nama,    B.kaso,    rKaso,      num(reuseKy));
-    pushMat(B.balok.nama,   B.balok,   rBalok,     num(reuseKy));
-    pushMat(B.paku.nama,    B.paku,    rPaku,      1);
-    pushMat(B.minyak.nama,  B.minyak,  rMinyak,    1);
-
-    // Upah
-    baris.push({
-      kategori:'Upah', komponen:B.tukang.nama,
-      koefBruto:B.tukang.koef, reuse:1, koefEfektif:B.tukang.koef,
-      satuan:'OH', harga:hargaRes(rTukang,'rap'),
-      total:B.tukang.koef * hargaRes(rTukang,'rap')
-    });
-    baris.push({
-      kategori:'Upah', komponen:B.pekerja.nama,
-      koefBruto:B.pekerja.koef, reuse:1, koefEfektif:B.pekerja.koef,
-      satuan:'OH', harga:hargaRes(rPekerja,'rap'),
-      total:B.pekerja.koef * hargaRes(rPekerja,'rap')
-    });
-    baris.push({
-      kategori:'Upah', komponen:B.mandor.nama,
-      koefBruto:B.mandor.koef, reuse:1, koefEfektif:B.mandor.koef,
-      satuan:'OH', harga:hargaRes(rMandor,'rap'),
-      total:B.mandor.koef * hargaRes(rMandor,'rap')
-    });
-
-    const hargaPerM2 = baris.reduce((s,x)=>s+x.total, 0);
-    return {
-      volume, tipeMp, baris,
-      hargaPerM2,
-      totalRAB: volume * num(hargaRAB),
-      totalRAP: volume * hargaPerM2,
-      varianRp: volume * num(hargaRAB) - volume * hargaPerM2,
-      varianPct: num(hargaRAB) > 0
-        ? ((num(hargaRAB) - hargaPerM2) / num(hargaRAB) * 100) : 0
-    };
-  }
-};
-
-/* ---------- RENDER 1: KONVERSI MATERIAL ---------- */
-function renderConvResult(){
-  const matNama = $('#convMat').value;
-  const bjMaster = DB.bj_material.find(x=>x.nama===matNama);
-  if (!bjMaster){ $('#convResult').innerHTML = '<div class="empty">Material tidak ditemukan.</div>'; return; }
-  const bj = num($('#convBJ').value) || bjMaster.bj;
-  const volumeRAB = num($('#convVRAB').value);
-  const satRAB    = $('#convSatRAB').value;
-  const hRAB      = num($('#convHRAB').value);
-  const hRAP      = num($('#convHRAP').value);
-
-  const r = ReconCalc.konversiMaterial({volumeRAB, satRAB, bj, hargaRAB:hRAB});
-
-  const totalRABRp = r.totalRAB;
-  const totalRAPRp = r.volumeM3 * hRAP;
-  const varian     = totalRABRp - totalRAPRp;
-  const varianPct  = totalRABRp > 0 ? varian/totalRABRp*100 : 0;
-
-  $('#convResult').innerHTML = `
-    <div class="recon-block">
-      <h4>Hasil Konversi — ${esc(matNama)}</h4>
-      <div class="kv">
-        <div class="k">Volume Awal (RAB)</div><div class="v">${fmt(volumeRAB,3)} ${esc(satRAB)}</div>
-        <div class="k">Berat Jenis (BJ)</div><div class="v">${fmt(bj,3)} ton/m³</div>
-        <div class="k">Massa (kg)</div><div class="v big">${fmt(r.massaKg,2)} kg</div>
-        <div class="k">Volume Konversi (RAP)</div><div class="v big">${fmt(r.volumeM3,3)} m³</div>
-        <div class="k">Harga Satuan RAB</div><div class="v">${rp(hRAB)} / ${esc(satRAB)}</div>
-        <div class="k">Harga Satuan RAP</div><div class="v">${rp(hRAP)} / m³</div>
-      </div>
-    </div>
-    <div class="tw" style="margin-top:14px">
-      <table>
-        <thead><tr><th>Item</th><th class="num">Volume</th><th>Satuan</th><th class="num">Harga Satuan</th><th class="num">Total (Rp)</th></tr></thead>
-        <tbody>
-          <tr>
-            <td><b>RAB</b> (${esc(matNama)})</td>
-            <td class="num">${fmt(volumeRAB,3)}</td><td>${esc(satRAB)}</td>
-            <td class="num">${rp(hRAB)}</td><td class="num">${rp(totalRABRp)}</td>
-          </tr>
-          <tr>
-            <td><b>RAP</b> (${esc(matNama)})</td>
-            <td class="num">${fmt(r.volumeM3,3)}</td><td>m³</td>
-            <td class="num">${rp(hRAP)}</td><td class="num">${rp(totalRAPRp)}</td>
-          </tr>
-        </tbody>
-        <tfoot><tr style="background:#0e1a30;font-weight:700">
-          <td colspan="4" style="text-align:right;padding:10px">Varian (RAB − RAP)</td>
-          <td class="num ${varian>=0?'pos':'neg'}">${rp(varian)} (${fmt(varianPct,2)}%)</td>
-        </tr></tfoot>
-      </table>
-    </div>
-  `;
-}
-
-/* ---------- RENDER 2: SITE MIX vs READYMIX ---------- */
-function renderMixResult(){
-  const mutu = $('#mixMutu').value;
-  const vol  = num($('#mixVol').value);
-  const hrm  = num($('#mixHRM').value);
-  const waste= num($('#mixWaste').value);
-
-  const r = ReconCalc.siteMix(mutu, vol, hrm, waste);
-  if (!r){ $('#mixResult').innerHTML = '<div class="empty">Mutu tidak ditemukan.</div>'; return; }
-
-  const comp = r.komposisi;
-  const rowBody = r.rincian.map(x=>`
-    <tr>
-      <td>${esc(x.komp)}</td>
-      <td class="num">${fmt(x.qty,4)}</td>
-      <td>${esc(x.sat)}</td>
-      <td class="num">${rp(x.harga)}</td>
-      <td class="num">${rp(x.total)}</td>
-    </tr>`).join('');
-
-  $('#mixResult').innerHTML = `
-    <div class="recon-block">
-      <h4>Komposisi ${esc(mutu)} per m³ (SNI 7394:2008)</h4>
-      <div class="kv">
-        <div class="k">Semen PC</div><div class="v">${fmt(comp.semen,1)} kg</div>
-        <div class="k">Pasir Beton</div><div class="v">${fmt(comp.pasir,3)} m³</div>
-        <div class="k">Split 2-3</div><div class="v">${fmt(comp.split,3)} m³</div>
-        <div class="k">Air Kerja</div><div class="v">${fmt(comp.air,1)} liter</div>
-        <div class="k">Kuat Tekan fc'</div><div class="v">${fmt(comp.fc,1)} MPa</div>
-      </div>
-    </div>
-
-    <div class="tw" style="margin-top:14px">
-      <table>
-        <thead><tr>
-          <th>Komponen</th><th class="num">Qty (dgn waste ${fmt(r.wastePct,1)}%)</th>
-          <th>Satuan</th><th class="num">Harga RAP</th><th class="num">Total / m³</th>
-        </tr></thead>
-        <tbody>${rowBody}</tbody>
-        <tfoot>
-          <tr style="background:#0e1a30"><td colspan="4" style="text-align:right;padding:10px;font-weight:700">Harga Satuan RAP Site Mix / m³</td>
-            <td class="num" style="font-weight:800">${rp(r.hargaPerM3)}</td></tr>
-          <tr style="background:#0e1a30"><td colspan="4" style="text-align:right;padding:10px;font-weight:700">Harga Satuan RAB Readymix / m³</td>
-            <td class="num">${rp(hrm)}</td></tr>
-        </tfoot>
-      </table>
-    </div>
-
-    <div class="tw" style="margin-top:14px">
-      <table>
-        <thead><tr><th>Total Volume</th><th>Metode</th><th class="num">Harga Sat / m³</th><th class="num">Total (Rp)</th></tr></thead>
-        <tbody>
-          <tr><td rowspan="2" style="vertical-align:middle;font-weight:700">${fmt(vol,2)} m³</td>
-            <td>RAB (Readymix ${esc(mutu)})</td>
-            <td class="num">${rp(hrm)}</td>
-            <td class="num">${rp(r.totalRAB)}</td></tr>
-          <tr>
-            <td>RAP (Site Mix di Lapangan)</td>
-            <td class="num">${rp(r.hargaPerM3)}</td>
-            <td class="num">${rp(r.totalRAP)}</td></tr>
-        </tbody>
-        <tfoot><tr style="background:#0e1a30;font-weight:700">
-          <td colspan="3" style="text-align:right;padding:10px">Varian (RAB − RAP)</td>
-          <td class="num ${r.varianRp>=0?'pos':'neg'}">${rp(r.varianRp)} (${fmt(r.varianPct,2)}%)</td>
-        </tr></tfoot>
-      </table>
-    </div>
-    <p class="hint">${r.varianPct>0 ? '✅ Site Mix LEBIH HEMAT dari Readymix.' : '⚠️ Site Mix LEBIH MAHAL — pertimbangkan kembali metode.'}</p>
-  `;
-}
-
-/* ---------- RENDER 3: BREAKDOWN BEKISTING ---------- */
-function renderBekResult(){
-  const vol     = num($('#bekVol').value);
-  const tipeMp  = $('#bekTipe').value;
-  const reuseMp = num($('#bekReuseMp').value);
-  const reuseKy = num($('#bekReuseKy').value);
-  const hRAB    = num($('#bekHRAB').value);
-
-  const r = ReconCalc.bekisting(vol, tipeMp, reuseMp, reuseKy, hRAB);
-
-  const kategoris = ['Material','Upah'];
-  const sectionRows = kategoris.map(kat=>{
-    const items = r.baris.filter(x=>x.kategori===kat);
-    if (!items.length) return '';
-    const subtotal = items.reduce((s,x)=>s+x.total,0);
-    const rows = items.map(x=>`
-      <tr>
-        <td>${esc(x.komponen)}</td>
-        <td class="num">${fmt(x.koefBruto,4)}</td>
-        <td class="num">${x.reuse}</td>
-        <td class="num">${fmt(x.koefEfektif,6)}</td>
-        <td>${esc(x.satuan)}</td>
-        <td class="num">${rp(x.harga)}</td>
-        <td class="num">${rp(x.total)}</td>
-      </tr>`).join('');
-    return `
-      <tr style="background:rgba(47,129,247,.08)"><td colspan="7" style="font-weight:700;text-transform:uppercase;letter-spacing:.5px;font-size:11px">${kat}</td></tr>
-      ${rows}
-      <tr style="background:#0e1a30"><td colspan="6" style="text-align:right;padding:8px;font-weight:700">Sub-total ${kat}</td>
-        <td class="num" style="font-weight:700">${rp(subtotal)}</td></tr>
-    `;
-  }).join('');
-
-  $('#bekResult').innerHTML = `
-    <div class="recon-block">
-      <h4>Breakdown Bekisting per m² — ${esc(BEKISTING_BREAKDOWN_DEFAULT[tipeMp].nama)}</h4>
-      <div class="kv">
-        <div class="k">Volume Bekisting</div><div class="v">${fmt(vol,2)} m²</div>
-        <div class="k">Re-use Multiplex</div><div class="v">${reuseMp}×</div>
-        <div class="k">Re-use Kayu</div><div class="v">${reuseKy}×</div>
-        <div class="k">Harga Satuan RAB</div><div class="v">${rp(hRAB)} / m²</div>
-        <div class="k">Harga Satuan RAP</div><div class="v big">${rp(r.hargaPerM2)} / m²</div>
-      </div>
-    </div>
-
-    <div class="tw" style="margin-top:14px">
-      <table>
-        <thead><tr>
-          <th>Komponen</th>
-          <th class="num">Koef Bruto</th>
-          <th class="num">Re-use</th>
-          <th class="num">Koef Efektif</th>
-          <th>Satuan</th>
-          <th class="num">Harga RAP</th>
-          <th class="num">Total / m²</th>
-        </tr></thead>
-        <tbody>${sectionRows}</tbody>
-        <tfoot>
-          <tr style="background:#0e1a30"><td colspan="6" style="text-align:right;padding:10px;font-weight:700">Total RAP / m²</td>
-            <td class="num" style="font-weight:700">${rp(r.hargaPerM2)}</td></tr>
-          <tr style="background:#0e1a30"><td colspan="6" style="text-align:right;padding:10px;font-weight:700">Harga RAB / m²</td>
-            <td class="num">${rp(hRAB)}</td></tr>
-        </tfoot>
-      </table>
-    </div>
-
-    <div class="tw" style="margin-top:14px">
-      <table>
-        <thead><tr><th>Item</th><th class="num">Volume</th><th>Satuan</th><th class="num">Harga Sat</th><th class="num">Total</th></tr></thead>
-        <tbody>
-          <tr><td><b>RAB</b> Bekisting (paket)</td><td class="num">${fmt(vol,2)}</td><td>m²</td>
-            <td class="num">${rp(hRAB)}</td><td class="num">${rp(r.totalRAB)}</td></tr>
-          <tr><td><b>RAP</b> Breakdown Material + Upah</td><td class="num">${fmt(vol,2)}</td><td>m²</td>
-            <td class="num">${rp(r.hargaPerM2)}</td><td class="num">${rp(r.totalRAP)}</td></tr>
-        </tbody>
-        <tfoot><tr style="background:#0e1a30;font-weight:700">
-          <td colspan="4" style="text-align:right;padding:10px">Efisiensi (RAB − RAP)</td>
-          <td class="num ${r.varianRp>=0?'pos':'neg'}">${rp(r.varianRp)} (${fmt(r.varianPct,2)}%)</td>
-        </tr></tfoot>
-      </table>
-    </div>
-    <p class="hint">${r.varianPct>0 ? '✅ Breakdown RAP LEBIH HEMAT dari paket RAB.' : '⚠️ Breakdown RAP lebih mahal — periksa re-use atau harga material.'}</p>
-  `;
-}
-
-/* ---------- RENDER 4: REKAP REKONSILIASI ---------- */
-function renderReconRekap(){
-  const items = DB.reconciliation || [];
-  if (!items.length){
-    $('#tblRecon').innerHTML = `<tbody><tr><td class="empty">Belum ada data rekonsiliasi. Gunakan salah satu kalkulator di atas dan klik <b>+ Rekonsiliasi Baru</b> untuk menyimpan hasilnya.</td></tr></tbody>`;
-    return;
-  }
-  const head = `<thead><tr>
-    <th>Tanggal</th><th>Skenario</th><th>Uraian</th>
-    <th class="num">Total RAB</th><th class="num">Total RAP</th>
-    <th class="num">Varian (Rp)</th><th class="num">Varian (%)</th>
-    <th class="center">Status</th><th class="center">Aksi</th>
-  </tr></thead>`;
-  const body = items.map(it=>{
-    const cls = it.varianRp >= 0 ? 'pos' : 'neg';
-    const st  = it.varianRp >= 0
-      ? '<span class="badge b-ok">EFISIEN</span>'
-      : '<span class="badge b-danger">OVER</span>';
-    return `<tr>
-      <td>${esc(it.tanggal)}</td>
-      <td><span class="badge b-warn">${esc(it.skenario)}</span></td>
-      <td>${esc(it.uraian)}</td>
-      <td class="num">${rp(it.totalRAB)}</td>
-      <td class="num">${rp(it.totalRAP)}</td>
-      <td class="num ${cls}">${rp(it.varianRp)}</td>
-      <td class="num ${cls}">${fmt(it.varianPct,2)}%</td>
-      <td class="center">${st}</td>
-      <td class="center">
-        <button class="btn btn-sm" data-view-recon="${it.id}">👁</button>
-        <button class="btn btn-sm btn-danger" data-del-recon="${it.id}">✕</button>
-      </td>
-    </tr>`;
-  }).join('');
-  $('#tblRecon').innerHTML = head + `<tbody>${body}</tbody>`;
-
-  $$('[data-view-recon]').forEach(b=>b.onclick=()=>viewReconDetail(b.dataset.viewRecon));
-  $$('[data-del-recon]').forEach(b=>b.onclick=()=>{
-    if (!confirm('Hapus rekonsiliasi ini?')) return;
-    DB.reconciliation = DB.reconciliation.filter(x=>x.id!==b.dataset.delRecon);
-    saveDB(); renderReconRekap(); toast('Rekonsiliasi dihapus');
-  });
-}
-
-function viewReconDetail(id){
-  const it = DB.reconciliation.find(x=>x.id===id);
-  if (!it) return;
-  const rows = (it.rincian||[]).map(x=>`
-    <tr><td>${esc(x.komponen)}</td><td class="num">${fmt(x.qty,4)}</td><td>${esc(x.satuan||'-')}</td>
-    <td class="num">${rp(x.harga)}</td><td class="num">${rp(x.total)}</td></tr>`).join('');
-  const body = `
-    <div class="kv" style="margin-bottom:14px">
-      <div class="k">Skenario</div><div class="v">${esc(it.skenario)}</div>
-      <div class="k">Uraian</div><div class="v">${esc(it.uraian)}</div>
-      <div class="k">Tanggal</div><div class="v">${esc(it.tanggal)}</div>
-      <div class="k">Total RAB</div><div class="v">${rp(it.totalRAB)}</div>
-      <div class="k">Total RAP</div><div class="v">${rp(it.totalRAP)}</div>
-      <div class="k">Varian</div><div class="v ${it.varianRp>=0?'pos':'neg'}">${rp(it.varianRp)} (${fmt(it.varianPct,2)}%)</div>
-    </div>
-    ${rows ? `<div class="tw"><table>
-      <thead><tr><th>Komponen</th><th class="num">Qty</th><th>Sat</th><th class="num">Harga</th><th class="num">Total</th></tr></thead>
-      <tbody>${rows}</tbody></table></div>` : ''}
-  `;
-  openModal('Detail Rekonsiliasi', body, ()=>{ /* read-only */ });
-  $('#mSubmit').style.display = 'none';
-  setTimeout(()=>{ $('#mSubmit').style.display = ''; }, 100);
-}
-
-/* ---------- SUB-TAB NAVIGATION ---------- */
-function initRecon(){
-  // Populate selects
-  const mc = $('#convMat');
-  mc.innerHTML = DB.bj_material.map(x=>`<option value="${esc(x.nama)}">${esc(x.kode)} — ${esc(x.nama)} (BJ ${fmt(x.bj,2)})</option>`).join('');
-  mc.onchange = () => {
-    const m = DB.bj_material.find(x=>x.nama===mc.value);
-    if (m) $('#convBJ').value = m.bj;
-  };
-
-  const mm = $('#mixMutu');
-  mm.innerHTML = DB.beton_presets.map(x=>`<option value="${esc(x.mutu)}">${esc(x.mutu)} — fc' ${fmt(x.fc,1)} MPa</option>`).join('');
-
-  // Sub-tab switching
-  $$('.subtab').forEach(t=>t.onclick = () => {
-    $$('.subtab').forEach(x=>x.classList.toggle('active', x===t));
-    $$('.subpanel').forEach(p=>p.classList.toggle('active', p.id === 'sub-'+t.dataset.sub));
-  });
-
-  // Wire calculator buttons
-  $('#btnConvCalc').onclick = renderConvResult;
-  $('#btnMixCalc').onclick  = renderMixResult;
-  $('#btnBekCalc').onclick  = renderBekResult;
-
-  // Auto-calc on load
-  renderConvResult();
-
-  // Save current calculation to reconciliation
-  $('#btnNewRecon').onclick = () => {
-    const activeSub = $('.subtab.active')?.dataset.sub;
-    if (!activeSub){ toast('Pilih salah satu kalkulator terlebih dahulu', false); return; }
-    if (activeSub === 'rekap'){ toast('Buka salah satu kalkulator untuk menyimpan', false); return; }
-
-    let item = null;
-
-    if (activeSub === 'conv'){
-      const mat = $('#convMat').value;
-      const vol = num($('#convVRAB').value);
-      const sat = $('#convSatRAB').value;
-      const bj  = num($('#convBJ').value);
-      const hRAB= num($('#convHRAB').value);
-      const hRAP= num($('#convHRAP').value);
-      const r = ReconCalc.konversiMaterial({volumeRAB:vol, satRAB:sat, bj, hargaRAB:hRAB});
-      const totalRAB = r.totalRAB;
-      const totalRAP = r.volumeM3 * hRAP;
-      item = {
-        skenario:'Konversi Material',
-        uraian:`${mat}: ${fmt(vol,2)} ${sat} → ${fmt(r.volumeM3,3)} m³`,
-        totalRAB, totalRAP,
-        varianRp: totalRAB-totalRAP,
-        varianPct: totalRAB>0 ? (totalRAB-totalRAP)/totalRAB*100 : 0,
-        rincian: [
-          {komponen:'RAB '+mat, qty:vol, satuan:sat, harga:hRAB, total:totalRAB},
-          {komponen:'RAP '+mat, qty:r.volumeM3, satuan:'m3', harga:hRAP, total:totalRAP}
-        ]
-      };
-    } else if (activeSub === 'mix'){
-      const mutu= $('#mixMutu').value;
-      const vol = num($('#mixVol').value);
-      const hrm = num($('#mixHRM').value);
-      const wst = num($('#mixWaste').value);
-      const r = ReconCalc.siteMix(mutu, vol, hrm, wst);
-      if (!r){ toast('Data beton tidak lengkap', false); return; }
-      item = {
-        skenario:'Readymix → Site Mix',
-        uraian:`${mutu} — ${fmt(vol,2)} m³ (waste ${fmt(wst,1)}%)`,
-        totalRAB:r.totalRAB, totalRAP:r.totalRAP,
-        varianRp:r.varianRp, varianPct:r.varianPct,
-        rincian:r.rincian
-      };
-    } else if (activeSub === 'bekist'){
-      const vol = num($('#bekVol').value);
-      const tipe= $('#bekTipe').value;
-      const rMp = num($('#bekReuseMp').value);
-      const rKy = num($('#bekReuseKy').value);
-      const hRAB= num($('#bekHRAB').value);
-      const r = ReconCalc.bekisting(vol, tipe, rMp, rKy, hRAB);
-      item = {
-        skenario:'Breakdown Bekisting',
-        uraian:`${BEKISTING_BREAKDOWN_DEFAULT[tipe].nama} — ${fmt(vol,2)} m² (reuse ${rMp}×/${rKy}×)`,
-        totalRAB:r.totalRAB, totalRAP:r.totalRAP,
-        varianRp:r.varianRp, varianPct:r.varianPct,
-        rincian:r.baris.map(x=>({
-          komponen:x.komponen, qty:x.koefEfektif, satuan:x.satuan,
-          harga:x.harga, total:x.total * vol
-        }))
-      };
-    }
-
-    if (!item){ toast('Gagal menyimpan', false); return; }
-    item.id = uid('recon');
-    item.tanggal = today();
-    item.project_id = STATE.activeProject || '';
-    DB.reconciliation.push(item);
-    saveDB();
-    toast('Rekonsiliasi tersimpan');
-    // switch to rekap
-    $$('.subtab').forEach(x=>x.classList.toggle('active', x.dataset.sub==='rekap'));
-    $$('.subpanel').forEach(p=>p.classList.toggle('active', p.id === 'sub-rekap'));
-    renderReconRekap();
-  };
-
-  // CSV Export
-  $('#btnExportRecon').onclick = () => {
-    const items = DB.reconciliation || [];
-    if (!items.length){ toast('Tidak ada data untuk diexport', false); return; }
-    const header = ['Tanggal','Skenario','Uraian','Total_RAB','Total_RAP','Varian_Rp','Varian_Pct'];
-    const rows = items.map(x=>[
-      x.tanggal, x.skenario, '"'+x.uraian.replace(/"/g,'""')+'"',
-      Math.round(x.totalRAB), Math.round(x.totalRAP),
-      Math.round(x.varianRp), x.varianPct.toFixed(4)
-    ]);
-    const csv = [header.join(','), ...rows.map(r=>r.join(','))].join('\n');
-    const blob = new Blob([csv], {type:'text/csv;charset=utf-8'});
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = 'rekon-RAB-RAP-'+today()+'.csv';
-    a.click();
-    toast('CSV berhasil diexport');
-  };
-
-  renderReconRekap();
-}
-
-/* =====================================================================
-   MODUL LEMBAR AHSP PUPR (Requirement 1)
-   ===================================================================== */
-  let _lastLembarCSV = null;
-function renderLembarAhsp(){
-  const pid = $('#lembarProjSel').value;
-  const aid = $('#lembarAhspSel').value;
-  const wrap = $('#ahspLembarWrap');
-  if (!pid || !aid){
-    wrap.innerHTML = '<div class="empty">Pilih proyek dan item AHSP.</div>';
-    return;
-  }
-  const proj = DB.projects.find(p=>p.id===pid);
-  const ahsp = DB.ahsp_headers.find(a=>a.id===aid);
-  if (!ahsp){ wrap.innerHTML = '<div class="empty">AHSP tidak ditemukan.</div>'; return; }
-
-  const dets = DB.project_ahsp_details.filter(d=>d.project_id===pid && d.ahsp_id===aid);
-
-  // Kelompokkan per kategori
-  const groups = {upah:[], bahan:[], alat:[]};
-  dets.forEach(d=>{
-    const r = DB.master_resources.find(x=>x.id===d.resource_id);
-    if (!r) return;
-    const row = {
-      kode: r.kode,
-      nama: r.nama,
-      satuan: r.satuan,
-      kRAB: Calc.koefRAB(d, r),
-      kRAP: Calc.koefRAP(d, r),
-      hRAB: num(d.harga_rab),
-      hRAP: num(d.harga_rap),
-      isAlat: r.jenis==='alat'
-    };
-    row.subRAB = row.kRAB * row.hRAB;
-    row.subRAP = row.kRAP * row.hRAP;
-    (groups[r.jenis] || groups.bahan).push(row);
-  });
-
-  const sum = arr => arr.reduce((s,x)=>s+x.subRAB,0);
-  const totI = sum(groups.upah);
-  const totII = sum(groups.bahan);
-  const totIII = sum(groups.alat);
-  const IV = totI + totII + totIII;
-
-  const ohPct = num(ahsp.overhead ?? SET.overhead);
-  const marginPct = num(ahsp.margin ?? 4);   // fallback 4% bila tak di-set
-  const umumPct = num(ahsp.biaya_umum ?? 2); // fallback 2%
-
-  const V  = IV * (umumPct/100);
-  const VI = IV * (marginPct/100);
-  const VII = IV + V + VI;
-  const VIII = Math.round(VII);
-
-  const fmtNum = n => fmt(n,2);
-  const fmtRp  = n => rp(n);
-  const fmtKoef = n => fmt(n, 6);
-
-  const rowH = (arr, no, isAlat) => arr.map((x,i)=>{
-    const koefTxt = isAlat
-      ? `<span title="Koef RAB / RAP">${fmtKoef(x.kRAB)} <span style="color:#999">/</span> ${fmtKoef(x.kRAP)}</span>`
-      : fmtKoef(x.kRAB);
-    const hargaTxt = isAlat
-      ? `${fmtRp(x.hRAB)} <span style="color:#999">/</span> ${fmtRp(x.hRAP)}`
-      : fmtRp(x.hRAB);
-    const subTxt = isAlat
-      ? `${fmtRp(x.subRAB)} <span style="color:#999">/</span> ${fmtRp(x.subRAP)}`
-      : fmtRp(x.subRAB);
-    return `<tr>
-      <td class="ctr">${i+1}</td>
-      <td>${esc(x.nama)}</td>
-      <td class="ctr">${esc(x.satuan)}</td>
-      <td class="num">${koefTxt}</td>
-      <td class="num">${hargaTxt}</td>
-      <td class="num">${subTxt}</td>
-    </tr>`;
-  }).join('');
-
-  wrap.innerHTML = `
-    <div class="print-header">
-      <h1>LEMBAR ANALISIS HARGA SATUAN PEKERJAAN</h1>
-      <h2>${esc(proj?.nama || '')}</h2>
-      <p>${esc(proj?.lokasi || '')} — Kode: ${esc(proj?.kode || '')}</p>
-    </div>
-
-    <div class="ahsp-sheet">
-      <h2>ANALISA HARGA SATUAN PEKERJAAN (AHSP)</h2>
-
-      <div class="ahsp-meta">
-        <div class="k">Kode Permen</div><div>:</div><div class="v">${esc(ahsp.kode)}</div>
-        <div class="k">Item Pekerjaan</div><div>:</div><div class="v">${esc(ahsp.nama)}</div>
-        <div class="k">Satuan</div><div>:</div><div class="v">${esc(ahsp.satuan)}</div>
-        <div class="k">Kategori</div><div>:</div><div class="v">${esc(ahsp.kategori || '-')}</div>
-      </div>
-
-      <table class="ahsp-tbl">
-        <thead>
-          <tr>
-            <th style="width:42px">No</th>
-            <th>Uraian</th>
-            <th style="width:60px">Satuan</th>
-            <th style="width:110px">Koefisien<br/><span style="font-weight:400;font-size:9px">(RAB / RAP)</span></th>
-            <th style="width:150px">Harga Satuan (Rp.)<br/><span style="font-weight:400;font-size:9px">(RAB / RAP)</span></th>
-            <th style="width:160px">Jumlah Harga (Rp.)<br/><span style="font-weight:400;font-size:9px">(RAB / RAP)</span></th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr class="subhead"><td class="ctr">I</td><td colspan="5">UPAH</td></tr>
-          ${groups.upah.length ? rowH(groups.upah, 'I', false) : '<tr><td colspan="6" style="text-align:center;color:#999;font-style:italic">— tidak ada komponen upah —</td></tr>'}
-          <tr class="subtotal"><td></td><td colspan="4" style="text-align:right">Subtotal I (Upah)</td><td class="num">${fmtRp(totI)}</td></tr>
-
-          <tr class="subhead"><td class="ctr">II</td><td colspan="5">BAHAN</td></tr>
-          ${groups.bahan.length ? rowH(groups.bahan, 'II', false) : '<tr><td colspan="6" style="text-align:center;color:#999;font-style:italic">— tidak ada komponen bahan —</td></tr>'}
-          <tr class="subtotal"><td></td><td colspan="4" style="text-align:right">Subtotal II (Bahan)</td><td class="num">${fmtRp(totII)}</td></tr>
-
-          <tr class="subhead"><td class="ctr">III</td><td colspan="5">ALAT</td></tr>
-          ${groups.alat.length ? rowH(groups.alat, 'III', true) : '<tr><td colspan="6" style="text-align:center;color:#999;font-style:italic">— tidak ada komponen alat —</td></tr>'}
-          <tr class="subtotal"><td></td><td colspan="4" style="text-align:right">Subtotal III (Alat)</td><td class="num">${fmtRp(totIII)}</td></tr>
-
-          <tr class="roman"><td class="ctr">IV</td><td colspan="4">Jumlah (I + II + III)</td><td class="num">${fmtRp(IV)}</td></tr>
-          <tr class="roman"><td class="ctr">V</td><td colspan="4">Biaya Umum / Overhead (${fmt(umumPct,2)}%)</td><td class="num">${fmtRp(V)}</td></tr>
-          <tr class="roman"><td class="ctr">VI</td><td colspan="4">Biaya Keuntungan / Margin (${fmt(marginPct,2)}%)</td><td class="num">${fmtRp(VI)}</td></tr>
-          <tr class="roman"><td class="ctr">VII</td><td colspan="4">Jumlah Harga (IV + V + VI)</td><td class="num">${fmtRp(VII)}</td></tr>
-          <tr class="grand-total"><td class="ctr">VIII</td><td colspan="4">DIBULATKAN — Harga Satuan Pekerjaan</td><td class="num">${fmtRp(VIII)}</td></tr>
-        </tbody>
-      </table>
-
-      <div class="ahsp-note">
-        Catatan: Kolom Koefisien/Harga/Jumlah menampilkan nilai <b>RAB / RAP</b> secara berdampingan untuk komponen Alat.
-        Koefisien RAB dikunci dari parameter kontrak; koefisien RAP dihitung dari parameter lapangan (Ts, Fk, Fa lapangan).
-        Harga satuan RAB termasuk overhead &amp; margin; harga satuan RAP bersih tanpa profit internal.
-      </div>
-
-      <div class="ahsp-actions no-print">
-        <button class="btn" id="btnLembarExportCSV2">⬇ Export CSV</button>
-        <button class="btn btn-primary" onclick="window.print()">🖨 Cetak / PDF</button>
-      </div>
-    </div>
-  `;
-
-  // Wire export CSV
-  setTimeout(()=>{
-    const btn = document.getElementById('btnLembarExportCSV2');
-    if (btn) btn.onclick = exportLembarCSV;
-  }, 50);
-
-  window._lastLembarCSV = {
-    proj: proj, ahsp: ahsp, groups: groups,
-    I: totI, II: totII, III: totIII, IV, V, VI, VII, VIII,
-    umumPct, marginPct
-  };
-}
-
-function exportLembarCSV(){
-  const d = window._lastLembarCSV;
-  if (!d){ toast('Belum ada lembar untuk diexport', false); return; }
-  const lines = [];
-  lines.push(`"Kode Permen","${d.ahsp.kode}"`);
-  lines.push(`"Item Pekerjaan","${d.ahsp.nama}"`);
-  lines.push(`"Satuan","${d.ahsp.satuan}"`);
-  lines.push('');
-  lines.push('"No","Uraian","Satuan","Koefisien RAB","Harga Satuan RAB","Jumlah RAB"');
-
-  const emit = (arr, label) => {
-    lines.push(`"","${label}","","","",""`);
-    arr.forEach((x,i)=>{
-      lines.push(`"${i+1}","${x.nama.replace(/"/g,'""')}","${x.satuan}","${x.kRAB.toFixed(6)}","${Math.round(x.hRAB)}","${Math.round(x.subRAB)}"`);
-    });
-  };
-  emit(d.groups.upah, 'I. UPAH');
-  emit(d.groups.bahan, 'II. BAHAN');
-  emit(d.groups.alat, 'III. ALAT');
-  lines.push('');
-  lines.push(`"IV","Jumlah (I+II+III)","","","","${Math.round(d.IV)}"`);
-  lines.push(`"V","Biaya Umum (${d.umumPct}%)","","","","${Math.round(d.V)}"`);
-  lines.push(`"VI","Biaya Keuntungan (${d.marginPct}%)","","","","${Math.round(d.VI)}"`);
-  lines.push(`"VII","Jumlah Harga","","","","${Math.round(d.VII)}"`);
-  lines.push(`"VIII","DIBULATKAN","","","","${Math.round(d.VIII)}"`);
-
-  const csv = lines.join('\n');
-  const blob = new Blob(['\ufeff' + csv], {type:'text/csv;charset=utf-8'});
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = `AHSP-${d.ahsp.kode}-${today()}.csv`;
-  a.click();
-  toast('CSV lembar AHSP diexport');
-}
-
-/* =====================================================================
-   DETEKSI OTOMATIS REKONSILIASI (Requirement 6)
-   ===================================================================== */
-function detectReconNeeds(projectId, ahspId){
-  const dets = DB.project_ahsp_details.filter(d=>d.project_id===projectId && d.ahsp_id===ahspId);
-  const keywords = {
-    bekisting: /bekisting|perancah|multiplex|kayu/i,
-    beton:     /beton|readymix|ready mix|site mix|beton mutu/i,
-    material:  /pasir|kerikil|split|batu|agregat|semen/i
-  };
-  const result = { bekisting:false, beton:false, material:false, items:[] };
-  dets.forEach(d=>{
-    const r = DB.master_resources.find(x=>x.id===d.resource_id);
-    if (!r) return;
-    const txt = r.nama + ' ' + (r.kode || '');
-    if (keywords.bekisting.test(txt) && !result.bekisting){ result.bekisting = true; result.items.push({jenis:'bekisting', nama:r.nama}); }
-    if (keywords.beton.test(txt) && !result.beton){ result.beton = true; result.items.push({jenis:'beton', nama:r.nama}); }
-    if (keywords.material.test(txt) && !result.material){ result.material = true; result.items.push({jenis:'material', nama:r.nama}); }
-  });
-  return result;
-}
-
-/* =====================================================================
-   INIT LEMBAR
-   ===================================================================== */
-function initLembar(){
-  const ps = $('#lembarProjSel');
-  const as = $('#lembarAhspSel');
-  ps.innerHTML = DB.projects.map(p=>`<option value="${p.id}">${esc(p.kode)} — ${esc(p.nama)}</option>`).join('');
-  as.innerHTML = DB.ahsp_headers.map(a=>`<option value="${a.id}">${esc(a.kode)} — ${esc(a.nama)}</option>`).join('');
-  if (STATE.activeProject) ps.value = STATE.activeProject;
-  if (DB.ahsp_headers.length) as.value = DB.ahsp_headers[0].id;
-
-  ps.onchange = renderLembarAhsp;
-  as.onchange = renderLembarAhsp;
-  $('#btnLembarPrint').onclick = () => window.print();
-  $('#btnLembarExportCSV').onclick = exportLembarCSV;
-
-  renderLembarAhsp();
-}
-
-/* =====================================================================
-   INIT
-   ===================================================================== */
+/* ---------- INIT ---------- */
 (function init(){
   loadSET();
   const ok = loadDB();
-  if (!ok || !DB.projects || !DB.projects.length){ seedData(); }
+  if (!ok || !DB.projects || !DB.projects.length){
+    seedData();
+  } else {
+    seedCalendarDefaults();
+  }
   STATE.activeProject = DB.projects[0]?.id || '';
+
+  // Recalculate CPM untuk semua proyek
+  DB.projects.forEach(p => {
+    const cal = WorkingCalendar.get(p.calendar_id);
+    const dur = hitungDurasiLengkap(p.tgl_mulai, p.tgl_selesai, cal, p.durasi_mode || 'working');
+    p.durasi_hari   = dur.durasi_hari;
+    p.durasi_minggu = dur.durasi_minggu;
+    p.durasi_kerja  = dur.durasi_kerja;
+    runCPM(p.id);
+  });
+
+  saveDB();
   renderProjectSelector();
   renderAll();
   renderSettings();
   seedReconMasterData();
   initRecon();
-  console.log('%cManajemen Konstruksi v1 — siap digunakan','color:#1abc9c;font-size:14px;font-weight:bold');
+  initScheduleEvents();
+
+  // Initialize AUTOSAVE indicator
+  if (typeof AUTOSAVE !== 'undefined'){
+    AUTOSAVE.initIndicator();
+    AUTOSAVE.setStatus('✓ Sistem siap', 'var(--ok)');
+  }
+
+  // Populate holiday filter
+  const fhol = $('#fHolCal');
+  if (fhol){
+    fhol.innerHTML = '<option value="">Semua Kalender</option>' +
+      (DB.working_calendars || []).map(c => `<option value="${c.id}">${esc(c.kode)} — ${esc(c.nama)}</option>`).join('');
+    fhol.onchange = renderHolidays;
+  }
+
+  console.log('%cManajemen Konstruksi v1 (Schedule) — siap digunakan',
+    'color:#1abc9c;font-size:14px;font-weight:bold');
 })();
 </script>
 </body>
