@@ -1,0 +1,155 @@
+/**
+ * Manajemen Konstruksi v1 — Backend Spreadsheet
+ * Endpoint: Web App (Execute as: Me, Who has access: Anyone)
+ */
+const SHEET_NAMES = {
+  master_resources      : 'master_resources',
+  ahsp_headers          : 'ahsp_headers',
+  ahsp_details_master   : 'ahsp_details_master',
+  projects              : 'projects',
+  project_ahsp_details  : 'project_ahsp_details',
+  project_wbs           : 'project_wbs',
+  progress              : 'progress',
+  _settings             : '_settings'
+};
+
+function doPost(e) {
+  try {
+    const body = JSON.parse(e.postData.contents);
+    const action = body.action;
+
+    if (action === 'push') {
+      const db = body.payload.db;
+      const settings = body.payload.settings || {};
+      writeAll_(db, settings);
+      return json_({ ok: true, message: 'Semua tabel tersinkronisasi.' });
+    }
+
+    if (action === 'pull') {
+      const db = readAll_();
+      const settings = readSettings_();
+      return json_({ ok: true, db, settings });
+    }
+
+    return json_({ ok: false, message: 'Action tidak dikenal: ' + action });
+  } catch (err) {
+    return json_({ ok: false, message: err.message });
+  }
+}
+
+function doGet() {
+  return json_({ ok: true, message: 'Manajemen Konstruksi v1 API aktif.' });
+}
+
+/* ---------- WRITE ---------- */
+function writeAll_(db, settings) {
+  Object.keys(SHEET_NAMES).forEach(key => {
+    if (key === '_settings') return;
+    const rows = db[key] || [];
+    writeSheet_(SHEET_NAMES[key], rows);
+  });
+  writeSettings_(settings);
+}
+
+function writeSheet_(name, rows) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let sh = ss.getSheetByName(name);
+  if (!sh) sh = ss.insertSheet(name);
+  sh.clear();
+
+  if (!rows.length) { sh.getRange(1,1).setValue('(kosong)'); return; }
+
+  // Kumpulkan seluruh header unik dari semua objek
+  const headers = [];
+  rows.forEach(r => Object.keys(r).forEach(k => { if (headers.indexOf(k) < 0) headers.push(k); }));
+  headers.sort();
+
+  const values = [headers];
+  rows.forEach(r => {
+    values.push(headers.map(h => {
+      const v = r[h];
+      if (v === null || v === undefined) return '';
+      if (typeof v === 'object') return JSON.stringify(v);
+      return v;
+    }));
+  });
+
+  sh.getRange(1, 1, values.length, headers.length).setValues(values);
+  sh.getRange(1, 1, 1, headers.length).setFontWeight('bold').setBackground('#d9ead3');
+  sh.setFrozenRows(1);
+}
+
+function writeSettings_(settings) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let sh = ss.getSheetByName(SHEET_NAMES._settings);
+  if (!sh) sh = ss.insertSheet(SHEET_NAMES._settings);
+  sh.clear();
+  sh.getRange(1,1,1,2).setValues([['key','value']]);
+  Object.keys(settings).forEach((k, i) => {
+    sh.getRange(i+2, 1, 1, 2).setValues([[k, settings[k]]]);
+  });
+  sh.getRange(1,1,1,2).setFontWeight('bold');
+}
+
+/* ---------- READ ---------- */
+function readAll_() {
+  const out = {};
+  Object.keys(SHEET_NAMES).forEach(key => {
+    if (key === '_settings') return;
+    out[key] = readSheet_(SHEET_NAMES[key]);
+  });
+  return out;
+}
+
+function readSheet_(name) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sh = ss.getSheetByName(name);
+  if (!sh) return [];
+  const lastRow = sh.getLastRow();
+  const lastCol = sh.getLastColumn();
+  if (lastRow < 2 || lastCol < 1) return [];
+
+  const values = sh.getRange(1, 1, lastRow, lastCol).getValues();
+  const headers = values[0].map(h => String(h).trim()).filter(h => h !== '');
+  const rows = [];
+
+  for (let i = 1; i < values.length; i++) {
+    const obj = {};
+    let hasVal = false;
+    headers.forEach((h, j) => {
+      let v = values[i][j];
+      if (v instanceof Date) v = v.toISOString().slice(0,10);
+      // konversi angka otomatis
+      if (typeof v === 'string' && v !== '' && !isNaN(v) && v.trim() !== '' && /^-?\d+(\.\d+)?$/.test(v.trim())) {
+        v = parseFloat(v);
+      }
+      // parse JSON bila perlu
+      if (typeof v === 'string' && (v.startsWith('{') || v.startsWith('['))) {
+        try { v = JSON.parse(v); } catch(e){}
+      }
+      obj[h] = v;
+      if (v !== '' && v !== null) hasVal = true;
+    });
+    if (hasVal) rows.push(obj);
+  }
+  return rows;
+}
+
+function readSettings_() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sh = ss.getSheetByName(SHEET_NAMES._settings);
+  if (!sh) return {};
+  const lastRow = sh.getLastRow();
+  if (lastRow < 2) return {};
+  const values = sh.getRange(2, 1, lastRow-1, 2).getValues();
+  const obj = {};
+  values.forEach(([k,v]) => { if (k) obj[k] = v; });
+  return obj;
+}
+
+/* ---------- HELPER ---------- */
+function json_(obj) {
+  return ContentService
+    .createTextOutput(JSON.stringify(obj))
+    .setMimeType(ContentService.MimeType.JSON);
+}
