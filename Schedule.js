@@ -198,6 +198,16 @@ const CPM = {
     return WorkingCalendar.get(it.calendar_id || proj.calendar_id);
   },
 
+   /* ── Helper: snap tanggal ke hari kerja terdekat ke depan ── */
+snapToWorkDay(iso, cal){
+  let d = iso instanceof Date ? new Date(iso) : new Date(iso + 'T00:00:00');
+  let guard = 0;
+  while (!WorkingCalendar.isWorkDay(d, cal) && guard++ < 90){
+    d.setDate(d.getDate() + 1);
+  }
+  return d;
+},
+
   /* ═══════════════════════════════════════════════════════════
      A. TOPOLOGICAL SORT — Kahn's Algorithm (iteratif, aman)
      ═══════════════════════════════════════════════════════════ */
@@ -281,6 +291,8 @@ const CPM = {
           if (cand > es) es = cand;
         }
       }
+
+      es = this.snapToWorkDay(es, cal);
 
       it._ES = es;
       it._EF = WorkingCalendar.addWorkDays(es, dur, cal);
