@@ -8,6 +8,14 @@
    BAGIAN 1 — WORKING CALENDAR ENGINE
    Menghitung durasi dengan mempertimbangkan hari kerja & hari libur
    ===================================================================== */
+/* Helper: format Date ke ISO date pakai waktu LOKAL (bukan UTC) */
+function localISO(d){
+  if (!(d instanceof Date) || isNaN(d.getTime())) return '';
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return y + '-' + m + '-' + day;
+}
 const WorkingCalendar = {
   DEFAULT_WORK_DAYS: [1,2,3,4,5],
 
@@ -28,7 +36,7 @@ const WorkingCalendar = {
     const dow = date.getDay();
     if (!workDays.includes(dow)) return false;
 
-    const dateStr = date.toISOString().slice(0,10);
+    const dateStr = localISO(date);
     const holidays = DB.holidays || [];
     if (holidays.some(h => h.tanggal === dateStr)) return false;
     return true;
@@ -70,7 +78,7 @@ const WorkingCalendar = {
 
   /** Format ISO date */
   fmt(d){
-    return d.toISOString().slice(0,10);
+    return localISO(d);
   }
 };
 
@@ -726,7 +734,7 @@ const ResourceLoader = {
     let guard = 0;
     while (d < end && guard++ < 5000){
       if (WorkingCalendar.isWorkDay(d, cal)){
-        out.push(d.toISOString().slice(0,10));
+        out.push(localISO(d));
       }
       d.setDate(d.getDate() + 1);
     }
