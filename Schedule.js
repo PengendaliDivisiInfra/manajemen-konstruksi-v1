@@ -943,6 +943,7 @@ const ResourceLoader = {
       buckets:    Object.values(buckets).sort((a,b) => a.bucket_key.localeCompare(b.bucket_key)),
       byResource: Object.values(byResource).sort((a,b) => b.total_cost - a.total_cost),
       byWBS:      byWBS.sort((a,b) => a.kode_wbs.localeCompare(b.kode_wbs)),
+      resDailyMap,                                    // ← NEW (Phase 4)
       totals: {
         upah:  Object.values(buckets).reduce((s,b) => s + b.upah,  0),
         bahan: Object.values(buckets).reduce((s,b) => s + b.bahan, 0),
@@ -1084,6 +1085,54 @@ function renderSchedule(){
       }
     });
   }
+     /* ── Phase 4: Gantt ── */
+  const ganttEl = document.getElementById('chartGantt');
+  if (ganttEl) GanttRenderer.render(pid, ganttEl);
+
+  /* ── Phase 4: Resource Histogram ── */
+  const selRes = document.getElementById('histResource');
+  const histEl = document.getElementById('chartHistogram');
+  if (selRes && histEl){
+    // isi dropdown resource (sekali, kalau kosong)
+    if (!selRes.options.length){
+      selRes.innerHTML = rl.byResource.map(r =>
+        `<option value="${esc(r.kode)}">${esc(r.kode)} — ${esc(r.nama)} (${esc(r.jenis)})</option>`
+      ).join('');
+    }
+    const kode = selRes.value || (rl.byResource[0]?.kode);
+    const gran = document.getElementById('histGranularity')?.value || 'daily';
+    if (kode) ResourceHistogram.render(pid, histEl, kode, gran);
+  }
+
+  /* ── Phase 4: Over-Allocation Alerts ── */
+  const alertEl = document.getElementById('overAllocWrap');
+  if (alertEl){
+    const det = OverAllocationDetector.detect(pid);
+    if (!det.ok){
+      alertEl.innerHTML = `<div class="alert warn">${esc(det.error)}</div>`;
+    } else if (!det.alerts.length){
+      alertEl.innerHTML = `<div class="alert ok"><span>✅</span><div><b>Tidak ada over-allocation.</b><br>Semua resource berada dalam batas kapasitas harian (atau kapasitas belum diisi).</div></div>`;
+    } else {
+      const html = det.alerts.map(a => `
+        <div class="alert">
+          <span>🔴</span>
+          <div style="flex:1">
+            <b>${esc(a.kode)} — ${esc(a.nama)}</b>
+            <div style="font-size:11.5px;margin-top:4px">
+              Kapasitas <b>${fmt(a.kapasitas,0)} ${esc(a.satuan)}/hari</b> ·
+              Dilampaui <b>${a.jumlah_hari} hari</b> ·
+              Puncak <b>${fmt(a.qty_terburuk,2)} ${esc(a.satuan)}</b>
+              (<span class="neg">+${fmt(a.over_terburuk,2)}</span>, <b class="neg">${fmt(a.persen_over,1)}%</span></b>)
+              pada <b>${esc(a.tanggal_terburuk)}</b>
+            </div>
+            <div style="font-size:10.5px;color:var(--muted);margin-top:4px">
+              Saran: delay item non-kritis, atau tambah kapasitas ${esc(a.jenis)}.
+            </div>
+          </div>
+        </div>`).join('');
+      alertEl.innerHTML = html;
+    }
+  }
 }
 
 /* =====================================================================
@@ -1110,6 +1159,12 @@ function initScheduleEvents(){
 
   const selDist = document.getElementById('schedDistribution');
   if (selDist) selDist.onchange = renderSchedule;
+
+  const selRes = document.getElementById('histResource');
+  if (selRes) selRes.onchange = renderSchedule;
+
+  const selHistGran = document.getElementById('histGranularity');
+  if (selHistGran) selHistGran.onchange = renderSchedule;
    
   const btnExp = document.getElementById('btnExportSchedule');
   if (btnExp){
@@ -1242,3 +1297,236 @@ function testResourceLoader(projectId){
   })));
   return r;
 }
+
+/* =====================================================================
+   BAGIAN 9 — PHASE 4 VISUALIZATION & DETECTION
+   Gantt · Resource Histogram · Over-Allocation Detector
+   ===================================================================== */
+
+/* ═══════════════════════════════════════════════════════════
+   A. GANTT CHART — Bar horizontal, biru=normal, merah=kritis
+   ═══════════════════════════════════════════════════════════ */
+const GanttRenderer = {
+  render(projectId, canvasEl){
+    if (!canvasEl) return;
+    const proj = DB.projects.find(p => p.id === projectId);
+    if (!proj) return;
+
+    const items = DB.project_wbs
+      .filter(w => w.project_id === projectId && !w.is_group && w.tgl_mulai_rencana)
+      .sort((a,b) => (a.tgl_mulai_rencana || '').localeCompare(b.tgl_mulai_rencana || ''));
+
+    if (STATE.chartGantt){ STATE.chartGantt.destroy(); STATE.chartGantt = null; }
+
+    if (!items.length){
+      const ctx = canvasEl.getContext('2d');
+      ctx.clearRect(0, 0, canvasEl.width, canvasEl.height);
+      ctx.fillStyle = '#8fa3c4';
+      ctx.font = '13px Segoe UI';
+      ctx.textAlign = 'center';
+      ctx.fillText('Belum ada item WBS dengan jadwal.', canvasEl.width/2, 40);
+      return;
+    }
+
+    // Tinggi canvas adaptif: 28px per baris + 60px padding
+    canvasEl.style.height = Math.max(200, items.length * 28 + 60) + 'px';
+
+    const projStart = new Date(proj.tgl_mulai + 'T00:00:00');
+    const dayMs = 86400000;
+
+    const labels = items.map(w => w.kode_wbs + '  ' + String(w.uraian || '').slice(0, 45));
+    const data = items.map(w => {
+      const s = new Date(w.tgl_mulai_rencana + 'T00:00:00');
+      const f = new Date(w.tgl_selesai_rencana + 'T00:00:00');
+      const a = Math.round((s - projStart) / dayMs);
+      const b = Math.round((f - projStart) / dayMs);
+      return [a, b];
+    });
+    const bg = items.map(w => num(w.is_critical) === 1
+      ? 'rgba(239,68,68,.85)' : 'rgba(47,129,247,.85)');
+    const bc = items.map(w => num(w.is_critical) === 1 ? '#dc2626' : '#1f6fe0');
+
+    STATE.chartGantt = new Chart(canvasEl.getContext('2d'), {
+      type: 'bar',
+      data: {
+        labels,
+        datasets: [{
+          label: 'Jadwal',
+          data,
+          backgroundColor: bg,
+          borderColor: bc,
+          borderWidth: 1,
+          borderRadius: 4,
+          barPercentage: 0.7
+        }]
+      },
+      options: {
+        indexAxis: 'y',
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: {duration: 300},
+        plugins: {
+          legend: {display: false},
+          tooltip: {
+            callbacks: {
+              title: c => items[c[0].dataIndex].kode_wbs + ' — ' + items[c[0].dataIndex].uraian,
+              label: c => {
+                const w = items[c.dataIndex];
+                return [
+                  'Mulai  : ' + (w.tgl_mulai_rencana || '-'),
+                  'Selesai: ' + (w.tgl_selesai_rencana || '-'),
+                  'Durasi : ' + (num(w.durasi_hari) || num(w.duration) || 1) + ' hari kerja',
+                  'Float  : ' + num(w.float_total ?? w.total_float) + ' hari',
+                  num(w.is_critical) === 1 ? '★ JALUR KRITIS' : '○ non-kritis'
+                ];
+              }
+            }
+          }
+        },
+        scales: {
+          x: {
+            ticks: {
+              color: '#8fa3c4', font: {size: 10},
+              callback: v => {
+                const d = new Date(projStart.getTime() + v * dayMs);
+                return localISO(d).slice(5);
+              }
+            },
+            grid: {color: 'rgba(36,54,92,.5)'}
+          },
+          y: {
+            ticks: {color: '#e6edf7', font: {size: 10}},
+            grid: {display: false}
+          }
+        }
+      }
+    });
+  }
+};
+
+/* ═══════════════════════════════════════════════════════════
+   B. RESOURCE HISTOGRAM — Kebutuhan harian/periodik per resource
+   ═══════════════════════════════════════════════════════════ */
+const ResourceHistogram = {
+  render(projectId, canvasEl, resourceKode, granularity){
+    if (!canvasEl || !resourceKode) return;
+    granularity = granularity || 'daily';
+
+    const rl = ResourceLoader.load(projectId, {mode:'rab', granularity});
+    if (!rl.ok) return;
+
+    // Agregasi map harian ke bucket kalau perlu
+    const rawMap = rl.resDailyMap[resourceKode] || {};
+    const map = {};
+    Object.keys(rawMap).forEach(d => {
+      const k = granularity === 'monthly' ? d.slice(0,7)
+              : granularity === 'weekly'  ? ResourceLoader.bucketKey(d, 'weekly')
+              : d;
+      map[k] = (map[k] || 0) + rawMap[d];
+    });
+
+    const labels = Object.keys(map).sort();
+    const values = labels.map(k => map[k]);
+
+    const info = rl.byResource.find(x => x.kode === resourceKode);
+    const cap = num(info?.kapasitas_harian);
+    // kapasitas per bucket = kapasitas harian × jumlah hari dalam bucket (approx)
+    const capBucket = granularity === 'daily' ? cap
+                    : granularity === 'weekly' ? cap * 5
+                    : cap * 22;
+
+    const datasets = [{
+      label: 'Kebutuhan ' + (info?.nama || resourceKode) + ' (' + (info?.satuan||'') + ')',
+      data: values,
+      backgroundColor: values.map(v => capBucket > 0 && v > capBucket
+        ? 'rgba(239,68,68,.75)' : 'rgba(47,129,247,.75)'),
+      borderColor: values.map(v => capBucket > 0 && v > capBucket ? '#dc2626' : '#1f6fe0'),
+      borderWidth: 1,
+      borderRadius: 4
+    }];
+
+    if (capBucket > 0){
+      datasets.push({
+        label: 'Kapasitas (' + fmt(capBucket, 0) + ' ' + (info?.satuan||'') + ')',
+        data: labels.map(() => capBucket),
+        type: 'line',
+        borderColor: '#f59e0b',
+        backgroundColor: 'rgba(245,158,11,.1)',
+        borderWidth: 2,
+        borderDash: [6, 4],
+        pointRadius: 0,
+        fill: false
+      });
+    }
+
+    if (STATE.chartHist){ STATE.chartHist.destroy(); STATE.chartHist = null; }
+    STATE.chartHist = new Chart(canvasEl.getContext('2d'), {
+      type: 'bar',
+      data: {labels, datasets},
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        animation: {duration: 300},
+        plugins: {
+          legend: {labels:{color:'#e6edf7', font:{size:11}}},
+          tooltip: {
+            callbacks: {
+              label: c => c.dataset.label + ': ' + fmt(c.parsed.y, 2)
+            }
+          }
+        },
+        scales: {
+          x: {ticks:{color:'#8fa3c4', font:{size:10}}, grid:{display:false}},
+          y: {beginAtZero:true, ticks:{color:'#8fa3c4'}, grid:{color:'rgba(36,54,92,.5)'}}
+        }
+      }
+    });
+  }
+};
+
+/* ═══════════════════════════════════════════════════════════
+   C. OVER-ALLOCATION DETECTOR
+   Bandingkan kebutuhan harian vs kapasitas_harian per resource
+   ═══════════════════════════════════════════════════════════ */
+const OverAllocationDetector = {
+  detect(projectId){
+    const rl = ResourceLoader.load(projectId, {mode:'rab', granularity:'daily'});
+    if (!rl.ok) return {ok: false, error: rl.error, alerts: []};
+
+    const infoMap = {};
+    rl.byResource.forEach(x => { infoMap[x.kode] = x; });
+
+    const alerts = [];
+    Object.keys(rl.resDailyMap).forEach(kode => {
+      const info = infoMap[kode];
+      const cap = num(info?.kapasitas_harian);
+      if (cap <= 0) return;
+
+      const map = rl.resDailyMap[kode];
+      const violations = [];
+      Object.keys(map).forEach(d => {
+        if (map[d] > cap){
+          violations.push({tanggal: d, qty: map[d], over: map[d] - cap});
+        }
+      });
+
+      if (violations.length){
+        violations.sort((a,b) => a.tanggal.localeCompare(b.tanggal));
+        const maxOver = Math.max(...violations.map(v => v.over));
+        const worst   = violations.find(v => v.over === maxOver);
+        alerts.push({
+          kode, nama: info.nama, jenis: info.jenis,
+          satuan: info.satuan, kapasitas: cap,
+          jumlah_hari: violations.length,
+          tanggal_terburuk: worst.tanggal,
+          qty_terburuk: worst.qty,
+          over_terburuk: maxOver,
+          persen_over: (maxOver / cap * 100),
+          violations
+        });
+      }
+    });
+
+    alerts.sort((a,b) => b.persen_over - a.persen_over);
+    return {ok: true, alerts, total_checked: rl.byResource.length};
+  }
+};
