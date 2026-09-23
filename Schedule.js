@@ -1938,19 +1938,6 @@ const GanttView = {
   },
 
 /* =====================================================================
-   BAGIAN 9C — Backward-compat stub (jika ada kode lama masih pakai)
-   ===================================================================== */
-const GanttRenderer = {
-  render(projectId, canvasEl){
-    // diarahkan ke GanttView — canvasEl kini jadi container
-    if (canvasEl && canvasEl.parentElement){
-      const wrap = canvasEl.parentElement;
-      GanttView.mount(wrap, projectId, { zoom: wrap._lastZoom || 'weekly' });
-    }
-  }
-};
-
-/* =====================================================================
    BAGIAN 9D — RESOURCE HISTOGRAM
    Kebutuhan harian/periodik per resource + garis kapasitas
    ===================================================================== */
