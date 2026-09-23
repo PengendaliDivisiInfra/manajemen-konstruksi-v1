@@ -51,19 +51,34 @@ function writeAll_(db, settings) {
   writeSettings_(settings);
 }
 
+/* =====================================================================
+   WRITE SHEET — dengan Auto-Styling Profesional
+   ===================================================================== */
 function writeSheet_(name, rows) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   let sh = ss.getSheetByName(name);
   if (!sh) sh = ss.insertSheet(name);
+
+  // Bersihkan konten, format, dan banding lama
   sh.clear();
+  sh.clearFormats();
+  try { sh.getBandings().forEach(b => b.remove()); } catch(e){}
 
-  if (!rows.length) { sh.getRange(1,1).setValue('(kosong)'); return; }
+  if (!rows.length) {
+    sh.getRange(1,1).setValue('(kosong)')
+      .setFontStyle('italic').setFontColor('#888888');
+    sh.setColumnWidth(1, 200);
+    return;
+  }
 
-  // Kumpulkan seluruh header unik dari semua objek
+  // --- Kumpulkan seluruh header unik ---
   const headers = [];
-  rows.forEach(r => Object.keys(r).forEach(k => { if (headers.indexOf(k) < 0) headers.push(k); }));
+  rows.forEach(r => Object.keys(r).forEach(k => {
+    if (headers.indexOf(k) < 0) headers.push(k);
+  }));
   headers.sort();
 
+  // --- Bangun matriks nilai ---
   const values = [headers];
   rows.forEach(r => {
     values.push(headers.map(h => {
@@ -74,9 +89,102 @@ function writeSheet_(name, rows) {
     }));
   });
 
-  sh.getRange(1, 1, values.length, headers.length).setValues(values);
-  sh.getRange(1, 1, 1, headers.length).setFontWeight('bold').setBackground('#d9ead3');
+  // --- Tulis data mentah ---
+  const range = sh.getRange(1, 1, values.length, headers.length);
+  range.setValues(values);
+
+  /* ============================================================
+     STYLING PROFESIONAL
+     ============================================================ */
+
+  // 1. Header — biru tua korporat, teks putih, bold, tengah
+  const headerRange = sh.getRange(1, 1, 1, headers.length);
+  headerRange
+    .setFontWeight('bold')
+    .setFontColor('#ffffff')
+    .setBackground('#1f4e79')
+    .setHorizontalAlignment('center')
+    .setVerticalAlignment('middle')
+    .setFontFamily('Arial')
+    .setFontSize(11);
+  sh.setRowHeight(1, 34);
   sh.setFrozenRows(1);
+
+  // 2. Border grid abu-abu tipis di seluruh area data
+  const dataArea = sh.getRange(1, 1, values.length, headers.length);
+  dataArea.setBorder(
+    true, true, true, true, true, true,
+    '#cccccc',
+    SpreadsheetApp.BorderStyle.SOLID
+  );
+  dataArea.setFontFamily('Arial').setFontSize(10);
+  dataArea.setVerticalAlignment('middle');
+
+  // 3. Auto-resize kolom (dengan batas min/max)
+  for (let c = 1; c <= headers.length; c++) {
+    sh.autoResizeColumn(c);
+    const w = sh.getColumnWidth(c);
+    if (w > 320) sh.setColumnWidth(c, 320);
+    if (w < 80)  sh.setColumnWidth(c, 80);
+  }
+
+  // 4. Number formatting berdasarkan nama kolom
+  const hLower = headers.map(h => String(h).toLowerCase());
+  const ccyPattern = '"Rp"#,##0.00';
+  const decPattern = '0.000000';
+  const numPattern = '#,##0.00';
+  const intPattern = '#,##0';
+
+  for (let c = 0; c < headers.length; c++) {
+    const h = hLower[c];
+    const colRange = sh.getRange(2, c + 1, values.length - 1, 1);
+    const isNumeric = ['harga','total','nilai','biaya','varian','rp','ppn','margin','deviasi','subtotal','nilai_kontrak','harga_rab','harga_rap','harga_satuan','harga_satuan_rab','harga_satuan_rap','total_rab','total_rap']
+      .some(kw => h.includes(kw));
+    const isCoef = ['koefisien','faktor','kapasitas','persen','ratio','bucket','siklus']
+      .some(kw => h.includes(kw));
+    const isVolume = ['volume','qty','jumlah','vol_','koef']
+      .some(kw => h.includes(kw));
+
+    if (isCoef) {
+      colRange.setNumberFormat(decPattern).setHorizontalAlignment('right');
+    } else if (isNumeric) {
+      colRange.setNumberFormat(ccyPattern).setHorizontalAlignment('right');
+    } else if (isVolume && !isNaN(values[1] && values[1][c])) {
+      colRange.setNumberFormat(numPattern).setHorizontalAlignment('right');
+    } else if (!isNaN(values[1] && values[1][c])) {
+      colRange.setNumberFormat(intPattern).setHorizontalAlignment('right');
+    } else {
+      colRange.setHorizontalAlignment('left');
+    }
+  }
+
+  // 5. Baris selang-seling (banding) untuk readability
+  try {
+    const banding = dataArea.applyRowBanding(SpreadsheetApp.BandingTheme.LIGHT_GREY, false, false);
+    if (banding) {
+      banding.setHeaderRowColor('#1f4e79')
+             .setFirstRowColor('#f3f7fb')
+             .setSecondRowColor('#ffffff')
+             .setFooterRowColor(null);
+    }
+  } catch(e) {
+    // Fallback bila applyRowBanding gagal (sheet sudah punya banding)
+    for (let i = 2; i <= values.length; i++) {
+      if (i % 2 === 0) {
+        sh.getRange(i, 1, 1, headers.length).setBackground('#f3f7fb');
+      }
+    }
+  }
+
+  // 6. Highlight kolom ID menjadi monospace kecil
+  const idCols = headers.map((h, i) => /^(id|_id|project_id|ahsp_id|resource_id|wbs_id)$/i.test(h) ? i : -1)
+    .filter(i => i >= 0);
+  idCols.forEach(i => {
+    sh.getRange(2, i + 1, values.length - 1, 1)
+      .setFontFamily('Consolas')
+      .setFontSize(9)
+      .setFontColor('#666666');
+  });
 }
 
 function writeSettings_(settings) {
@@ -84,11 +192,24 @@ function writeSettings_(settings) {
   let sh = ss.getSheetByName(SHEET_NAMES._settings);
   if (!sh) sh = ss.insertSheet(SHEET_NAMES._settings);
   sh.clear();
-  sh.getRange(1,1,1,2).setValues([['key','value']]);
-  Object.keys(settings).forEach((k, i) => {
-    sh.getRange(i+2, 1, 1, 2).setValues([[k, settings[k]]]);
-  });
-  sh.getRange(1,1,1,2).setFontWeight('bold');
+
+  // Header
+  sh.getRange(1, 1, 1, 2).setValues([['key','value']])
+    .setFontWeight('bold')
+    .setBackground('#1f4e79')
+    .setFontColor('#ffffff')
+    .setHorizontalAlignment('center');
+  sh.setFrozenRows(1);
+
+  // Data
+  const rows = Object.keys(settings).map(k => [k, settings[k]]);
+  if (rows.length) {
+    sh.getRange(2, 1, rows.length, 2).setValues(rows);
+    sh.getRange(1, 1, rows.length + 1, 2).setBorder(true, true, true, true, true, true, '#cccccc', SpreadsheetApp.BorderStyle.SOLID);
+  }
+  sh.autoResizeColumn(1);
+  sh.autoResizeColumn(2);
+  sh.setColumnWidth(1, 180);
 }
 
 /* ---------- READ ---------- */
