@@ -384,6 +384,8 @@
 
 </main>
 
+  
+
 <!-- ===================== MODAL ===================== -->
 <div class="overlay" id="overlay">
   <div class="modal">
@@ -2065,6 +2067,169 @@ function formHoliday(id){
     if (h) Object.assign(h, obj); else DB.holidays.push(obj);
     saveDB(); renderHolidays(); toast('Hari libur disimpan');
   });
+}
+
+  /* ---------- LEMBAR AHSP PUPR ---------- */
+function initLembar(){
+  const projSel = $('#lembarProjSel');
+  const ahspSel = $('#lembarAhspSel');
+  if (!projSel || !ahspSel) return;
+
+  projSel.innerHTML = DB.projects.map(p =>
+    `<option value="${p.id}" ${p.id === STATE.activeProject ? 'selected' : ''}>${esc(p.kode)} — ${esc(p.nama)}</option>`
+  ).join('');
+
+  ahspSel.innerHTML = DB.ahsp_headers.map(a =>
+    `<option value="${a.id}">${esc(a.kode)} — ${esc(a.nama)}</option>`
+  ).join('');
+
+  projSel.onchange = renderLembar;
+  ahspSel.onchange = renderLembar;
+
+  const btnPrint = $('#btnLembarPrint');
+  if (btnPrint) btnPrint.onclick = () => window.print();
+
+  const btnCSV = $('#btnLembarExportCSV');
+  if (btnCSV) btnCSV.onclick = exportLembarCSV;
+
+  renderLembar();
+}
+
+function renderLembar(){
+  const wrap = $('#ahspLembarWrap');
+  if (!wrap) return;
+  const pid = $('#lembarProjSel')?.value;
+  const aid = $('#lembarAhspSel')?.value;
+  if (!pid || !aid){
+    wrap.innerHTML = `<div class="empty">Pilih proyek dan item AHSP.</div>`;
+    return;
+  }
+
+  const proj = DB.projects.find(p => p.id === pid);
+  const ahsp = DB.ahsp_headers.find(a => a.id === aid);
+  if (!proj || !ahsp){ wrap.innerHTML = `<div class="empty">Data tidak ditemukan.</div>`; return; }
+
+  const dets = DB.project_ahsp_details.filter(d =>
+    d.project_id === pid && d.ahsp_id === aid
+  );
+
+  const groups = {upah: [], bahan: [], alat: []};
+  dets.forEach(d => {
+    const r = DB.master_resources.find(x => x.id === d.resource_id);
+    if (!r) return;
+    const kRAB = Calc.koefRAB(d, r);
+    const hRAB = num(d.harga_rab);
+    const sub  = kRAB * hRAB;
+    (groups[r.jenis] = groups[r.jenis] || []).push({r, kRAB, hRAB, sub});
+  });
+
+  const romanLabel = {upah:'A', bahan:'B', alat:'C'};
+  const jenisLabel = {upah:'TENAGA KERJA', bahan:'BAHAN / MATERIAL', alat:'PERALATAN'};
+
+  let subtotalAll = 0;
+  let rowsHTML = '';
+
+  ['upah','bahan','alat'].forEach(jenis => {
+    const list = groups[jenis] || [];
+    if (!list.length) return;
+    let sub = 0;
+    rowsHTML += `<tr class="subhead"><td colspan="6">${romanLabel[jenis]}. ${jenisLabel[jenis]}</td></tr>`;
+    list.forEach(({r, kRAB, hRAB, sub: s}) => {
+      sub += s;
+      rowsHTML += `<tr>
+        <td>${esc(r.kode)}</td>
+        <td>${esc(r.nama)}</td>
+        <td class="ctr">${esc(r.satuan)}</td>
+        <td class="num">${fmt(kRAB, 6)}</td>
+        <td class="num">${rp(hRAB)}</td>
+        <td class="num">${rp(s)}</td>
+      </tr>`;
+    });
+    subtotalAll += sub;
+    rowsHTML += `<tr class="subtotal"><td colspan="5" style="text-align:right">Subtotal ${jenisLabel[jenis]}</td><td class="num">${rp(sub)}</td></tr>`;
+  });
+
+  const oh = num(ahsp.overhead);
+  const totalSetelahOH = subtotalAll * (1 + oh / 100);
+
+  wrap.innerHTML = `
+    <div class="ahsp-sheet">
+      <h2>ANALISA HARGA SATUAN PEKERJAAN</h2>
+      <div class="ahsp-meta">
+        <div class="k">Proyek</div><div>:</div><div class="v">${esc(proj.nama)}</div>
+        <div class="k">Lokasi</div><div>:</div><div class="v">${esc(proj.lokasi || '-')}</div>
+        <div class="k">Kode AHSP</div><div>:</div><div class="v">${esc(ahsp.kode)}</div>
+        <div class="k">Uraian</div><div>:</div><div class="v">${esc(ahsp.nama)}</div>
+        <div class="k">Satuan</div><div>:</div><div class="v">${esc(ahsp.satuan)}</div>
+        <div class="k">Sumber</div><div>:</div><div class="v">${esc(ahsp.sumber || 'Permen PUPR')}</div>
+      </div>
+      <table class="ahsp-tbl">
+        <thead>
+          <tr>
+            <th style="width:70px">Kode</th>
+            <th>Uraian</th>
+            <th style="width:60px">Satuan</th>
+            <th style="width:90px">Koefisien</th>
+            <th style="width:110px">Harga Satuan</th>
+            <th style="width:130px">Jumlah Harga</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rowsHTML || '<tr><td colspan="6" class="empty">Tidak ada komponen.</td></tr>'}
+          <tr class="subtotal">
+            <td colspan="5" style="text-align:right">JUMLAH HARGA TENAGA + BAHAN + ALAT</td>
+            <td class="num">${rp(subtotalAll)}</td>
+          </tr>
+          <tr class="subtotal">
+            <td colspan="5" style="text-align:right">OVERHEAD &amp; KEUNTUNGAN (${fmt(oh,2)}%)</td>
+            <td class="num">${rp(totalSetelahOH - subtotalAll)}</td>
+          </tr>
+          <tr class="grand-total">
+            <td colspan="5" style="text-align:right">HARGA SATUAN PEKERJAAN (per ${esc(ahsp.satuan)})</td>
+            <td class="num">${rp(totalSetelahOH)}</td>
+          </tr>
+        </tbody>
+      </table>
+      <div class="ahsp-note">
+        Catatan: Koefisien diambil dari project_ahsp_details. Harga satuan menggunakan harga RAB.
+        Analisa ini bersifat read-only dan tidak mengubah data RAB/RAP.
+      </div>
+    </div>
+  `;
+}
+
+function exportLembarCSV(){
+  const pid = $('#lembarProjSel')?.value;
+  const aid = $('#lembarAhspSel')?.value;
+  if (!pid || !aid){ toast('Pilih proyek & AHSP dulu', false); return; }
+
+  const ahsp = DB.ahsp_headers.find(a => a.id === aid);
+  const dets = DB.project_ahsp_details.filter(d =>
+    d.project_id === pid && d.ahsp_id === aid
+  );
+
+  const lines = [
+    ['Kode AHSP', ahsp.kode].join(','),
+    ['Nama', ahsp.nama].join(','),
+    ['Satuan', ahsp.satuan].join(','),
+    '',
+    ['Kode','Uraian','Satuan','Koefisien','Harga','Subtotal'].join(',')
+  ];
+
+  dets.forEach(d => {
+    const r = DB.master_resources.find(x => x.id === d.resource_id);
+    if (!r) return;
+    const k = Calc.koefRAB(d, r);
+    const h = num(d.harga_rab);
+    lines.push([r.kode, `"${r.nama}"`, r.satuan, k, h, k*h].join(','));
+  });
+
+  const blob = new Blob(['\ufeff' + lines.join('\n')], {type:'text/csv;charset=utf-8'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `ahsp-${ahsp.kode}-${today()}.csv`;
+  a.click();
+  toast('CSV diexport');
 }
 
 /* ---------- RENDER SETTINGS ---------- */
