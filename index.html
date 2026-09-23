@@ -366,6 +366,11 @@
         </div>
         <button class="btn btn-ok" id="btnPush">⬆ Push ke Sheet</button>
         <button class="btn" id="btnPull">⬇ Pull dari Sheet</button>
+        <p class="hint">
+        Versi DB terakhir: <b id="dbVersionLabel">—</b> ·
+        Client ID: <code id="clientIdLabel">—</code> ·
+        Status lock: <b id="lockStatusLabel">—</b>
+      </p>
       </div>
       <p class="hint">Tempelkan URL hasil Deploy Apps Script (akses: Anyone).</p>
       <div class="sep"></div>
@@ -475,7 +480,11 @@ function toast(msg, ok=true){
 /* ---------- DATA LAYER ---------- */
 let DB = null;
 let SET = { overhead: 10, ppn: 11, sheetUrl: '' };
-let STATE = { activeProject: '', chartS: null, chartC: null, chartRL: null };
+let STATE = {
+  activeProject: '', chartS: null, chartC: null, chartRL: null,
+  chartGantt: null, chartHist: null,
+  dbVersion: null      // ← versi terakhir dari server
+};
 
 function emptyDB(){
   return {
@@ -2237,6 +2246,17 @@ function renderSettings(){
   $('#setUrl').value = SET.sheetUrl || '';
   $('#setOh').value  = SET.overhead;
   $('#setPpn').value = SET.ppn;
+    const vEl = document.getElementById('dbVersionLabel');
+  if (vEl) vEl.textContent = STATE.dbVersion != null ? ('v' + STATE.dbVersion) : '—';
+  const cEl = document.getElementById('clientIdLabel');
+  if (cEl) cEl.textContent = SyncManager.CLIENT_ID;
+  SyncManager.status().then(s => {
+    const l = document.getElementById('lockStatusLabel');
+    if (!l) return;
+    if (!s.ok) { l.textContent = '—'; return; }
+    l.textContent = s.locked ? ('🔒 dipegang ' + s.holder) : '🟢 bebas';
+    l.style.color = s.locked ? 'var(--warn)' : 'var(--ok)';
+  }).catch(() => {});
 }
 
 /* ---------- MODAL ---------- */
@@ -2438,28 +2458,56 @@ async function sheetRequest(action, payload){
 
 $('#btnPush').onclick = async () => {
   SET.sheetUrl = $('#setUrl').value.trim(); saveSET();
+
+  // Acquire soft lock dulu (block 30 detik kalau ada user lain)
+  const lock = await SyncManager.lock(120000).catch(() => ({ ok: false, code:'NET' }));
+  if (!lock.ok && lock.code === 'LOCKED'){
+    const go = confirm('⚠ ' + lock.message + '\n\nTetap lanjut? Risiko konflik data.');
+    if (!go) return;
+  }
+
   try {
     toast('Mengirim data...');
-    const out = await sheetRequest('push', {db:DB, settings:SET});
-    if (out.ok) toast('Berhasil: ' + out.message);
-    else toast('Gagal: ' + out.message, false);
-  } catch(e){ toast('Koneksi gagal: ' + e.message, false); }
+    const out = await SyncManager.push(DB, SET);
+    if (out.ok){
+      toast(`Berhasil (v${out.dbVersion}): ${out.sizeKB} KB`);
+    } else if (out.code === 'CONFLICT'){
+      const doPull = confirm(
+        '⚠ Konflik versi.\n\n' + out.message + '\n\nPull sekarang? (data lokal akan ditimpa)'
+      );
+      if (doPull){ $('#btnPull').click(); }
+      else toast('Push dibatalkan', false);
+    } else if (out.code === 'LOCKED'){
+      toast('Diblokir: ' + out.message, false);
+    } else {
+      toast('Gagal: ' + out.message, false);
+    }
+  } catch(e){
+    toast('Koneksi gagal: ' + e.message, false);
+  } finally {
+    await SyncManager.release().catch(() => {});
+  }
 };
 
 $('#btnPull').onclick = async () => {
   SET.sheetUrl = $('#setUrl').value.trim(); saveSET();
   try {
     toast('Mengambil data...');
-    const out = await sheetRequest('pull', {});
+    const out = await SyncManager.pull();
     if (out.ok && out.db){
       DB = out.db;
       if (out.settings) SET = Object.assign(SET, out.settings);
+      STATE.dbVersion = out.dbVersion ?? null;
       saveDB(); saveSET();
       STATE.activeProject = DB.projects[0]?.id || '';
       renderAll(); renderSettings();
-      toast('Data ditarik dari Sheet');
-    } else toast('Gagal pull', false);
-  } catch(e){ toast('Koneksi gagal', false); }
+      toast(`Data ditarik (v${out.dbVersion})`);
+    } else {
+      toast('Gagal pull: ' + (out.message || 'unknown'), false);
+    }
+  } catch(e){
+    toast('Koneksi gagal: ' + e.message, false);
+  }
 };
 
 /* ---------- INIT ---------- */
