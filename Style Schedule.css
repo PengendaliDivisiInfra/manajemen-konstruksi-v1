@@ -1131,12 +1131,11 @@ canvas{
 .nowrap{white-space:nowrap}
 
 /* =====================================================================
-   GANTT CHART — MS PROJECT STYLE (Fase 1.1 — Alignment Fix)
+   GANTT CHART — MS PROJECT STYLE (Fase 1.2 — Grid Layout Fix)
    ===================================================================== */
 .gantt-root{
-  --gantt-row-h:26px;
-  --gantt-head-h:60px;   /* ← DISAMAKAN dengan AXIS_H */
-  --gantt-axis-h:60px;
+  --gantt-row-h:26px;      /* tinggi baris tabel & bar — WAJIB sama */
+  --gantt-head-h:60px;     /* tinggi thead kiri & axis kanan — WAJIB sama */
   display:flex;
   flex-direction:column;
   border:1px solid var(--line);
@@ -1146,6 +1145,7 @@ canvas{
   font-size:12px;
 }
 
+/* ── Toolbar ── */
 .gantt-toolbar{
   display:flex;
   align-items:center;
@@ -1155,6 +1155,7 @@ canvas{
   background:#0e1a30;
   border-bottom:1px solid var(--line);
   flex-wrap:wrap;
+  flex-shrink:0;
 }
 .gantt-toolbar-left{display:flex;flex-direction:column;gap:2px}
 .gantt-title{font-weight:700;color:var(--txt);font-size:13px}
@@ -1163,25 +1164,29 @@ canvas{
 .gantt-lbl{font-size:10.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
 .gantt-zoom{padding:5px 9px;font-size:12px;width:auto}
 
-/* Grid utama */
-.gantt-grid{
+/* ═══════════════════════════════════════════════════════════
+   GRID 2×2 — kunci alignment sempurna
+   ┌────────────────────┬────────────────────┐
+   │ .gantt-thead       │ .gantt-axis-wrap   │ ← row 1: 60px fixed
+   ├────────────────────┼────────────────────┤
+   │ .gantt-tbody       │ .gantt-bars-wrap   │ ← row 2: fleksibel
+   └────────────────────┴────────────────────┘
+   ═══════════════════════════════════════════════════════════ */
+.gantt-body{
   display:grid;
-  grid-template-columns:var(--gantt-table-w,640px) 1fr;
+  grid-template-columns: var(--gantt-table-w,640px) 1fr;
+  grid-template-rows: var(--gantt-head-h) 1fr;
   height:60vh;
   min-height:340px;
+  overflow:hidden;
 }
 
-/* ── SISI KIRI: Entry Table ── */
-.gantt-left{
-  border-right:1px solid var(--line);
-  display:flex;
-  flex-direction:column;
-  overflow:hidden;
-  background:#0c1729;
-}
+/* ── R1 C1: Header tabel (kolom-kolom kiri) ── */
 .gantt-thead{
+  grid-column:1;
+  grid-row:1;
   display:flex;
-  height:var(--gantt-head-h);   /* ← 60px, matching axis */
+  align-items:stretch;
   background:#1f4e79;
   color:#fff;
   font-size:10.5px;
@@ -1189,9 +1194,8 @@ canvas{
   text-transform:uppercase;
   letter-spacing:.5px;
   overflow:hidden;
-  flex-shrink:0;
-  align-items:flex-end;          /* label di bawah, sejajar baris 'hari' axis */
-  padding-bottom:6px;
+  box-sizing:border-box;
+  border-right:1px solid var(--line);
 }
 .gantt-th{
   padding:0 8px;
@@ -1201,17 +1205,44 @@ canvas{
   white-space:nowrap;
   overflow:hidden;
   text-overflow:ellipsis;
+  box-sizing:border-box;
+  flex-shrink:0;
 }
+.gantt-th:last-child{border-right:none}
+
+/* ── R1 C2: Axis kanan (skala waktu) ── */
+.gantt-axis-wrap{
+  grid-column:2;
+  grid-row:1;
+  overflow:hidden;
+  background:#0e1a30;
+  position:relative;
+  box-sizing:border-box;
+}
+.gantt-axis-track{
+  position:absolute;
+  top:0;
+  left:0;
+  height:var(--gantt-head-h);
+  will-change:transform;
+}
+
+/* ── R2 C1: Tabel body (scroll Y) ── */
 .gantt-tbody{
-  flex:1;
+  grid-column:1;
+  grid-row:2;
   overflow-y:auto;
   overflow-x:hidden;
+  background:#0c1729;
+  border-right:1px solid var(--line);
+  box-sizing:border-box;
 }
 .gantt-tbody::-webkit-scrollbar{width:0}
 
 .gantt-row{
   display:flex;
   height:var(--gantt-row-h);
+  box-sizing:border-box;
   line-height:var(--gantt-row-h);
   border-bottom:1px solid rgba(36,54,92,.4);
   transition:background .1s;
@@ -1235,55 +1266,30 @@ canvas{
   font-variant-numeric:tabular-nums;
   font-size:11.5px;
   color:var(--txt);
+  box-sizing:border-box;
+  flex-shrink:0;
 }
 .gantt-td:last-child{border-right:none}
 
 .gantt-indent{display:inline-block;height:1px}
-.gantt-expand{
-  display:inline-block;
-  width:12px;
-  color:var(--muted);
-  font-size:9px;
-  cursor:pointer;
-}
-.gantt-diamond-inline{
-  color:#0f172a;
-  font-size:9px;
-  margin-right:4px;
-  vertical-align:middle;
-}
+.gantt-expand{display:inline-block;width:12px;color:var(--muted);font-size:9px;cursor:pointer}
+.gantt-diamond-inline{color:#0f172a;font-size:9px;margin-right:4px;vertical-align:middle}
 
-/* ── SISI KANAN: Chart (restrukturisasi) ── */
-.gantt-right{
-  display:flex;
-  flex-direction:column;
-  overflow:hidden;
-  background:#0b1220;
-}
-
-/* Axis OUTSIDE scroll container — hanya horizontal yang disinkron */
-.gantt-axis-top{
-  height:var(--gantt-axis-h);
-  flex-shrink:0;
-  overflow:hidden;
-  background:#0e1a30;
-  border-bottom:1px solid var(--line);
-  position:relative;
-}
-.gantt-axis-track{
-  position:absolute;
-  top:0;
-  left:0;
-  height:var(--gantt-axis-h);
-  will-change:transform;
-}
-
-/* Bars container — scroll x & y */
-.gantt-chart-scroll{
-  flex:1;
-  width:100%;
+/* ── R2 C2: Bars area (scroll X & Y) ── */
+.gantt-bars-wrap{
+  grid-column:2;
+  grid-row:2;
   overflow:auto;
+  background:#0b1220;
   position:relative;
+  box-sizing:border-box;
 }
-.gantt-bars{display:block}
+
+/* Canvas block-level — anti inline-gap */
+.gantt-axis,
+.gantt-bars{
+  display:block;
+  max-height:none !important;
+}
+
 #ganttContainer canvas{max-height:none !important}
