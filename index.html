@@ -210,10 +210,15 @@
             <option value="rab">RAB (Rencana)</option>
             <option value="rap">RAP (Riil)</option>
           </select>
-          <select id="schedDistribution" style="width:150px">
-            <option value="uniform">Distribusi Merata</option>
-            <option value="triangular">Kurva Segitiga</option>
-            <option value="bell">Kurva Lonceng</option>
+          <select id="schedDistribution" style="width:170px">
+            <option value="uniform">Global: Uniform</option>
+            <option value="front">Global: Front Loaded</option>
+            <option value="back">Global: Back Loaded</option>
+            <option value="bell">Global: Bell</option>
+            <option value="early_peak">Global: Early Peak</option>
+            <option value="late_peak">Global: Late Peak</option>
+            <option value="double_peak">Global: Double Peak</option>
+            <option value="triangular">Global: Triangular</option>
           </select>
           <select id="schedGranularity" style="width:130px">
             <option value="daily">Harian</option>
@@ -1959,6 +1964,14 @@ function formWbs(id, forceGroup){
       <div class="row" style="margin-top:12px">
         <div class="field"><label class="f">Durasi (hari kerja)</label><input id="fw_dur" type="number" step="1" min="1" value="${num(w?.duration)||1}" /></div>
         <div class="field"><label class="f">Kalender</label><select id="fw_cal">${calOpts}</select></div>
+        <div class="field"><label class="f">Work Contour</label>
+          <select id="fw_contour">
+            <option value="">— Ikuti Global —</option>
+            ${Object.keys(WORK_CONTOURS).map(k =>
+              `<option value="${k}" ${w?.work_contour === k ? 'selected' : ''}>${esc(WORK_CONTOURS[k])}</option>`
+            ).join('')}
+          </select>
+        </div>
       </div>
       <div class="row" style="margin-top:12px">
         <div class="field"><label class="f">Constraint</label>
@@ -2018,6 +2031,8 @@ function formWbs(id, forceGroup){
       writeScheduleField(obj, 'calendar_id', $('#fw_cal').value);
       writeScheduleField(obj, 'constraint_type', $('#fw_ct').value);
       writeScheduleField(obj, 'constraint_date', $('#fw_cd').value);
+      // ── Fase 2E: Work Contour ──
+      writeScheduleField(obj, 'work_contour', $('#fw_contour').value || '');
     } else {
       obj.ahsp_id = ''; obj.satuan = ''; obj.volume_rab = 0; obj.volume_rap = 0;
       writeScheduleField(obj, 'predecessor', '');
