@@ -1233,6 +1233,42 @@ function renderSchedule(){
       alertEl.innerHTML = html;
     }
   }
+
+  /* ── Fase 1E: Conflict Detection Panel ── */
+  const conflictEl = document.getElementById('conflictWrap');
+  if (conflictEl){
+    const cfr = ConflictDetector.detect(pid);
+    if (!cfr.ok){
+      conflictEl.innerHTML = '<div class="alert warn">' + esc(cfr.error || 'Gagal deteksi konflik') + '</div>';
+    } else if (!cfr.conflicts.length){
+      conflictEl.innerHTML = '<div class="alert ok"><span>✅</span><div><b>Tidak ada konflik jadwal.</b><br>Semua constraint dan predecessor konsisten.</div></div>';
+    } else {
+      const groups = { high: [], warn: [], info: [] };
+      cfr.conflicts.forEach(c => (groups[c.severity] || groups.info).push(c));
+      let html = '';
+      if (groups.high.length){
+        html += '<div style="font-size:11px;color:var(--muted);margin-bottom:6px;letter-spacing:.5px;font-weight:700">🔴 KRITIS (' + groups.high.length + ')</div>';
+        html += groups.high.map(renderConflictCard).join('');
+      }
+      if (groups.warn.length){
+        html += '<div style="font-size:11px;color:var(--muted);margin:10px 0 6px;letter-spacing:.5px;font-weight:700">🟡 PERINGATAN (' + groups.warn.length + ')</div>';
+        html += groups.warn.map(renderConflictCard).join('');
+      }
+      if (groups.info.length){
+        html += groups.info.map(renderConflictCard).join('');
+      }
+      conflictEl.innerHTML = html;
+
+      // Click-to-edit: klik conflict card → buka form WBS
+      conflictEl.querySelectorAll('[data-conflict-task]').forEach(card => {
+        card.style.cursor = 'pointer';
+        card.onclick = () => {
+          const taskId = card.getAttribute('data-conflict-task');
+          if (taskId && typeof formWbs === 'function') formWbs(taskId);
+        };
+      });
+    }
+  }
 }
 
 /* =====================================================================
@@ -1265,7 +1301,18 @@ function initScheduleEvents(){
 
   const selHistGran = document.getElementById('histGranularity');
   if (selHistGran) selHistGran.onchange = renderSchedule;
-   
+
+  /* ── Fase 1E: Conflict Refresh ── */
+  const btnCfr = document.getElementById('btnConflictRefresh');
+  if (btnCfr){
+    btnCfr.onclick = () => {
+      const pid = STATE.activeProject;
+      if (!pid){ toast('Pilih proyek dulu', false); return; }
+      renderSchedule();
+      toast('Konflik jadwal di-refresh');
+    };
+  }
+
   const btnExp = document.getElementById('btnExportSchedule');
   if (btnExp){
     btnExp.onclick = () => {
@@ -2633,6 +2680,57 @@ const GanttView = {
       });
     }
 
+    // E.3. Constraint & Manual Badges (Fase 1E)
+    state.visibleNodes.forEach((n, i) => {
+      if (n.isGroupHeader) return;
+      if (n.isSummary || n.isMilestone) return;
+      const pos = posMap[n.id];
+      if (!pos) return;
+
+      const raw = n.raw || {};
+      const schedMode = String(raw.schedule_mode || 'auto').toLowerCase();
+      const isManual  = schedMode === 'manual';
+      const ct        = String(raw.constraint_type || '').toUpperCase();
+      const hasCt     = !!ct;
+      const isConflict = num(raw.float_total ?? raw.total_float) < 0;
+
+      if (!isManual && !hasCt && !isConflict) return;
+
+      const midY = pos.y + rowH / 2;
+      let bx = pos.x2 + 5;
+
+      /* ── Badge helper ── */
+      const drawBadge = (x, label, bg) => {
+        ctx.save();
+        ctx.font = 'bold 9px Segoe UI';
+        const tw = ctx.measureText(label).width;
+        const w = tw + 8;
+        const h = 11;
+        ctx.fillStyle = bg;
+        this.rrect(ctx, x, midY - h/2, w, h, 3);
+        ctx.fill();
+        ctx.fillStyle = '#fff';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(label, x + w/2, midY + 0.5);
+        ctx.restore();
+        return w;
+      };
+
+      /* ── Manual badge (purple) ── */
+      if (isManual) bx += drawBadge(bx, 'M', 'rgba(168,85,247,.92)') + 3;
+
+      /* ── Conflict badge (red, high-priority) ── */
+      if (isConflict){
+        bx += drawBadge(bx, '⚠', 'rgba(220,38,38,.92)') + 3;
+      }
+
+      /* ── Constraint badge (orange) — tampilkan kode constraint ── */
+      if (hasCt && ct.length <= 4){
+        bx += drawBadge(bx, ct, 'rgba(245,158,11,.92)') + 3;
+      }
+    });
+
     // F. Dependency arrows (Fase 1C — MS Project style)
     this.drawDependencies(ctx, state, posMap, rowH);
 
@@ -3556,6 +3654,215 @@ const OverAllocationDetector = {
     return {ok: true, alerts, total_checked: rl.byResource.length};
   }
 };
+
+/* =====================================================================
+   BAGIAN 9E.2 — CONFLICT DETECTOR (Fase 1E)
+   Deteksi konflik jadwal: Manual vs Predecessor, Constraint Ketat, Negative Float
+   ===================================================================== */
+const ConflictDetector = {
+  /**
+   * Deteksi semua konflik jadwal untuk sebuah proyek.
+   * Return: { ok, conflicts: [], count }
+   * Setiap conflict: { type, severity, taskId, kode, uraian, message, detail }
+   */
+  detect(projectId){
+    const proj = DB.projects.find(p => p.id === projectId);
+    if (!proj) return { ok: false, error: 'Proyek tidak ditemukan', conflicts: [] };
+
+    const items = DB.project_wbs.filter(w =>
+      w.project_id === projectId && !w.is_group
+    );
+    if (!items.length) return { ok: true, conflicts: [], count: 0 };
+
+    const byId = {}, byKode = {};
+    items.forEach(it => {
+      byId[it.id] = it;
+      if (it.kode_wbs) byKode[String(it.kode_wbs).trim()] = it;
+    });
+
+    const conflicts = [];
+
+    /* ═══ 1. NEGATIVE FLOAT ═══ */
+    items.forEach(it => {
+      const flt = num(it.float_total ?? it.total_float);
+      if (flt < 0){
+        conflicts.push({
+          type: 'NEGATIVE_FLOAT',
+          severity: 'high',
+          taskId: it.id,
+          kode: it.kode_wbs || '?',
+          uraian: it.uraian || '',
+          message: 'Total Float negatif (' + flt + ' hari) — jadwal tidak mungkin dengan constraint saat ini.',
+          detail: 'Constraint dan predecessor saling bertentangan, sehingga task tidak dapat dijadwalkan tepat waktu.'
+        });
+      }
+    });
+
+    /* ═══ 2. MANUAL TASK vs PREDECESSOR ═══ */
+    items.forEach(it => {
+      if (CPM.getScheduleMode(it) !== 'manual') return;
+      if (!it.manual_start) return;
+      const rels = CPM.getRelationships(it);
+      if (!rels.length) return;
+
+      const cal = WorkingCalendar.get(it.calendar_id || proj.calendar_id);
+      const mStart = CPM._parseDate(it.manual_start);
+      if (!mStart) return;
+
+      rels.forEach(rel => {
+        const pred = byId[rel.predRef] || byKode[String(rel.predRef).trim()];
+        if (!pred) return;
+
+        const predEF = pred.tgl_selesai_rencana ? CPM._parseDate(pred.tgl_selesai_rencana) : null;
+        const predES = pred.tgl_mulai_rencana   ? CPM._parseDate(pred.tgl_mulai_rencana)   : null;
+
+        let minStart = null;
+        if (rel.type === 'FS' && predEF){
+          minStart = WorkingCalendar.addWorkDays(predEF, rel.lag, cal);
+        } else if (rel.type === 'SS' && predES){
+          minStart = WorkingCalendar.addWorkDays(predES, rel.lag, cal);
+        }
+
+        if (minStart && mStart < minStart){
+          const lagLabel = rel.lag !== 0
+            ? (rel.lag > 0 ? '+' + rel.lag : String(rel.lag)) + 'd'
+            : '';
+          conflicts.push({
+            type: 'MANUAL_PRED_CONFLICT',
+            severity: 'warn',
+            taskId: it.id,
+            kode: it.kode_wbs || '?',
+            uraian: it.uraian || '',
+            message: 'Manual start (' + it.manual_start + ') lebih awal dari yang diizinkan predecessor ' +
+                     pred.kode_wbs + ' (' + WorkingCalendar.fmt(minStart) + ').',
+            detail: 'Relasi ' + rel.type + lagLabel + ' — task manual mengabaikan logika predecessor. ' +
+                    'Successor mungkin akan bergeser karena task ini dipatok di tanggal manual.'
+          });
+        }
+      });
+    });
+
+    /* ═══ 3. CONSTRAINT KETAT (MSO / MFO / FNLT) vs PREDECESSOR ═══ */
+    items.forEach(it => {
+      const ct = String(it.constraint_type || '').toUpperCase();
+      if (!['MSO', 'MFO', 'SNLT', 'FNLT'].includes(ct)) return;
+      const cd = it.constraint_date ? CPM._parseDate(it.constraint_date) : null;
+      if (!cd) return;
+
+      const rels = CPM.getRelationships(it);
+      if (!rels.length) return;
+
+      const cal = WorkingCalendar.get(it.calendar_id || proj.calendar_id);
+
+      rels.forEach(rel => {
+        const pred = byId[rel.predRef] || byKode[String(rel.predRef).trim()];
+        if (!pred) return;
+
+        /* MSO: start dipatok → cek apakah predecessor masih mengizinkan */
+        if (ct === 'MSO' && rel.type === 'FS'){
+          const predEF = pred.tgl_selesai_rencana ? CPM._parseDate(pred.tgl_selesai_rencana) : null;
+          if (!predEF) return;
+          const minStart = WorkingCalendar.addWorkDays(predEF, rel.lag, cal);
+          if (cd < minStart){
+            conflicts.push({
+              type: 'MSO_PRED_CONFLICT',
+              severity: 'high',
+              taskId: it.id,
+              kode: it.kode_wbs || '?',
+              uraian: it.uraian || '',
+              message: 'MSO (' + it.constraint_date + ') lebih awal dari minimum start dari predecessor ' +
+                       pred.kode_wbs + ' (' + WorkingCalendar.fmt(minStart) + ').',
+              detail: 'Constraint MSO memaksa task mulai sebelum predecessor selesai — akan memicu negative float.'
+            });
+          }
+        }
+
+        /* FNLT: finish dipatok → cek apakah task bisa selesai tepat waktu */
+        if (ct === 'FNLT'){
+          const curFinish = it.tgl_selesai_rencana ? CPM._parseDate(it.tgl_selesai_rencana) : null;
+          if (curFinish && curFinish > cd){
+            conflicts.push({
+              type: 'FNLT_PRED_CONFLICT',
+              severity: 'warn',
+              taskId: it.id,
+              kode: it.kode_wbs || '?',
+              uraian: it.uraian || '',
+              message: 'Finish (' + it.tgl_selesai_rencana + ') melebihi constraint FNLT (' + it.constraint_date + ').',
+              detail: 'Task tidak dapat diselesaikan sesuai batas waktu yang diinginkan.'
+            });
+          }
+        }
+      });
+    });
+
+    /* ═══ 4. MANUAL TASK vs SUCCESSOR ═══ */
+    items.forEach(it => {
+      if (CPM.getScheduleMode(it) !== 'manual') return;
+      if (!it.manual_finish) return;
+
+      const mFinish = CPM._parseDate(it.manual_finish);
+      if (!mFinish) return;
+      const cal = WorkingCalendar.get(it.calendar_id || proj.calendar_id);
+
+      items.forEach(succ => {
+        if (succ.id === it.id) return;
+        const succRels = CPM.getRelationships(succ);
+        succRels.forEach(rel => {
+          const refTask = byId[rel.predRef] || byKode[String(rel.predRef).trim()];
+          if (!refTask || refTask.id !== it.id) return;
+
+          if (rel.type === 'FS' && succ.tgl_mulai_rencana){
+            const succStart = CPM._parseDate(succ.tgl_mulai_rencana);
+            if (!succStart) return;
+            const minSuccStart = WorkingCalendar.addWorkDays(mFinish, rel.lag, cal);
+            if (succStart < minSuccStart){
+              conflicts.push({
+                type: 'MANUAL_SUCC_CONFLICT',
+                severity: 'warn',
+                taskId: it.id,
+                kode: it.kode_wbs || '?',
+                uraian: it.uraian || '',
+                message: 'Successor ' + succ.kode_wbs + ' mulai (' + succ.tgl_mulai_rencana +
+                         ') sebelum manual finish task ini (' + it.manual_finish + ').',
+                detail: 'Successor mungkin tidak menghormati tanggal manual atau akan memicu slack negatif.'
+              });
+            }
+          }
+        });
+      });
+    });
+
+    /* ── Dedup by (type + taskId) ── */
+    const seen = new Set();
+    const filtered = conflicts.filter(c => {
+      const key = c.type + '::' + c.taskId;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+
+    /* ── Sort: high → warn → info ── */
+    const ord = { high: 0, warn: 1, info: 2 };
+    filtered.sort((a, b) => (ord[a.severity] ?? 99) - (ord[b.severity] ?? 99));
+
+    return { ok: true, conflicts: filtered, count: filtered.length };
+  }
+};
+
+/* ── Helper: HTML kartu konflik (dipakai di renderSchedule) ── */
+function renderConflictCard(c){
+  const sev = c.severity || 'warn';
+  const cls = sev === 'high' ? '' : sev === 'warn' ? 'warn' : 'info';
+  const ico = sev === 'high' ? '🔴' : sev === 'warn' ? '🟡' : 'ℹ';
+  return '<div class="conflict-card ' + cls + '" data-conflict-task="' + esc(c.taskId) + '">' +
+    '<span>' + ico + '</span>' +
+    '<div style="flex:1">' +
+      '<b>' + esc(c.kode) + ' — ' + esc(c.uraian) + '</b>' +
+      '<div style="font-size:11.5px;margin-top:4px">' + esc(c.message) + '</div>' +
+      '<div style="font-size:10.5px;color:var(--muted);margin-top:3px">' + esc(c.detail || '') + '</div>' +
+    '</div>' +
+  '</div>';
+}
 
 /* =====================================================================
    BAGIAN 10 — SEED WORKING CALENDARS & HOLIDAYS (Frontend fallback)
