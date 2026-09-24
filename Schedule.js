@@ -1182,11 +1182,22 @@ function renderSchedule(){
     });
   }
    
-   /* ── Fase 1: Gantt MS Project Style ── */
+   /* ── Fase 1 + 2D: Gantt / Resource Sheet View Toggle ── */
    const ganttEl = document.getElementById('ganttContainer');
+   const schedViewTabs = document.getElementById('schedViewTabs');
    if (ganttEl){
-     const mode = $('#schedMode')?.value || 'rab';
-     GanttView.mount(ganttEl, pid, { mode, zoom: ganttEl._lastZoom || 'weekly' });
+     const viewMode = ganttEl._viewMode || 'gantt';
+     if (schedViewTabs){
+       schedViewTabs.querySelectorAll('[data-view]').forEach(btn => {
+         btn.classList.toggle('is-active', btn.getAttribute('data-view') === viewMode);
+       });
+     }
+     if (viewMode === 'gantt'){
+       const mode = $('#schedMode')?.value || 'rab';
+       GanttView.mount(ganttEl, pid, { mode, zoom: ganttEl._lastZoom || 'weekly' });
+     } else {
+       ResourceSheet.render(ganttEl, pid, {});
+     }
    }
 
   /* ── Phase 4: Resource Histogram ── */
@@ -1301,6 +1312,21 @@ function initScheduleEvents(){
 
   const selHistGran = document.getElementById('histGranularity');
   if (selHistGran) selHistGran.onchange = renderSchedule;
+
+  /* ── Fase 2D: View Toggle (Gantt ↔ Resource Sheet) ── */
+  const schedViewTabs = document.getElementById('schedViewTabs');
+  if (schedViewTabs){
+    schedViewTabs.querySelectorAll('[data-view]').forEach(btn => {
+      btn.onclick = () => {
+        const view = btn.getAttribute('data-view');
+        const ganttEl = document.getElementById('ganttContainer');
+        if (!ganttEl) return;
+        ganttEl._viewMode = view;
+        renderSchedule();
+        toast(view === 'gantt' ? '📅 Tampilan Gantt Chart' : '📊 Tampilan Resource Sheet');
+      };
+    });
+  }
 
   /* ── Fase 1E: Conflict Refresh ── */
   const btnCfr = document.getElementById('btnConflictRefresh');
@@ -4044,6 +4070,277 @@ const OverAllocationDetector = {
     return {ok: true, alerts, total_checked: rl.byResource.length};
   }
 };
+
+/* =====================================================================
+   BAGIAN 9E.3 — RESOURCE SHEET VIEW (Fase 2D)
+   Matriks resource × periode (Vertical / Horizontal)
+   ===================================================================== */
+const ResourceSheet = {
+  LAYOUT_STORE_KEY: 'mk_resource_sheet_layout_v1',
+
+  loadLayout(){
+    try {
+      const raw = localStorage.getItem(this.LAYOUT_STORE_KEY);
+      if (raw){
+        const p = JSON.parse(raw);
+        return {
+          mode: p.mode === 'horizontal' ? 'horizontal' : 'vertical',
+          granularity: ['daily','weekly','monthly'].includes(p.granularity) ? p.granularity : 'weekly',
+          hideEmpty: !!p.hideEmpty
+        };
+      }
+    } catch(e){}
+    return { mode: 'vertical', granularity: 'weekly', hideEmpty: false };
+  },
+
+  saveLayout(layout){
+    try { localStorage.setItem(this.LAYOUT_STORE_KEY, JSON.stringify(layout)); } catch(e){}
+  },
+
+  /* Ambil data matrix — resource × bucket */
+  buildMatrix(projectId, granularity, hideEmpty){
+    const rl = ResourceLoader.load(projectId, {
+      mode: 'rab', distribution: 'uniform', granularity
+    });
+    if (!rl.ok) return { ok: false, error: rl.error };
+
+    const buckets = rl.buckets;
+    const resources = rl.byResource;
+
+    /* Map: resourceKode → { bucketKey → qty } */
+    const matrix = {};
+    resources.forEach(r => matrix[r.kode] = {});
+
+    /* Ambil dari resDailyMap → konversi ke bucket */
+    Object.keys(rl.resDailyMap || {}).forEach(kode => {
+      const raw = rl.resDailyMap[kode];
+      Object.keys(raw).forEach(iso => {
+        const bk = ResourceLoader.bucketKey(iso, granularity);
+        if (!matrix[kode]) matrix[kode] = {};
+        matrix[kode][bk] = (matrix[kode][bk] || 0) + raw[iso];
+      });
+    });
+
+    /* Column keys = semua bucket_key unik yang muncul */
+    const colKeys = new Set();
+    Object.values(matrix).forEach(m => Object.keys(m).forEach(k => colKeys.add(k)));
+    const columns = Array.from(colKeys).sort();
+
+    /* Filter kolom kosong & resource kosong */
+    let rows = resources.slice();
+    if (hideEmpty){
+      rows = rows.filter(r => {
+        const m = matrix[r.kode] || {};
+        return Object.values(m).some(v => num(v) > 0);
+      });
+    }
+
+    return { ok: true, resources: rows, columns, matrix, byResource: rl.byResource, buckets };
+  },
+
+  /* ── Render utama — dipanggil dari GanttView toggle ── */
+  render(container, projectId, opts){
+    if (!container) return;
+    opts = opts || {};
+    const layout = Object.assign(this.loadLayout(), opts);
+
+    const data = this.buildMatrix(projectId, layout.granularity, layout.hideEmpty);
+    if (!data.ok){
+      container.innerHTML = '<div class="empty">' + esc(data.error) + '</div>';
+      return;
+    }
+    if (!data.resources.length){
+      container.innerHTML = '<div class="empty">Tidak ada resource dengan data jadwal.</div>';
+      return;
+    }
+    if (!data.columns.length){
+      container.innerHTML = '<div class="empty">Belum ada jadwal. Jalankan Recalculate CPM dulu.</div>';
+      return;
+    }
+
+    /* ── Toolbar kontrol ── */
+    const toolbar =
+      '<div class="rs-toolbar">' +
+        '<span class="rs-lbl">Layout</span>' +
+        '<select class="rs-layout-sel">' +
+          '<option value="vertical"' + (layout.mode === 'vertical' ? ' selected' : '') + '>Vertical (baris = resource)</option>' +
+          '<option value="horizontal"' + (layout.mode === 'horizontal' ? ' selected' : '') + '>Horizontal (baris = periode)</option>' +
+        '</select>' +
+        '<span class="rs-lbl">Granularitas</span>' +
+        '<select class="rs-gran-sel">' +
+          '<option value="daily"' + (layout.granularity === 'daily' ? ' selected' : '') + '>Harian</option>' +
+          '<option value="weekly"' + (layout.granularity === 'weekly' ? ' selected' : '') + '>Mingguan</option>' +
+          '<option value="monthly"' + (layout.granularity === 'monthly' ? ' selected' : '') + '>Bulanan</option>' +
+        '</select>' +
+        '<label class="rs-chk"><input type="checkbox" class="rs-hide-empty"' +
+          (layout.hideEmpty ? ' checked' : '') + '> Sembunyikan 0</label>' +
+        '<span class="rs-count">' + data.resources.length + ' resource · ' + data.columns.length + ' periode</span>' +
+      '</div>';
+
+    /* ── Tabel ── */
+    let tableHTML = '';
+    if (layout.mode === 'vertical'){
+      tableHTML = this._renderVertical(data, layout);
+    } else {
+      tableHTML = this._renderHorizontal(data, layout);
+    }
+
+    container.innerHTML = toolbar + tableHTML;
+
+    /* ── Wire controls ── */
+    const layoutSel = container.querySelector('.rs-layout-sel');
+    if (layoutSel) layoutSel.onchange = e => {
+      const newLayout = Object.assign({}, layout, { mode: e.target.value });
+      this.saveLayout(newLayout);
+      this.render(container, projectId, newLayout);
+    };
+
+    const granSel = container.querySelector('.rs-gran-sel');
+    if (granSel) granSel.onchange = e => {
+      const newLayout = Object.assign({}, layout, { granularity: e.target.value });
+      this.saveLayout(newLayout);
+      this.render(container, projectId, newLayout);
+    };
+
+    const hideChk = container.querySelector('.rs-hide-empty');
+    if (hideChk) hideChk.onchange = e => {
+      const newLayout = Object.assign({}, layout, { hideEmpty: e.target.checked });
+      this.saveLayout(newLayout);
+      this.render(container, projectId, newLayout);
+    };
+
+    /* Tooltip & klik cell → detail */
+    container.querySelectorAll('[data-rs-cell]').forEach(cell => {
+      cell.addEventListener('click', () => {
+        const kode = cell.getAttribute('data-rs-kode');
+        const bk   = cell.getAttribute('data-rs-bk');
+        const qty  = num(cell.getAttribute('data-rs-qty'));
+        if (qty <= 0) return;
+        const r = data.resources.find(x => x.kode === kode);
+        toast((r?.nama || kode) + ' · ' + bk + ': ' + fmt(qty, 2) + ' ' + (r?.satuan || ''));
+      });
+    });
+  },
+
+  /* ── Cell renderer dengan utilization color ── */
+  _cellHTML(kode, bk, qty, resourceInfo){
+    const cap = num(resourceInfo?.kapasitas_harian);
+    /* Konversi kapasitas ke bucket */
+    const gran = resourceInfo?._gran || 'weekly';
+    const capPerBucket = gran === 'daily' ? cap : gran === 'weekly' ? cap * 5 : cap * 22;
+
+    let cls = 'rs-cell';
+    let title = '';
+    if (qty <= 0){
+      cls += ' rs-cell-empty';
+    } else if (capPerBucket > 0){
+      const ratio = qty / capPerBucket;
+      if (ratio > 1.2){ cls += ' rs-cell-danger'; title = 'Over ' + ((ratio - 1) * 100).toFixed(0) + '%'; }
+      else if (ratio > 1.0){ cls += ' rs-cell-warn'; title = 'Over ' + ((ratio - 1) * 100).toFixed(0) + '%'; }
+      else cls += ' rs-cell-ok';
+    } else {
+      cls += ' rs-cell-neutral';
+    }
+
+    const display = qty <= 0 ? '·' : fmt(qty, qty < 10 ? 2 : 0);
+
+    return '<td class="' + cls + '" ' +
+      'data-rs-cell="1" data-rs-kode="' + esc(kode) + '" data-rs-bk="' + esc(bk) + '" data-rs-qty="' + qty + '" ' +
+      'title="' + esc(title) + '">' +
+      '<span class="rs-val">' + display + '</span>' +
+    '</td>';
+  },
+
+  /* ── Layout Vertical: baris = resource, kolom = periode ── */
+  _renderVertical(data, layout){
+    const {resources, columns, matrix} = data;
+
+    /* Header */
+    const head =
+      '<thead><tr>' +
+        '<th class="rs-th-id">Kode</th>' +
+        '<th class="rs-th-name">Nama</th>' +
+        '<th class="rs-th-jenis">Jenis</th>' +
+        '<th class="rs-th-sat">Satuan</th>' +
+        '<th class="rs-th-cap num">Kap/Periode</th>' +
+        columns.map(c => '<th class="rs-th-col num">' + esc(c) + '</th>').join('') +
+        '<th class="rs-th-total num">Total</th>' +
+      '</tr></thead>';
+
+    /* Body */
+    const body = resources.map(r => {
+      const m = matrix[r.kode] || {};
+      const cap = num(r.kapasitas_harian);
+      const capPerBucket = layout.granularity === 'daily' ? cap
+                          : layout.granularity === 'weekly' ? cap * 5
+                          : cap * 22;
+      const capDisplay = cap > 0 ? fmt(capPerBucket, 0) : '—';
+
+      const cells = columns.map(bk => {
+        const qty = num(m[bk]);
+        const rWithGran = Object.assign({}, r, { _gran: layout.granularity });
+        return this._cellHTML(r.kode, bk, qty, rWithGran);
+      }).join('');
+
+      const total = columns.reduce((s, bk) => s + num(m[bk]), 0);
+
+      return '<tr>' +
+        '<td class="rs-td-id">' + esc(r.kode) + '</td>' +
+        '<td class="rs-td-name">' + esc(r.nama) + '</td>' +
+        '<td class="rs-td-jenis"><span class="rs-jenis ' + esc(r.jenis) + '">' + esc(r.jenis) + '</span></td>' +
+        '<td class="rs-td-sat">' + esc(r.satuan) + '</td>' +
+        '<td class="rs-td-cap num">' + capDisplay + '</td>' +
+        cells +
+        '<td class="rs-td-total num"><b>' + fmt(total, total < 100 ? 2 : 0) + '</b></td>' +
+      '</tr>';
+    }).join('');
+
+    return '<div class="rs-wrap">' +
+      '<table class="rs-table">' + head + '<tbody>' + body + '</tbody></table>' +
+    '</div>';
+  },
+
+  /* ── Layout Horizontal: baris = periode, kolom = resource ── */
+  _renderHorizontal(data, layout){
+    const {resources, columns, matrix} = data;
+
+    /* Header */
+    const head =
+      '<thead><tr>' +
+        '<th class="rs-th-id">Periode</th>' +
+        resources.map(r =>
+          '<th class="rs-th-col num" title="' + esc(r.nama) + '">' +
+            esc(r.kode) +
+          '</th>'
+        ).join('') +
+        '<th class="rs-th-total num">Total</th>' +
+      '</tr></thead>';
+
+    /* Body — 1 row per column (bucket) */
+    const body = columns.map(bk => {
+      let rowTotal = 0;
+      const cells = resources.map(r => {
+        const qty = num((matrix[r.kode] || {})[bk]);
+        rowTotal += qty;
+        const rWithGran = Object.assign({}, r, { _gran: layout.granularity });
+        return this._cellHTML(r.kode, bk, qty, rWithGran);
+      }).join('');
+
+      return '<tr>' +
+        '<td class="rs-td-id">' + esc(bk) + '</td>' +
+        cells +
+        '<td class="rs-td-total num"><b>' + fmt(rowTotal, rowTotal < 100 ? 2 : 0) + '</b></td>' +
+      '</tr>';
+    }).join('');
+
+    return '<div class="rs-wrap">' +
+      '<table class="rs-table rs-table-h">' + head + '<tbody>' + body + '</tbody></table>' +
+    '</div>';
+  }
+};
+
+/* =====================================================================
+   BAGIAN 9E.2 — CONFLICT DETECTOR (Fase 1E)
 
 /* =====================================================================
    BAGIAN 9E.2 — CONFLICT DETECTOR (Fase 1E)
