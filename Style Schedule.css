@@ -2159,3 +2159,193 @@ canvas:not(.gantt-axis):not(.gantt-bars){
   font-weight:600;
 }
 .gantt-btn-level:hover{filter:brightness(1.12)}
+
+/* =====================================================================
+   FASE 4E — PROFESSIONAL REPORT
+   ===================================================================== */
+
+/* Report options modal — reuse existing */
+.report-opt-row{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  padding:9px 0;
+  border-bottom:1px solid rgba(36,54,92,.4);
+}
+.report-opt-row:last-child{border-bottom:none}
+.report-opt-row input[type="checkbox"]{
+  width:16px;height:16px;
+  accent-color:var(--acc);cursor:pointer;flex-shrink:0;
+}
+.report-opt-row label{flex:1;font-size:12.5px;cursor:pointer}
+.report-opt-row .report-field{
+  display:flex;gap:6px;align-items:center;
+  flex:0 0 auto;min-width:180px;
+}
+.report-opt-row .report-field input,
+.report-opt-row .report-field select{padding:5px 8px;font-size:12px}
+
+.report-opt-group{
+  margin-top:12px;
+  padding:10px 14px;
+  background:rgba(47,129,247,.06);
+  border:1px solid rgba(47,129,247,.20);
+  border-radius:8px;
+  font-size:11.5px;
+  color:var(--muted);
+  line-height:1.6;
+}
+.report-opt-group b{color:#7cb3ff}
+
+/* =====================================================================
+   FASE 4F — RESOURCE SHEET VIEW
+   ===================================================================== */
+
+/* View toggle container */
+.gantt-btn-view{
+  padding:5px 10px;
+  font-size:11.5px;
+  border-radius:6px;
+  background:linear-gradient(135deg,#0891b2,#0e7490);
+  border:1px solid transparent;
+  color:#fff;
+  cursor:pointer;
+  transition:.12s;
+  font-weight:600;
+}
+.gantt-btn-view:hover{filter:brightness(1.12)}
+
+.gantt-btn-report{
+  padding:5px 10px;
+  font-size:11.5px;
+  border-radius:6px;
+  background:linear-gradient(135deg,#dc2626,#b91c1c);
+  border:1px solid transparent;
+  color:#fff;
+  cursor:pointer;
+  transition:.12s;
+  font-weight:600;
+}
+.gantt-btn-report:hover{filter:brightness(1.12)}
+
+/* Resource Sheet table */
+.rs-wrap{
+  padding:14px 16px;
+  height:60vh;
+  min-height:340px;
+  overflow-y:auto;
+  background:#0c1729;
+  box-sizing:border-box;
+}
+.rs-title{
+  font-weight:700;
+  color:#e6edf7;
+  font-size:14px;
+  margin-bottom:4px;
+  display:flex;
+  align-items:center;
+  gap:10px;
+}
+.rs-subtitle{
+  font-size:11.5px;
+  color:var(--muted);
+  margin-bottom:14px;
+}
+.rs-table{
+  width:100%;
+  border-collapse:collapse;
+  font-size:11.5px;
+  color:var(--txt);
+}
+.rs-table thead th{
+  background:linear-gradient(180deg,#1f4e79,#17395a);
+  color:#fff;
+  padding:8px 10px;
+  text-align:left;
+  font-weight:700;
+  font-size:10.5px;
+  text-transform:uppercase;
+  letter-spacing:.5px;
+  white-space:nowrap;
+  position:sticky;
+  top:0;
+  z-index:5;
+  border-bottom:1px solid var(--line);
+}
+.rs-table thead th.num{text-align:right}
+.rs-table thead th.center{text-align:center}
+.rs-table tbody td{
+  padding:8px 10px;
+  border-bottom:1px solid rgba(36,54,92,.4);
+  vertical-align:middle;
+}
+.rs-table tbody td.num{
+  text-align:right;
+  font-variant-numeric:tabular-nums;
+  white-space:nowrap;
+}
+.rs-table tbody td.center{text-align:center}
+.rs-table tbody tr:hover{background:rgba(47,129,247,.06)}
+.rs-table tbody tr.rs-group-header{
+  background:linear-gradient(90deg,rgba(47,129,247,.10),rgba(47,129,247,.02));
+  font-weight:700;
+  cursor:pointer;
+}
+.rs-table tbody tr.rs-group-header td{
+  color:#7cb3ff;
+  border-bottom:1px solid var(--acc);
+}
+.rs-table tbody tr.rs-group-header .rs-expand{
+  display:inline-block;
+  width:12px;
+  color:#7cb3ff;
+  font-size:10px;
+  transition:transform .12s;
+}
+.rs-table tbody tr.rs-detail td:first-child{
+  padding-left:34px;
+  font-style:italic;
+  color:var(--muted);
+}
+.rs-table tbody tr.rs-detail{
+  background:rgba(15,23,42,.5);
+}
+.rs-table tbody tr.rs-empty td{
+  padding:32px;
+  text-align:center;
+  color:var(--muted);
+  font-style:italic;
+}
+
+/* Resource type badge */
+.rs-jenis{
+  display:inline-block;
+  padding:2px 8px;
+  border-radius:10px;
+  font-size:10px;
+  font-weight:700;
+  letter-spacing:.3px;
+}
+.rs-jenis.upah{background:rgba(47,129,247,.18);color:#7cb3ff}
+.rs-jenis.bahan{background:rgba(26,188,156,.18);color:#4fe0c0}
+.rs-jenis.alat{background:rgba(245,158,11,.18);color:#ffc861}
+
+/* Utilization bar */
+.rs-util{
+  display:inline-block;
+  width:60px;
+  height:6px;
+  background:rgba(36,54,92,.6);
+  border-radius:3px;
+  overflow:hidden;
+  vertical-align:middle;
+  margin-right:6px;
+}
+.rs-util-fill{
+  display:block;
+  height:100%;
+  background:linear-gradient(90deg,#22c55e,#16a34a);
+  transition:width .3s;
+}
+.rs-util-fill.warn{background:linear-gradient(90deg,#f59e0b,#d97706)}
+.rs-util-fill.danger{background:linear-gradient(90deg,#dc2626,#b91c1c)}
