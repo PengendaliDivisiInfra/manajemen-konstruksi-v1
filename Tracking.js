@@ -52,8 +52,8 @@
     var TRACKING_COLS = [
       { key: 'act_start',  label: 'Act Start',  width: 92, align: 'center', tracking: true },
       { key: 'act_finish', label: 'Act Finish', width: 92, align: 'center', tracking: true },
-      { key: 'slip',       label: 'Slip',       width: 62, align: 'center', tracking: true },
-      { key: 'status',     label: 'Status',     width: 96, align: 'center', tracking: true }
+      { key: 'slip',       label: 'Slip',       width: 68, align: 'center', tracking: true },
+      { key: 'status',     label: 'Status',     width: 118, align: 'center', tracking: true }
     ];
 
     if (!GanttView._trackingColsInjected){
