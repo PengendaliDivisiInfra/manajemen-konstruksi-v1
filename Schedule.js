@@ -2645,10 +2645,10 @@ const GanttView = {
       if (n.isMilestone){
         const cx = x1;
         const cy = y + rowH / 2;
-        this.diamond(ctx, cx, cy, 7, n.isCritical ? '#dc2626' : '#e6edf7');
+        const isComplete = n.progressPct >= 99.9;
+        this.diamond(ctx, cx, cy, 8, n.isCritical, isComplete);
         return;
       }
-
       const w = Math.max(3, x2 - x1);
 
       if (n.isSummary){
@@ -2660,7 +2660,7 @@ const GanttView = {
       }
     });
 
-         // E.2. Baseline shadow bars (garis abu tipis di bawah bar utama)
+    // E.2. Baseline shadow bars (MS Project style — solid gray bar di bawah task bar)
     if (state.baselineIdx && Baseline.isSet(state.proj.id, state.baselineIdx)){
       const fS = Baseline.fieldFor(state.baselineIdx, 'start');
       const fF = Baseline.fieldFor(state.baselineIdx, 'finish');
@@ -2670,13 +2670,28 @@ const GanttView = {
         const bStart  = n.raw[fS];
         const bFinish = n.raw[fF];
         if (!bStart || !bFinish) return;
+
         const sOff = Math.round((new Date(bStart)  - startDate) / 86400000);
         const fOff = Math.round((new Date(bFinish) - startDate) / 86400000);
         const bx = sOff * px;
-        const bw = Math.max(2, (fOff - sOff) * px);
-        const by = i * rowH + rowH - 4;
-        ctx.fillStyle = '#7a8394';
-        ctx.fillRect(bx, by, bw, 2);
+        const bw = Math.max(3, (fOff - sOff) * px);
+
+        /* Baseline bar: di bawah task bar
+           Row height 26, task bar bottom = y + (26-14)/2 + 14 = y + 20
+           Baseline at y + 20, height 4 (fits in remaining 6px) */
+        const by = i * rowH + 20;
+
+        /* Main solid gray body */
+        ctx.fillStyle = '#6b7280';
+        ctx.fillRect(bx, by, bw, 4);
+
+        /* Dark border atas untuk kontras */
+        ctx.fillStyle = '#4b5563';
+        ctx.fillRect(bx, by, bw, 1);
+
+        /* End caps tipis untuk member kesan bar solid */
+        ctx.fillRect(bx, by, 1.5, 4);
+        ctx.fillRect(bx + bw - 1.5, by, 1.5, 4);
       });
     }
 
@@ -2758,28 +2773,47 @@ const GanttView = {
     }
   },
 
+  /* ── Task bar (MS Project style) ──
+     - Bar kosong: light fill (total duration)
+     - Bar completed: dark fill sampai % progress
+     - Progress Line: garis hitam vertikal di batas completed portion */
   taskBar(ctx, x, y, w, h, fill, stroke, pct){
     const bg = this.lighten(fill, 0.55);
+
+    /* Background bar (light) */
     ctx.fillStyle = bg;
     this.rrect(ctx, x, y, w, h, 3);
     ctx.fill();
 
     if (pct > 0){
       const pw = Math.max(2, w * (pct/100));
+
+      /* Completed portion (dark) */
       ctx.fillStyle = fill;
       this.rrect(ctx, x, y, pw, h, 3);
       ctx.fill();
+
+      /* Progress Line: garis vertikal hitam di batas completed */
+      if (pct < 100 && pw > 3 && w > 8){
+        ctx.save();
+        ctx.fillStyle = '#0b1220';
+        ctx.fillRect(x + pw - 1, y + 1, 2.5, h - 2);
+        ctx.restore();
+      }
     } else {
-      ctx.fillStyle = fill;
+      /* Belum mulai: seluruh bar light (tidak ada fill gelap) */
+      ctx.fillStyle = bg;
       this.rrect(ctx, x, y, w, h, 3);
       ctx.fill();
     }
 
+    /* Border bar */
     ctx.strokeStyle = stroke;
     ctx.lineWidth = 1;
     this.rrect(ctx, x + .5, y + .5, w - 1, h - 1, 3);
     ctx.stroke();
 
+    /* Label % di tengah bar */
     if (w > 60 && pct > 0){
       ctx.fillStyle = '#fff';
       ctx.font = 'bold 9px Segoe UI';
@@ -2788,7 +2822,7 @@ const GanttView = {
       ctx.fillText(Math.round(pct) + '%', x + w/2, y + h/2);
     }
   },
-
+   
   summaryBar(ctx, x, y, w, h){
     // Fill terang + border terang → KONTRAS di background gelap
     ctx.fillStyle = '#475569';
@@ -2824,7 +2858,32 @@ const GanttView = {
     ctx.fill();
   },
 
-  diamond(ctx, cx, cy, r, fill){
+  /* ── Milestone diamond (MS Project style) ──
+     - Normal milestone   : fill hitam, outline abu
+     - Critical milestone : fill merah, outline dark red
+     - Complete milestone : fill putih, outline hitam
+     Backward compat: kalau arg1 bertipe string → mode lama (arg1 = warna fill) */
+  diamond(ctx, cx, cy, r, arg1, arg2){
+    let fill, stroke;
+    if (typeof arg1 === 'string'){
+      // Mode lama
+      fill = arg1;
+      stroke = '#e6edf7';
+    } else {
+      const isCritical = !!arg1;
+      const isComplete = !!arg2;
+      if (isComplete){
+        fill = '#e6edf7';       // putih (complete)
+        stroke = '#0b1220';     // outline hitam
+      } else if (isCritical){
+        fill = '#dc2626';       // merah (kritis)
+        stroke = '#7f1d1d';     // outline dark red
+      } else {
+        fill = '#0b1220';       // hitam (normal — MS Project default)
+        stroke = '#94a3b8';     // outline abu
+      }
+    }
+
     ctx.beginPath();
     ctx.moveTo(cx, cy - r);
     ctx.lineTo(cx + r, cy);
@@ -2833,7 +2892,7 @@ const GanttView = {
     ctx.closePath();
     ctx.fillStyle = fill;
     ctx.fill();
-    ctx.strokeStyle = '#e6edf7';
+    ctx.strokeStyle = stroke;
     ctx.lineWidth = 1.5;
     ctx.stroke();
   },
