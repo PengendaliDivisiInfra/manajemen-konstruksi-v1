@@ -1493,6 +1493,10 @@ const GanttView = {
     const baselineIdx = (opts.baselineIdx !== undefined)
                         ? opts.baselineIdx
                         : (container._baselineIdx || null);
+    const filter = container._filter || {
+      search: '', chips: new Set(), sort: { key: null, dir: 'asc' }, groupBy: null
+    };
+    const collapsedGroups = container._collapsedGroups || new Set();
 
     const childrenOf = {};
     nodes.forEach(n => {
@@ -1527,7 +1531,8 @@ const GanttView = {
       chartWidth, zoom, zoomCfg,
       mode: opts.mode || 'rab', cal,
       collapsed, childrenOf, selected,
-      baselineIdx,                    // ← NEW
+      baselineIdx,
+      filter, collapsedGroups,        // ← NEW
       visibleNodes: [],
       totalHeight: 0,
       posMap: {},
@@ -1538,7 +1543,9 @@ const GanttView = {
     container._lastZoom = zoom;
     container._collapsed = collapsed;
     container._selected  = selected;
-    container._baselineIdx = baselineIdx;   // ← NEW
+    container._baselineIdx = baselineIdx;
+    container._filter = filter;
+    container._collapsedGroups = collapsedGroups;
 
     this.applyColWidths(state);
     this.computeVisible(state);
@@ -1549,21 +1556,235 @@ const GanttView = {
 
      /* Hitung node yang terlihat (skip descendants of collapsed) */
   computeVisible(state){
-    const {nodes, collapsed} = state;
+    const {nodes, collapsed, filter} = state;
 
-    // Build set: hidden node ids
+    // 1. Hidden karena collapse summary
     const hidden = new Set();
     const markHidden = (id) => {
       const kids = state.childrenOf[id] || [];
-      kids.forEach(kid => {
-        hidden.add(kid);
-        markHidden(kid);
-      });
+      kids.forEach(kid => { hidden.add(kid); markHidden(kid); });
     };
     collapsed.forEach(id => markHidden(id));
 
-    state.visibleNodes = nodes.filter(n => !hidden.has(n.id));
-    state.totalHeight  = state.visibleNodes.length * this.ROW_H;
+    let visible = nodes.filter(n => !hidden.has(n.id));
+
+    // 2. Filter by search
+    if (filter.search){
+      visible = this.applySearch(visible, state, filter.search);
+    }
+
+    // 3. Filter by chips
+    if (filter.chips.size > 0){
+      visible = this.applyChips(visible, state, filter.chips);
+    }
+
+    // 4. Sort by column (skip kalau group aktif)
+    if (filter.sort.key && !filter.groupBy){
+      visible = this.applySort(visible, state);
+    }
+
+    // 5. Group by (insert group headers)
+    if (filter.groupBy){
+      visible = this.applyGroup(visible, state);
+    }
+
+    state.visibleNodes = visible;
+    state.totalHeight  = visible.length * this.ROW_H;
+  },
+
+  /* Filter by search (show matching + ancestors) */
+  applySearch(nodes, state, q){
+    const needle = q.toLowerCase();
+    const matching = new Set();
+    const byId = {};
+    nodes.forEach(n => { byId[n.id] = n; });
+
+    nodes.forEach(n => {
+      if (n.isGroupHeader) return;
+      const hay = ((n.kode || '') + ' ' + (n.nama || '')).toLowerCase();
+      if (hay.includes(needle)) matching.add(n.id);
+    });
+
+    const keep = new Set(matching);
+    matching.forEach(id => {
+      let cur = byId[id];
+      while (cur && cur.parentId){
+        keep.add(cur.parentId);
+        cur = byId[cur.parentId];
+      }
+    });
+    return nodes.filter(n => keep.has(n.id));
+  },
+
+  /* Filter by chips (AND semantics) */
+  applyChips(nodes, state, chips){
+    const matching = new Set();
+    const byId = {};
+    nodes.forEach(n => { byId[n.id] = n; });
+
+    const hasBaseline = state.baselineIdx && Baseline.isSet(state.proj.id, state.baselineIdx);
+    const fF = hasBaseline ? Baseline.fieldFor(state.baselineIdx, 'finish') : null;
+
+    nodes.forEach(n => {
+      if (n.isGroupHeader) return;
+      let ok = true;
+      if (chips.has('critical')  && !n.isCritical)   ok = false;
+      if (chips.has('milestone') && !n.isMilestone)  ok = false;
+      if (chips.has('summary')   && !n.isSummary)    ok = false;
+      if (chips.has('late')){
+        if (!hasBaseline){ ok = false; }
+        else {
+          const bF = n.raw[fF];
+          if (!bF || !n.finishISO){ ok = false; }
+          else {
+            const cal = WorkingCalendar.get(n.raw.calendar_id);
+            const slip = WorkingCalendar.diffDays(bF, n.finishISO, cal, 'working');
+            if (slip <= 0) ok = false;
+          }
+        }
+      }
+      if (ok) matching.add(n.id);
+    });
+
+    const keep = new Set(matching);
+    matching.forEach(id => {
+      let cur = byId[id];
+      while (cur && cur.parentId){
+        keep.add(cur.parentId);
+        cur = byId[cur.parentId];
+      }
+    });
+    return nodes.filter(n => keep.has(n.id));
+  },
+
+  /* Sort siblings within each parent */
+  applySort(nodes, state){
+    const { key, dir } = state.filter.sort;
+    const byParent = {};
+    nodes.forEach(n => {
+      const pk = n.parentId || '__root__';
+      (byParent[pk] = byParent[pk] || []).push(n);
+    });
+
+    const cmp = (a, b) => {
+      const va = this.sortValue(a, key, state);
+      const vb = this.sortValue(b, key, state);
+      let r;
+      if (typeof va === 'number' && typeof vb === 'number') r = va - vb;
+      else r = String(va).localeCompare(String(vb), 'id');
+      return dir === 'asc' ? r : -r;
+    };
+    Object.keys(byParent).forEach(pk => byParent[pk].sort(cmp));
+
+    const result = [];
+    const walk = (pk) => {
+      (byParent[pk] || []).forEach(n => {
+        result.push(n);
+        walk(n.id);
+      });
+    };
+    walk('__root__');
+    return result;
+  },
+
+  sortValue(node, key, state){
+    switch (key){
+      case 'kode':      return String(node.kode || '');
+      case 'nama':      return String(node.nama || '').toLowerCase();
+      case 'duration':  return node.duration || 0;
+      case 'startISO':  return String(node.startISO || '');
+      case 'finishISO': return String(node.finishISO || '');
+      case 'predecessors': return String(node.predecessors || '');
+      case 'variance': {
+        if (!state.baselineIdx || !Baseline.isSet(state.proj.id, state.baselineIdx)) return 0;
+        const fF = Baseline.fieldFor(state.baselineIdx, 'finish');
+        const bF = node.raw[fF];
+        if (!bF || !node.finishISO) return 0;
+        const cal = WorkingCalendar.get(node.raw.calendar_id);
+        return WorkingCalendar.diffDays(bF, node.finishISO, cal, 'working');
+      }
+      default: return '';
+    }
+  },
+
+  /* Group by field — insert synthetic header rows */
+  applyGroup(nodes, state){
+    const field = state.filter.groupBy;
+    const groups = {};
+    nodes.forEach(n => {
+      if (n.isSummary) return;   // skip summaries in grouped view
+      const val = this.groupValue(n, field, state);
+      (groups[val] = groups[val] || []).push(n);
+    });
+
+    const names = Object.keys(groups).sort((a, b) =>
+      String(a).localeCompare(String(b), 'id')
+    );
+
+    const result = [];
+    names.forEach(name => {
+      const items = groups[name];
+      const isCollapsed = state.collapsedGroups.has(name);
+
+      result.push({
+        id: '__grp__' + field + '__' + name,
+        kode: '',
+        nama: name,
+        isGroupHeader: true,
+        groupName: name,
+        groupField: field,
+        groupCount: items.length,
+        collapsed: isCollapsed
+      });
+
+      if (!isCollapsed){
+        let items2 = items;
+        if (state.filter.sort.key){
+          items2 = items.slice().sort((a, b) => {
+            const va = this.sortValue(a, state.filter.sort.key, state);
+            const vb = this.sortValue(b, state.filter.sort.key, state);
+            let r;
+            if (typeof va === 'number' && typeof vb === 'number') r = va - vb;
+            else r = String(va).localeCompare(String(vb), 'id');
+            return state.filter.sort.dir === 'asc' ? r : -r;
+          });
+        }
+        items2.forEach(n => result.push(n));
+      }
+    });
+    return result;
+  },
+
+  groupValue(node, field, state){
+    switch (field){
+      case 'kategori': {
+        const w = node.raw;
+        if (!w.ahsp_id) return '— Tanpa AHSP —';
+        const a = DB.ahsp_headers.find(x => x.id === w.ahsp_id);
+        return a ? (a.kategori || '— Tanpa Kategori —') : '— Tanpa AHSP —';
+      }
+      case 'kalender': {
+        const w = node.raw;
+        const cal = DB.working_calendars.find(c =>
+          c.id === (w.calendar_id || state.proj.calendar_id)
+        );
+        return cal ? (cal.kode + ' — ' + cal.nama) : '— Tidak ada kalender —';
+      }
+      case 'status': {
+        if (!state.baselineIdx || !Baseline.isSet(state.proj.id, state.baselineIdx))
+          return '🔵 Belum ada baseline';
+        const w = node.raw;
+        const fF = Baseline.fieldFor(state.baselineIdx, 'finish');
+        const bF = w[fF];
+        if (!bF) return '⚪ Belum di baseline';
+        const cal = WorkingCalendar.get(w.calendar_id);
+        const slip = WorkingCalendar.diffDays(bF, w.tgl_selesai_rencana, cal, 'working');
+        if (slip > 0) return '🔴 Late';
+        if (slip < 0) return '🟢 Early';
+        return '🔵 On-Time';
+      }
+      default: return '—';
+    }
   },
 
   /* Cari index node di visibleNodes */
@@ -1657,14 +1878,35 @@ const GanttView = {
         '</div>' +
         kpiBar +
 
+        '<div class="gantt-filterbar">' +
+          '<input class="fb-search" placeholder="Cari task / kode…" value="' + esc(state.filter.search) + '">' +
+          '<button class="fb-chip chip-critical' + (state.filter.chips.has('critical')  ? ' active' : '') + '" data-chip="critical">🔥 Kritis</button>' +
+          '<button class="fb-chip chip-late'     + (state.filter.chips.has('late')      ? ' active' : '') + '" data-chip="late">⏰ Late</button>' +
+          '<button class="fb-chip chip-ms'       + (state.filter.chips.has('milestone') ? ' active' : '') + '" data-chip="milestone">◆ Milestone</button>' +
+          '<button class="fb-chip'                + (state.filter.chips.has('summary')   ? ' active' : '') + '" data-chip="summary">▾ Summary</button>' +
+          '<span class="fb-lbl" style="margin-left:8px">Group</span>' +
+          '<select class="fb-select fb-group">' +
+            '<option value="">— Tidak ada —</option>' +
+            '<option value="kategori" ' + (state.filter.groupBy === 'kategori' ? 'selected' : '') + '>Kategori</option>' +
+            '<option value="kalender" ' + (state.filter.groupBy === 'kalender' ? 'selected' : '') + '>Kalender</option>' +
+            '<option value="status"   ' + (state.filter.groupBy === 'status'   ? 'selected' : '') + '>Status (vs Baseline)</option>' +
+          '</select>' +
+          '<span class="fb-count"><b>' + state.visibleNodes.length + '</b> / ' + state.nodes.length + ' task</span>' +
+          '<button class="fb-clear">✕ Reset Filter</button>' +
+        '</div>' +
+
         '<div class="gantt-body">' +
           '<div class="gantt-thead">' +
             this.COLUMNS.map((c, idx) => {
               const cls = c.align === 'right' ? ' right' : c.align === 'center' ? ' center' : '';
               const isLast = idx === this.COLUMNS.length - 1;
               const resize = isLast ? '' : '<div class="gantt-th-resizer" data-col-idx="' + idx + '"></div>';
+              const isActiveSort = state.filter.sort.key === c.key;
+              const ind = isActiveSort
+                ? '<span class="sort-ind">' + (state.filter.sort.dir === 'asc' ? '▲' : '▼') + '</span>'
+                : '<span class="sort-ind off">▲</span>';
               return '<div class="gantt-th' + cls + '" data-col-key="' + c.key + '" style="width:' + c.width + 'px">' +
-                     esc(c.label) + resize + '</div>';
+                     esc(c.label) + ind + resize + '</div>';
             }).join('') +
           '</div>' +
 
@@ -1699,7 +1941,8 @@ const GanttView = {
 
      /* Gambar garis dependency antar task */
   drawDependencies(ctx, state, posMap, rowH){
-    const {visibleNodes, nodes} = state;
+    const {nodes} = state;
+    const visibleNodes = state.visibleNodes.filter(n => !n.isGroupHeader);
     const nodeById = {};
     nodes.forEach(n => { nodeById[n.id] = n; });
 
@@ -1708,6 +1951,7 @@ const GanttView = {
 
     ctx.save();
     visibleNodes.forEach(n => {
+      if (n.isGroupHeader) return;
       const raw = n.raw || {};
       if (!raw.predecessor) return;
 
@@ -1812,6 +2056,8 @@ const GanttView = {
 
   /* ─────── ROW HTML ─────── */
   rowHtml(node, idx){
+    if (node.isGroupHeader) return this.groupHeaderHtml(node);
+
     const state = this._state;
     const collapsed = state && state.collapsed ? state.collapsed : new Set();
     const selected  = state && state.selected  ? state.selected  : new Set();
@@ -1909,6 +2155,17 @@ const GanttView = {
 
     return '<div class="' + cls + '" data-idx="' + idx + '" data-node-id="' + esc(node.id) + '">' +
            cells + '</div>';
+  },
+
+     groupHeaderHtml(node){
+    const isCollapsed = node.collapsed;
+    return '<div class="gantt-row is-group-header" data-group-name="' + esc(node.groupName) + '">' +
+      '<div class="gantt-td" style="width:100%;justify-content:flex-start">' +
+        '<span class="gt-group-toggle">' + (isCollapsed ? '▸' : '▾') + '</span>' +
+        '<span class="gt-group-name">' + esc(node.groupName) + '</span>' +
+        '<span class="gt-group-count">' + node.groupCount + ' task</span>' +
+      '</div>' +
+    '</div>';
   },
 
   /* ─────── AXIS ─────── */
@@ -2024,7 +2281,8 @@ const GanttView = {
   drawBars(state, canvas){
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
-    const {visibleNodes, startDate, cal} = state;
+    const {startDate, cal} = state;
+    const visibleNodes = state.visibleNodes.filter(n => !n.isGroupHeader);
     const px  = state.zoomCfg.pxPerDay;
     const H   = canvas.height, W = canvas.width;
     const rowH = this.ROW_H;
@@ -2084,7 +2342,9 @@ const GanttView = {
     const posMap = {};
     state.posMap = posMap;
 
-    visibleNodes.forEach((n, i) => {
+    // Iterate over ALL visible items (including group headers) supaya y benar
+    state.visibleNodes.forEach((n, i) => {
+      if (n.isGroupHeader) return;   // group header tidak punya bar
       const y = i * rowH;
       if (!n.startISO || !n.finishISO) return;
 
@@ -2117,7 +2377,8 @@ const GanttView = {
     if (state.baselineIdx && Baseline.isSet(state.proj.id, state.baselineIdx)){
       const fS = Baseline.fieldFor(state.baselineIdx, 'start');
       const fF = Baseline.fieldFor(state.baselineIdx, 'finish');
-      visibleNodes.forEach((n, i) => {
+      state.visibleNodes.forEach((n, i) => {
+        if (n.isGroupHeader) return;
         if (n.isSummary || n.isMilestone) return;
         const bStart  = n.raw[fS];
         const bFinish = n.raw[fF];
@@ -2439,6 +2700,99 @@ const GanttView = {
     if (selClear)    selClear.onclick    = () => { state.selected.clear(); this.refreshSelectionUI(state); };
     if (selClearAll) selClearAll.onclick = () => { state.selected.clear(); this.refreshSelectionUI(state); };
 
+    // ── Filter bar wiring ──
+    const filterBar = container.querySelector('.gantt-filterbar');
+    if (filterBar){
+      const searchInput = filterBar.querySelector('.fb-search');
+      let searchTimer = null;
+      if (searchInput){
+        searchInput.addEventListener('input', e => {
+          clearTimeout(searchTimer);
+          const val = e.target.value;
+          searchTimer = setTimeout(() => {
+            state.filter.search = val;
+            container._filter = state.filter;
+            this.mount(state.container, state.proj.id, { mode: state.mode, zoom: state.zoom });
+          }, 250);
+        });
+        // Preserve cursor pos after mount
+        if (state.filter.search){
+          searchInput.focus();
+          searchInput.setSelectionRange(searchInput.value.length, searchInput.value.length);
+        }
+      }
+
+      filterBar.querySelectorAll('.fb-chip').forEach(chipEl => {
+        chipEl.onclick = () => {
+          const key = chipEl.getAttribute('data-chip');
+          if (!key) return;
+          if (state.filter.chips.has(key)) state.filter.chips.delete(key);
+          else state.filter.chips.add(key);
+          container._filter = state.filter;
+          this.mount(state.container, state.proj.id, { mode: state.mode, zoom: state.zoom });
+        };
+      });
+
+      const groupSel = filterBar.querySelector('.fb-group');
+      if (groupSel){
+        groupSel.onchange = e => {
+          state.filter.groupBy = e.target.value || null;
+          container._filter = state.filter;
+          this.mount(state.container, state.proj.id, { mode: state.mode, zoom: state.zoom });
+        };
+      }
+
+      const clearBtn = filterBar.querySelector('.fb-clear');
+      if (clearBtn){
+        clearBtn.onclick = () => {
+          state.filter.search = '';
+          state.filter.chips.clear();
+          state.filter.sort = { key: null, dir: 'asc' };
+          state.filter.groupBy = null;
+          state.collapsedGroups.clear();
+          container._filter = state.filter;
+          container._collapsedGroups = state.collapsedGroups;
+          this.mount(state.container, state.proj.id, { mode: state.mode, zoom: state.zoom });
+        };
+      }
+    }
+
+    // ── Sort by column header (mousedown for responsiveness) ──
+    const theadEl = container.querySelector('.gantt-thead');
+    if (theadEl){
+      theadEl.addEventListener('mousedown', e => {
+        if (e.target.closest('.gantt-th-resizer')) return;
+        if (state._lastResizeAt && Date.now() - state._lastResizeAt < 200) return;
+        const th = e.target.closest('.gantt-th[data-col-key]');
+        if (!th) return;
+        const key = th.getAttribute('data-col-key');
+        if (!key) return;
+        if (key === 'variance' && !state.baselineIdx) return;
+        const cur = state.filter.sort;
+        if (cur.key === key){
+          if (cur.dir === 'asc') cur.dir = 'desc';
+          else { cur.key = null; cur.dir = 'asc'; }
+        } else {
+          cur.key = key; cur.dir = 'asc';
+        }
+        container._filter = state.filter;
+        this.mount(state.container, state.proj.id, { mode: state.mode, zoom: state.zoom });
+      });
+    }
+
+    // ── Group header collapse toggle ──
+    leftBody.addEventListener('click', e => {
+      const toggle = e.target.closest('.gt-group-toggle');
+      if (!toggle) return;
+      const row = toggle.closest('.gantt-row.is-group-header');
+      if (!row) return;
+      const name = row.getAttribute('data-group-name');
+      if (state.collapsedGroups.has(name)) state.collapsedGroups.delete(name);
+      else state.collapsedGroups.add(name);
+      container._collapsedGroups = state.collapsedGroups;
+      this.mount(state.container, state.proj.id, { mode: state.mode, zoom: state.zoom });
+    });
+
     // ── Tooltip ──
     this.wireTooltip(state, rightScr, axisTrack);
 
@@ -2501,6 +2855,7 @@ const GanttView = {
       body.style.cursor = prevCursor;
       body.style.userSelect = '';
       this.saveColWidths(state.colWidths);
+      state._lastResizeAt = Date.now();   // ← NEW: blokir sort setelah resize
     };
 
     document.addEventListener('mousemove', onMove);
@@ -2818,7 +3173,7 @@ const GanttView = {
       if (rowIdx < 0 || rowIdx >= visibleNodes.length){ hideTip(); return; }
 
       const node = visibleNodes[rowIdx];
-      if (!node){ hideTip(); return; }
+      if (!node || node.isGroupHeader){ hideTip(); return; }
 
       showTip(node, e);
     });
