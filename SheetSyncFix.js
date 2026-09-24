@@ -57,6 +57,54 @@
     },
 
     /* ═══════════════════════════════════════════════════════════
+       RAW TEST — panggil endpoint langsung, tanpa retry/fallback
+       ═══════════════════════════════════════════════════════════ */
+    rawTest: function(action, payload){
+      var url = (typeof SET !== 'undefined' && SET.sheetUrl) ? SET.sheetUrl : '';
+      if (!url){
+        console.error('❌ URL belum diatur');
+        return Promise.reject('no url');
+      }
+      console.log('%c🔬 RAW TEST: ' + (action || 'softStatus'),
+        'color:#a855f7;font-weight:bold;font-size:13px');
+      console.log('   URL:', url);
+
+      var body = JSON.stringify({
+        action: action || 'softStatus',
+        payload: payload || {}
+      });
+      console.log('   Body size:', (body.length / 1024).toFixed(2), 'KB');
+
+      return fetch(url, {
+        method: 'POST',
+        redirect: 'follow',
+        headers: {'Content-Type': 'text/plain;charset=utf-8'},
+        body: body
+      }).then(function(res){
+        console.log('   HTTP Status:', res.status);
+        console.log('   Redirected:', res.redirected);
+        console.log('   Final URL:', res.url);
+        return res.text();
+      }).then(function(text){
+        console.log('   Response length:', text.length, 'chars');
+        console.log('   Response preview:', text.substring(0, 300));
+        try {
+          var json = JSON.parse(text);
+          console.log('%c✅ JSON valid', 'color:#22c55e;font-weight:bold');
+          console.log(json);
+          return json;
+        } catch (e){
+          console.warn('%c⚠ Response bukan JSON valid', 'color:#f59e0b;font-weight:bold');
+          console.log('   Raw:', text.substring(0, 500));
+          return null;
+        }
+      }).catch(function(e){
+        console.error('❌ Fetch error:', e.message);
+        throw e;
+      });
+    }
+
+    /* ═══════════════════════════════════════════════════════════
        2. GUIDE — panduan fix
        ═══════════════════════════════════════════════════════════ */
     guide: function(){
