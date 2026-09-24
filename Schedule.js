@@ -1861,6 +1861,7 @@ const GanttView = {
             '<button class="gantt-btn-tool gantt-btn-collapse-all" title="Collapse All">⊟</button>' +
             '<button class="gantt-btn-export gantt-btn-export-png" title="Export PNG">⬇ PNG</button>' +
             '<button class="gantt-btn-export gantt-btn-export-pdf" title="Export PDF" style="background:linear-gradient(135deg,#dc2626,#b91c1c)">📄 PDF</button>' +
+            '<button class="gantt-btn-level gantt-btn-level-open" title="Auto Leveling">⚖ Level</button>' +
             '<span class="gantt-lbl" style="margin-left:8px">Baseline</span>' +
             '<select class="gantt-baseline-sel">' +
               '<option value="">— Tidak ada —</option>' + blOpts +
@@ -1929,6 +1930,7 @@ const GanttView = {
 
         '<div class="gantt-sel-bar">' +
           '<span class="count"><span class="sel-count">0</span> dipilih</span>' +
+          '<button class="sel-btn sel-btn-bulk" style="background:linear-gradient(135deg,#2f81f7,#1f6fe0);border-color:transparent;color:#fff">✎ Bulk Edit</button>' +
           '<button class="sel-btn sel-btn-clear">Batal Pilih</button>' +
           '<button class="sel-btn sel-btn-clear-all">Kosongkan Semua</button>' +
         '</div>' +
@@ -2577,9 +2579,16 @@ const GanttView = {
 
     // Export
     // Export
+    // Export
     if (btnPNG) btnPNG.onclick = () => this.exportPNG(state, false);
     if (btnPDF) btnPDF.onclick = () => this.exportPNG(state, true);
 
+    // ── Leveling ──
+    const btnLevel = container.querySelector('.gantt-btn-level-open');
+    if (btnLevel) btnLevel.onclick = () => {
+      Leveling.openUI(state.proj.id);
+    };
+     
     // ── Baseline controls ──
     if (blSel) blSel.onchange = e => {
       const v = e.target.value;
@@ -2697,8 +2706,12 @@ const GanttView = {
     // ── Selection toolbar ──
     const selClear    = container.querySelector('.sel-btn-clear');
     const selClearAll = container.querySelector('.sel-btn-clear-all');
+    const selBulk     = container.querySelector('.sel-btn-bulk');
     if (selClear)    selClear.onclick    = () => { state.selected.clear(); this.refreshSelectionUI(state); };
     if (selClearAll) selClearAll.onclick = () => { state.selected.clear(); this.refreshSelectionUI(state); };
+    if (selBulk)     selBulk.onclick     = () => {
+      BulkEdit.open(Array.from(state.selected));
+    };
 
     // ── Filter bar wiring ──
     const filterBar = container.querySelector('.gantt-filterbar');
@@ -2893,6 +2906,7 @@ const GanttView = {
     siblings.splice(toIdx, 0, src);
 
     // Renumber
+    if (typeof Undo !== 'undefined') Undo.snapshot('Reorder: ' + (src.kode_wbs || '') + ' → ' + (tgt.kode_wbs || ''));
     siblings.forEach((w, i) => { w.urut = i + 1; });
     saveDB();
     this.mount(state.container, state.proj.id, { mode: state.mode, zoom: state.zoom });
@@ -3079,6 +3093,7 @@ const GanttView = {
         const origStart = new Date(bd.origStartISO + 'T00:00:00');
         const wbsItem = DB.project_wbs.find(w => w.id === bd.nodeId);
         if (!wbsItem){ this.drawBars(state, canvas); return; }
+        if (typeof Undo !== 'undefined') Undo.snapshot('Drag bar: ' + (wbsItem.kode_wbs || ''));
 
         const cal = WorkingCalendar.get(wbsItem.calendar_id || state.proj.calendar_id);
         const snapped = WorkingCalendar.addWorkDays(origStart, bd.deltaDays, cal);
@@ -3407,6 +3422,491 @@ function testResourceLoader(projectId){
 }
 
 /* =====================================================================
+   BAGIAN 9F — UNDO / REDO ENGINE (Fase 4C)
+   ===================================================================== */
+const Undo = {
+  STACK_MAX: 25,
+  undoStack: [],
+  redoStack: [],
+  listeners: [],
+  _silent: false,
+
+  snapshot(label){
+    if (this._silent) return;
+    const snap = {
+      label: label || 'Perubahan',
+      ts: Date.now(),
+      wbs: JSON.parse(JSON.stringify(DB.project_wbs)),
+      progress: JSON.parse(JSON.stringify(DB.progress))
+    };
+    this.undoStack.push(snap);
+    if (this.undoStack.length > this.STACK_MAX) this.undoStack.shift();
+    this.redoStack = [];
+    this.notify();
+  },
+
+  undo(){
+    if (!this.undoStack.length) return false;
+    this.redoStack.push({
+      label: 'Redo point',
+      ts: Date.now(),
+      wbs: JSON.parse(JSON.stringify(DB.project_wbs)),
+      progress: JSON.parse(JSON.stringify(DB.progress))
+    });
+    const snap = this.undoStack.pop();
+    DB.project_wbs = snap.wbs;
+    DB.progress    = snap.progress;
+    saveDB();
+    this.notify();
+    return snap.label;
+  },
+
+  redo(){
+    if (!this.redoStack.length) return false;
+    this.undoStack.push({
+      label: 'Undo point',
+      ts: Date.now(),
+      wbs: JSON.parse(JSON.stringify(DB.project_wbs)),
+      progress: JSON.parse(JSON.stringify(DB.progress))
+    });
+    const snap = this.redoStack.pop();
+    DB.project_wbs = snap.wbs;
+    DB.progress    = snap.progress;
+    saveDB();
+    this.notify();
+    return true;
+  },
+
+  clear(){ this.undoStack = []; this.redoStack = []; this.notify(); },
+  notify(){ this.listeners.forEach(fn => { try { fn(); } catch(e){} }); },
+  onChange(fn){ this.listeners.push(fn); return () => {
+    const i = this.listeners.indexOf(fn);
+    if (i >= 0) this.listeners.splice(i,1);
+  }; }
+};
+
+/* =====================================================================
+   BAGIAN 9G — BULK EDIT (Fase 4C)
+   ===================================================================== */
+const BulkEdit = {
+  open(ids){
+    if (!ids || !ids.length){ toast('Tidak ada task terpilih', false); return; }
+    const items = DB.project_wbs.filter(w => ids.includes(w.id) && !w.is_group);
+    if (!items.length){ toast('Tidak ada task (non-summary) terpilih', false); return; }
+
+    const calOpts = '<option value="">— Jangan ubah —</option>' +
+      (DB.working_calendars || []).map(c =>
+        '<option value="' + c.id + '">' + esc(c.kode) + ' — ' + esc(c.nama) + '</option>'
+      ).join('');
+
+    const ctOpts = '<option value="">— Jangan ubah —</option>' +
+      Object.keys(CONSTRAINT_TYPES).map(k =>
+        '<option value="' + k + '">' + k + ' — ' + CONSTRAINT_TYPES[k] + '</option>'
+      ).join('') +
+      '<option value="__none__">❌ Hapus constraint</option>';
+
+    const body =
+      '<div class="bulk-summary">✎ <b>' + items.length + ' task</b> akan diubah. Operasi yang dicentang akan diterapkan.</div>' +
+
+      '<div class="bulk-opt-row">' +
+        '<input type="checkbox" id="bulk_dur_en">' +
+        '<label for="bulk_dur_en">Set Duration</label>' +
+        '<div class="bulk-field"><input type="number" id="bulk_dur_val" min="1" step="1" value="1" disabled><span class="gt-dim">hari</span></div>' +
+      '</div>' +
+
+      '<div class="bulk-opt-row">' +
+        '<input type="checkbox" id="bulk_cal_en">' +
+        '<label for="bulk_cal_en">Ubah Kalender</label>' +
+        '<div class="bulk-field"><select id="bulk_cal_val" disabled>' + calOpts + '</select></div>' +
+      '</div>' +
+
+      '<div class="bulk-opt-row">' +
+        '<input type="checkbox" id="bulk_ct_en">' +
+        '<label for="bulk_ct_en">Set Constraint</label>' +
+        '<div class="bulk-field" style="flex-direction:column;align-items:stretch;gap:4px;min-width:220px">' +
+          '<select id="bulk_ct_val" disabled>' + ctOpts + '</select>' +
+          '<input type="date" id="bulk_ct_date" disabled style="width:100%">' +
+        '</div>' +
+      '</div>' +
+
+      '<div class="bulk-opt-row">' +
+        '<input type="checkbox" id="bulk_shift_en">' +
+        '<label for="bulk_shift_en">Geser jadwal</label>' +
+        '<div class="bulk-field">' +
+          '<input type="number" id="bulk_shift_val" step="1" value="1" disabled>' +
+          '<span class="gt-dim">hari kerja (' +
+            '<a href="javascript:void(0)" id="bulk_shift_dir" style="color:#7cb3ff;font-weight:700;text-decoration:underline">+</a>)' +
+          '</span>' +
+        '</div>' +
+      '</div>' +
+
+      '<div class="bulk-opt-row">' +
+        '<input type="checkbox" id="bulk_clrpred_en">' +
+        '<label for="bulk_clrpred_en">Hapus Predecessor (jadi mulai bebas)</label>' +
+        '<div class="bulk-field"></div>' +
+      '</div>' +
+
+      '<div class="bulk-opt-row">' +
+        '<input type="checkbox" id="bulk_lag_en">' +
+        '<label for="bulk_lag_en">Set Lag Predecessor</label>' +
+        '<div class="bulk-field"><input type="number" id="bulk_lag_val" step="1" value="0" disabled><span class="gt-dim">hari</span></div>' +
+      '</div>' +
+
+      '<div class="bulk-opt-row">' +
+        '<input type="checkbox" id="bulk_resetfloat_en">' +
+        '<label for="bulk_resetfloat_en">Reset CPM (recalculate setelahnya)</label>' +
+        '<div class="bulk-field"></div>' +
+      '</div>';
+
+    // Signal "shift dir" toggle — default +1
+    let shiftDir = 1;
+
+    openModal('✎ Bulk Edit — ' + items.length + ' task terpilih', body, () => {
+      const apply = {
+        dur: document.getElementById('bulk_dur_en').checked,
+        cal: document.getElementById('bulk_cal_en').checked,
+        ct:  document.getElementById('bulk_ct_en').checked,
+        shift: document.getElementById('bulk_shift_en').checked,
+        clrpred: document.getElementById('bulk_clrpred_en').checked,
+        lag: document.getElementById('bulk_lag_en').checked,
+        resetfloat: document.getElementById('bulk_resetfloat_en').checked
+      };
+      if (!apply.dur && !apply.cal && !apply.ct && !apply.shift && !apply.clrpred && !apply.lag && !apply.resetfloat){
+        toast('Pilih minimal 1 operasi', false);
+        return false;
+      }
+
+      Undo.snapshot('Bulk edit ' + items.length + ' task');
+
+      items.forEach(w => {
+        const cal = WorkingCalendar.get(w.calendar_id || w.project_id);
+        if (apply.dur){
+          const d = parseInt(document.getElementById('bulk_dur_val').value, 10) || 1;
+          writeScheduleField(w, 'duration', Math.max(1, d));
+        }
+        if (apply.cal){
+          const v = document.getElementById('bulk_cal_val').value;
+          if (v) writeScheduleField(w, 'calendar_id', v);
+        }
+        if (apply.ct){
+          const v = document.getElementById('bulk_ct_val').value;
+          if (v === '__none__'){
+            writeScheduleField(w, 'constraint_type', '');
+            writeScheduleField(w, 'constraint_date', '');
+          } else if (v){
+            writeScheduleField(w, 'constraint_type', v);
+            const dt = document.getElementById('bulk_ct_date').value;
+            if (dt) writeScheduleField(w, 'constraint_date', dt);
+          }
+        }
+        if (apply.shift && w.tgl_mulai_rencana){
+          const shift = shiftDir * (parseInt(document.getElementById('bulk_shift_val').value, 10) || 0);
+          if (shift){
+            const curStart = new Date(w.tgl_mulai_rencana + 'T00:00:00');
+            const newStart = WorkingCalendar.addWorkDays(curStart, shift, cal);
+            writeScheduleField(w, 'constraint_type', 'SNET');
+            writeScheduleField(w, 'constraint_date', WorkingCalendar.fmt(newStart));
+          }
+        }
+        if (apply.clrpred){
+          writeScheduleField(w, 'predecessor', '');
+        }
+        if (apply.lag){
+          const lv = parseInt(document.getElementById('bulk_lag_val').value, 10) || 0;
+          writeScheduleField(w, 'lag_days', lv);
+        }
+      });
+
+      if (apply.resetfloat || apply.dur || apply.cal || apply.ct || apply.shift || apply.clrpred){
+        runCPM(items[0].project_id);
+      }
+      saveDB();
+      toast('✅ Bulk edit selesai: ' + items.length + ' task');
+    });
+
+    // Enable/disable inputs
+    const bindEnable = (chkId, inputs) => {
+      const chk = document.getElementById(chkId);
+      chk.addEventListener('change', () => {
+        inputs.forEach(id => {
+          const el = document.getElementById(id);
+          if (el) el.disabled = !chk.checked;
+        });
+      });
+    };
+    bindEnable('bulk_dur_en', ['bulk_dur_val']);
+    bindEnable('bulk_cal_en', ['bulk_cal_val']);
+    bindEnable('bulk_ct_en', ['bulk_ct_val','bulk_ct_date']);
+    bindEnable('bulk_shift_en', ['bulk_shift_val']);
+    bindEnable('bulk_lag_en', ['bulk_lag_val']);
+
+    // Shift dir toggle
+    const dirBtn = document.getElementById('bulk_shift_dir');
+    dirBtn.addEventListener('click', () => {
+      shiftDir = -shiftDir;
+      dirBtn.textContent = shiftDir >= 0 ? '+' : '−';
+    });
+  }
+};
+
+/* =====================================================================
+   BAGIAN 9H — RESOURCE LEVELING & WHAT-IF (Fase 4D)
+   ===================================================================== */
+const Leveling = {
+  MAX_ITER: 20,
+
+  /* Preview: hitung tanpa commit */
+  preview(projectId, opts){
+    opts = opts || {};
+    const preserveCrit = opts.preserveCritical !== false;
+    const maxIter = opts.maxIter || this.MAX_ITER;
+
+    // Snapshot current state
+    const snapWbs = JSON.parse(JSON.stringify(DB.project_wbs));
+    const snapProg = JSON.parse(JSON.stringify(DB.progress));
+
+    const log = [];
+    let iter = 0;
+
+    try {
+      runCPM(projectId);
+      while (iter < maxIter){
+        iter++;
+        const det = OverAllocationDetector.detect(projectId);
+        if (!det.ok || !det.alerts.length) break;
+
+        // Ambil worst offender
+        const worst = det.alerts[0];
+        const delayResult = this.tryFix(projectId, worst, preserveCrit);
+        if (!delayResult.ok){
+          log.push({
+            type: 'unresolved',
+            resKode: worst.kode,
+            resNama: worst.nama,
+            tanggal: worst.tanggal_terburuk,
+            reason: delayResult.reason
+          });
+          break;
+        }
+        log.push({
+          type: 'delayed',
+          taskId: delayResult.task.id,
+          kode: delayResult.task.kode_wbs,
+          uraian: delayResult.task.uraian,
+          delayDays: delayResult.delayDays,
+          reason: worst.kode + ' · ' + worst.tanggal_terburuk
+        });
+      }
+
+      // Compute final state
+      runCPM(projectId);
+      const finalKPI = this.computeKPI(projectId);
+      const detFinal = OverAllocationDetector.detect(projectId);
+      const remaining = detFinal.ok ? detFinal.alerts.length : 0;
+
+      return { ok:true, log, remaining, finalKPI, iter };
+    } finally {
+      // Rollback
+      DB.project_wbs = snapWbs;
+      DB.progress    = snapProg;
+      runCPM(projectId);
+    }
+  },
+
+  /* Apply: commit changes */
+  apply(projectId, opts){
+    opts = opts || {};
+    const preserveCrit = opts.preserveCritical !== false;
+    const maxIter = opts.maxIter || this.MAX_ITER;
+
+    Undo.snapshot('Auto leveling');
+
+    const log = [];
+    let iter = 0;
+    runCPM(projectId);
+
+    while (iter < maxIter){
+      iter++;
+      const det = OverAllocationDetector.detect(projectId);
+      if (!det.ok || !det.alerts.length) break;
+
+      const worst = det.alerts[0];
+      const delayResult = this.tryFix(projectId, worst, preserveCrit);
+      if (!delayResult.ok){
+        log.push({ type: 'unresolved', resKode: worst.kode, tanggal: worst.tanggal_terburuk, reason: delayResult.reason });
+        break;
+      }
+      log.push({
+        type: 'delayed',
+        taskId: delayResult.task.id,
+        kode: delayResult.task.kode_wbs,
+        uraian: delayResult.task.uraian,
+        delayDays: delayResult.delayDays
+      });
+    }
+
+    runCPM(projectId);
+    saveDB();
+    return { ok:true, log, iter };
+  },
+
+  tryFix(projectId, worst, preserveCrit){
+    const cal = WorkingCalendar.get((DB.projects.find(p => p.id === projectId) || {}).calendar_id);
+    const resKode = worst.kode;
+    const worstDate = worst.tanggal_terburuk;
+
+    // Cari task kandidat: aktif di tanggal worstDate, non-critical, pakai resource tsb
+    const candidates = [];
+    DB.project_wbs.forEach(t => {
+      if (t.project_id !== projectId || t.is_group) return;
+      if (preserveCrit && num(t.is_critical) === 1) return;
+      if (num(t.float_total) <= 0) return;
+      if (!t.tgl_mulai_rencana || !t.tgl_selesai_rencana) return;
+      if (worstDate < t.tgl_mulai_rencana || worstDate >= t.tgl_selesai_rencana) return;
+
+      const usesRes = this.taskUsesResource(projectId, t, resKode);
+      if (!usesRes) return;
+
+      candidates.push(t);
+    });
+
+    if (!candidates.length){
+      return { ok:false, reason: 'Tidak ada task non-kritis dengan slack yang pakai resource ini di tanggal tsb' };
+    }
+
+    // Sort: float terbanyak dulu → delay dulu
+    candidates.sort((a, b) => num(b.float_total) - num(a.float_total));
+    const chosen = candidates[0];
+
+    // Delay 1 hari kerja via SNET
+    const curStart = new Date(chosen.tgl_mulai_rencana + 'T00:00:00');
+    const newStart = WorkingCalendar.addWorkDays(curStart, 1, cal);
+    const newISO = WorkingCalendar.fmt(newStart);
+
+    // Kalau constraint SNET sudah ada dan lebih besar, jangan overwrite
+    if (chosen.constraint_type === 'SNET' && chosen.constraint_date && chosen.constraint_date >= newISO){
+      return { ok:false, reason: 'Task sudah di-delay sampai ' + chosen.constraint_date };
+    }
+
+    writeScheduleField(chosen, 'constraint_type', 'SNET');
+    writeScheduleField(chosen, 'constraint_date', newISO);
+
+    runCPM(projectId);
+
+    return { ok:true, task: chosen, delayDays: 1 };
+  },
+
+  taskUsesResource(projectId, task, resKode){
+    if (!task.ahsp_id) return false;
+    const dets = DB.project_ahsp_details.filter(d =>
+      d.project_id === projectId && d.ahsp_id === task.ahsp_id
+    );
+    return dets.some(d => {
+      const r = DB.master_resources.find(x => x.id === d.resource_id);
+      return r && r.kode === resKode;
+    });
+  },
+
+  computeKPI(projectId){
+    const proj = DB.projects.find(p => p.id === projectId);
+    const items = DB.project_wbs.filter(w => w.project_id === projectId && !w.is_group);
+    const critical = items.filter(w => num(w.is_critical) === 1).length;
+    const finish = items.reduce((m, w) => {
+      const f = w.tgl_selesai_rencana || '';
+      return f > m ? f : m;
+    }, '');
+    return {
+      total: items.length,
+      critical,
+      finish
+    };
+  },
+
+  /* UI: buka modal */
+  openUI(projectId){
+    const det = OverAllocationDetector.detect(projectId);
+    const alertCount = det.ok ? det.alerts.length : 0;
+
+    const body =
+      '<div class="level-status">' +
+        '<div class="lvl-item"><div class="lbl">Over-Allocation</div><div class="val ' + (alertCount ? 'danger' : 'ok') + '">' + alertCount + '</div></div>' +
+        '<div class="lvl-item"><div class="lbl">Max Iterasi</div><div class="val"><input type="number" id="lvl_maxiter" value="20" min="5" max="50" style="width:70px;padding:3px 6px;font-size:12px"></div></div>' +
+        '<div class="lvl-item"><div class="lbl">Preserve Critical</div><div class="val"><input type="checkbox" id="lvl_preserve" checked style="width:18px;height:18px;accent-color:#2f81f7"></div></div>' +
+      '</div>' +
+      '<div style="margin-bottom:10px;font-size:11.5px;color:var(--muted);line-height:1.6">' +
+        '<b style="color:#7cb3ff">Algoritma:</b> Greedy. Untuk setiap over-allocation terparah, ' +
+        'cari task non-kritis dengan slack terbanyak yang aktif di tanggal tsb, delay 1 hari via constraint SNET. ' +
+        'Iterasi sampai bersih atau batas iterasi tercapai.' +
+      '</div>' +
+      '<div style="display:flex;gap:8px;margin-bottom:12px">' +
+        '<button class="btn" id="lvl_preview_btn" style="background:linear-gradient(135deg,#a855f7,#7c3aed);border-color:transparent;color:#fff">🔍 Preview (What-If)</button>' +
+        '<button class="btn" id="lvl_apply_btn" style="background:linear-gradient(135deg,#16a34a,#0f8a3f);border-color:transparent;color:#fff">✅ Apply Leveling</button>' +
+      '</div>' +
+      '<div class="level-list" id="lvl_list">' +
+        (alertCount === 0
+          ? '<div class="lv-row lv-empty">✅ Tidak ada over-allocation — jadwal sudah seimbang</div>'
+          : '<div class="lv-row lv-empty">Klik <b>Preview</b> atau <b>Apply</b> untuk memulai</div>') +
+      '</div>';
+
+    openModal('⚖ Resource Leveling', body, () => {});
+
+    // Hide default Submit button (kita pakai tombol sendiri)
+    const submitBtn = document.getElementById('mSubmit');
+    if (submitBtn) submitBtn.style.display = 'none';
+    const cancelBtn = document.getElementById('mCancel');
+    if (cancelBtn) cancelBtn.textContent = 'Tutup';
+
+    // Wire
+    document.getElementById('lvl_preview_btn').onclick = () => {
+      const previewMaxIter = parseInt(document.getElementById('lvl_maxiter').value, 10) || 20;
+      const previewPreserve = document.getElementById('lvl_preserve').checked;
+      const listEl = document.getElementById('lvl_list');
+      listEl.innerHTML = '<div class="lv-row lv-empty">⏳ Menghitung…</div>';
+      setTimeout(() => {
+        const result = Leveling.preview(projectId, { maxIter: previewMaxIter, preserveCritical: previewPreserve });
+        listEl.innerHTML = Leveling.renderLog(result);
+      }, 50);
+    };
+
+    document.getElementById('lvl_apply_btn').onclick = () => {
+      const applyMaxIter = parseInt(document.getElementById('lvl_maxiter').value, 10) || 20;
+      const applyPreserve = document.getElementById('lvl_preserve').checked;
+      if (!confirm('Terapkan leveling? Perubahan akan disimpan (Undo tersedia).')) return;
+      const result = Leveling.apply(projectId, { maxIter: applyMaxIter, preserveCritical: applyPreserve });
+      document.getElementById('lvl_list').innerHTML = Leveling.renderLog(result);
+      saveDB();
+      const ganttEl = document.getElementById('ganttContainer');
+      if (ganttEl) GanttView.mount(ganttEl, projectId, { mode: 'rab', zoom: ganttEl._lastZoom || 'weekly' });
+      toast('✅ Leveling selesai: ' + result.log.filter(x => x.type === 'delayed').length + ' task di-delay');
+    };
+  },
+
+  renderLog(result){
+    if (!result.log.length){
+      return '<div class="lv-row lv-empty">✅ Tidak ada yang perlu di-delay — jadwal sudah optimal</div>';
+    }
+    return result.log.map(entry => {
+      if (entry.type === 'delayed'){
+        return '<div class="lv-row">' +
+          '<span class="lv-kode">' + esc(entry.kode || '?') + '</span>' +
+          '<span class="lv-uraian">' + esc(entry.uraian || '') + '</span>' +
+          '<span class="lv-badge warn">+' + entry.delayDays + 'd</span>' +
+        '</div>';
+      }
+      return '<div class="lv-row">' +
+        '<span class="lv-kode" style="color:#f87171">⚠</span>' +
+        '<span class="lv-uraian">' + esc(entry.reason || 'Unresolved') + '</span>' +
+        '<span class="lv-badge danger">stuck</span>' +
+      '</div>';
+    }).join('') +
+    (result.remaining !== undefined
+      ? '<div class="lv-row lv-empty">Sisa over-allocation: <b style="color:' + (result.remaining > 0 ? '#f87171' : '#4ade80') + '">' + result.remaining + '</b></div>'
+      : '');
+  }
+};
+
+
+/* =====================================================================
    BAGIAN 10 — SYNC MANAGER (Phase 5)
    Partial payload · Version guard · Soft lock
    ===================================================================== */
@@ -3494,3 +3994,151 @@ const SyncManager = {
     return sheetRequest('softStatus', {});
   }
 };
+
+/* =====================================================================
+   BAGIAN 11 — UNDO/REDO KEYBOARD SHORTCUTS + TOPBAR WIRING (Fase 4C)
+   ===================================================================== */
+(function wireUndoGlobal(){
+  function refreshUndoUI(){
+    const bU = document.getElementById('btnUndo');
+    const bR = document.getElementById('btnRedo');
+    if (bU) bU.disabled = !Undo.undoStack.length;
+    if (bR) bR.disabled = !Undo.redoStack.length;
+  }
+
+  function renderHistoryMenu(){
+    const menu = document.getElementById('historyMenu');
+    if (!menu) return;
+    let html = '<div class="hist-title">Riwayat Perubahan (terbaru di atas)</div>';
+    if (!Undo.undoStack.length && !Undo.redoStack.length){
+      html += '<div class="hist-empty">Belum ada riwayat</div>';
+    } else {
+      const stack = Undo.undoStack.slice().reverse();
+      stack.forEach((snap, idx) => {
+        const isCur = idx === 0;
+        const t = new Date(snap.ts).toLocaleTimeString('id-ID', {hour:'2-digit',minute:'2-digit'});
+        html += '<div class="hist-item' + (isCur ? ' is-current' : '') + '" data-hist-idx="' + (Undo.undoStack.length - 1 - idx) + '">' +
+                '📌 ' + esc(snap.label) +
+                '<span class="ts">' + t + '</span></div>';
+      });
+    }
+    menu.innerHTML = html;
+
+    // Click handlers — clicking jumps to that point (undo/redo repeatedly)
+    menu.querySelectorAll('.hist-item').forEach(item => {
+      item.onclick = () => {
+        const targetIdx = parseInt(item.getAttribute('data-hist-idx'), 10);
+        const steps = Undo.undoStack.length - 1 - targetIdx;
+        for (let i = 0; i < steps; i++) Undo.undo();
+        if (typeof renderAll === 'function') renderAll();
+        menu.classList.remove('show');
+        toast('↶ Undo ' + steps + ' langkah');
+      };
+    });
+  }
+
+  Undo.onChange(() => {
+    refreshUndoUI();
+    if (document.getElementById('historyMenu')?.classList.contains('show')){
+      renderHistoryMenu();
+    }
+  });
+
+  // Wire buttons after DOM ready
+  function wire(){
+    const bU = document.getElementById('btnUndo');
+    const bR = document.getElementById('btnRedo');
+    const bH = document.getElementById('btnHistory');
+    const menu = document.getElementById('historyMenu');
+
+    if (bU && !bU._wired){
+      bU._wired = true;
+      bU.onclick = () => {
+        const label = Undo.undo();
+        if (label){
+          if (typeof renderAll === 'function') renderAll();
+          const ganttEl = document.getElementById('ganttContainer');
+          if (ganttEl && STATE.activeProject){
+            GanttView.mount(ganttEl, STATE.activeProject, { mode: 'rab', zoom: ganttEl._lastZoom || 'weekly' });
+          }
+          toast('↶ Undo: ' + label);
+        } else {
+          toast('Tidak ada yang bisa di-undo', false);
+        }
+      };
+    }
+    if (bR && !bR._wired){
+      bR._wired = true;
+      bR.onclick = () => {
+        if (Undo.redo()){
+          if (typeof renderAll === 'function') renderAll();
+          const ganttEl = document.getElementById('ganttContainer');
+          if (ganttEl && STATE.activeProject){
+            GanttView.mount(ganttEl, STATE.activeProject, { mode: 'rab', zoom: ganttEl._lastZoom || 'weekly' });
+          }
+          toast('↷ Redo');
+        } else {
+          toast('Tidak ada yang bisa di-redo', false);
+        }
+      };
+    }
+    if (bH && !bH._wired){
+      bH._wired = true;
+      bH.onclick = (e) => {
+        e.stopPropagation();
+        renderHistoryMenu();
+        menu.classList.toggle('show');
+      };
+    }
+    // Click outside → close menu
+    document.addEventListener('click', (e) => {
+      if (!menu) return;
+      if (!e.target.closest('.history-wrap')) menu.classList.remove('show');
+    });
+
+    refreshUndoUI();
+  }
+
+  // Global keyboard shortcuts
+  document.addEventListener('keydown', e => {
+    const isMac = /Mac|iPhone|iPad/.test(navigator.platform);
+    const mod = isMac ? e.metaKey : e.ctrlKey;
+    if (!mod) return;
+    // Skip kalau sedang fokus input/textarea
+    const tag = (e.target && e.target.tagName) || '';
+    const isInput = tag === 'INPUT' || tag === 'TEXTAREA' || e.target.isContentEditable;
+
+    if (!e.shiftKey && e.key.toLowerCase() === 'z'){
+      e.preventDefault();
+      if (isInput && e.target.type === 'text'){
+        // Biarkan browser handle native undo di text input
+        return;
+      }
+      const label = Undo.undo();
+      if (label){
+        if (typeof renderAll === 'function') renderAll();
+        const ganttEl = document.getElementById('ganttContainer');
+        if (ganttEl && STATE.activeProject){
+          GanttView.mount(ganttEl, STATE.activeProject, { mode: 'rab', zoom: ganttEl._lastZoom || 'weekly' });
+        }
+        toast('↶ Undo: ' + label);
+      }
+    } else if (e.shiftKey && e.key.toLowerCase() === 'z'){
+      e.preventDefault();
+      if (Undo.redo()){
+        if (typeof renderAll === 'function') renderAll();
+        const ganttEl = document.getElementById('ganttContainer');
+        if (ganttEl && STATE.activeProject){
+          GanttView.mount(ganttEl, STATE.activeProject, { mode: 'rab', zoom: ganttEl._lastZoom || 'weekly' });
+        }
+        toast('↷ Redo');
+      }
+    }
+  });
+
+  if (document.readyState === 'loading'){
+    document.addEventListener('DOMContentLoaded', wire);
+  } else {
+    wire();
+  }
+})();
