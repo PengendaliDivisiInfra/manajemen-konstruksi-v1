@@ -182,11 +182,12 @@
         console.table(Object.keys(_cache).map(function(k){
           var entry = _cache[k];
           var parts = k.split('::');
+          var sigParts = (parts[0] || '').split('|');
           return {
-            project: parts[0],
-            mode: parts[7],
-            dist: parts[8],
-            gran: parts[9],
+            project: sigParts[0] || '?',
+            mode: parts[1] || '?',
+            dist: parts[2] || '?',
+            gran: parts[3] || '?',
             age: Math.round((Date.now() - entry.ts) / 1000) + 's',
             buckets: entry.data.buckets ? entry.data.buckets.length : 0,
             resources: entry.data.byResource ? entry.data.byResource.length : 0
