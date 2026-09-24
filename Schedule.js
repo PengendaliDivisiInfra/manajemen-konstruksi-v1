@@ -2036,98 +2036,241 @@ const GanttView = {
     this.updateSelBar(state);
   },
 
-     /* Gambar garis dependency antar task */
+  /* ═══════════════════════════════════════════════════════════
+     DEPENDENCY ARROWS — MS Project Style (Fase 1C)
+     Mendukung:
+       · Multi-predecessor (via CPM.getRelationships)
+       · 4 tipe relasi: FS, SS, FF, SF
+       · Arrowhead adaptif (right untuk FS/SS, left untuk FF/SF)
+       · Routing orthogonal + detour untuk backward dependency
+       · Warna kritis (merah) vs normal (grey-blue)
+     ═══════════════════════════════════════════════════════════ */
   drawDependencies(ctx, state, posMap, rowH){
     const {nodes} = state;
     const visibleNodes = state.visibleNodes.filter(n => !n.isGroupHeader);
-    const nodeById = {};
-    nodes.forEach(n => { nodeById[n.id] = n; });
 
-    const ARROW = 6;   // ukuran arrowhead
-    const GAP   = 6;   // gap dari bar
+    // Lookup pred by id ATAU kode_wbs (untuk support referensi dua format)
+    const nodeById = {};
+    const nodeByKode = {};
+    nodes.forEach(n => {
+      nodeById[n.id] = n;
+      if (n.kode) nodeByKode[String(n.kode).trim()] = n;
+    });
+
+    const ARROW         = 7;   // ukuran arrowhead
+    const GAP           = 5;   // jarak panah dari tepi bar
+    const ROUTE_OFFSET  = 12;  // offset elbow dari bar
+    const DETOUR_EXTRA  = 24;  // detour untuk backward dependency
 
     ctx.save();
-    visibleNodes.forEach(n => {
-      if (n.isGroupHeader) return;
-      const raw = n.raw || {};
-      if (!raw.predecessor) return;
+    ctx.lineWidth = 1.5;
+    ctx.lineCap   = 'round';
+    ctx.lineJoin  = 'round';
 
-      const pred = nodeById[raw.predecessor];
-      if (!pred) return;
+    // Dedup edge: 1 pasang (pred→succ, type) digambar sekali
+    const drawnEdges = new Set();
 
-      const p = posMap[pred.id];
-      const s = posMap[n.id];
-      if (!p || !s) return;
+    visibleNodes.forEach(succNode => {
+      if (succNode.isGroupHeader) return;
+      const succRaw = succNode.raw || {};
+      if (!succRaw.predecessor) return;
 
-      const type = (raw.pred_type || 'FS').toUpperCase();
-      const isCrit = n.isCritical || pred.isCritical;
+      // Ambil SEMUA relasi (multi-predecessor support)
+      const rels = CPM.getRelationships(succRaw);
+      if (!rels || !rels.length) return;
 
-      // Tentukan titik start & end berdasarkan jenis relasi
-      let x1, y1, x2, y2;
-      const pMidY = p.y + rowH / 2;
-      const sMidY = s.y + rowH / 2;
+      const s = posMap[succNode.id];
+      if (!s) return;
 
-      switch (type){
-        case 'SS':   // Start-to-Start
-          x1 = p.x1; y1 = pMidY;
-          x2 = s.x1 - GAP; y2 = sMidY;
-          break;
-        case 'FF':   // Finish-to-Finish
-          x1 = p.x2 + GAP; y1 = pMidY;
-          x2 = s.x2; y2 = sMidY;
-          break;
-        case 'SF':   // Start-to-Finish
-          x1 = p.x1; y1 = pMidY;
-          x2 = s.x2; y2 = sMidY;
-          break;
-        case 'FS':   // Finish-to-Start (paling umum)
-        default:
-          x1 = p.x2 + GAP; y1 = pMidY;
-          x2 = s.x1 - GAP; y2 = sMidY;
-          break;
-      }
+      rels.forEach(rel => {
+        // Resolve predecessor: id → kode_wbs fallback
+        const predRef = rel.predRef;
+        const predNode = nodeById[predRef] || nodeByKode[String(predRef).trim()];
+        if (!predNode) return;
 
-      // Gambar garis elbow
-      ctx.strokeStyle = isCrit ? '#dc2626' : '#94a3b8';
-      ctx.fillStyle   = isCrit ? '#dc2626' : '#94a3b8';
-      ctx.lineWidth = 1.5;
+        const p = posMap[predNode.id];
+        if (!p) return;
 
-      const sameRow = Math.abs(y1 - y2) < 2;
+        const type = (rel.type || 'FS').toUpperCase();
 
-      if (sameRow){
-        // Straight horizontal arrow
-        ctx.beginPath();
-        ctx.moveTo(x1, y1);
-        ctx.lineTo(x2 - ARROW, y2);
-        ctx.stroke();
-        this.arrowHead(ctx, x2 - ARROW, y2, 'right', ARROW);
-      } else if (x1 + 12 < x2 - ARROW){
-        // Standard elbow: exit right → vertical → enter left
-        ctx.beginPath();
-        ctx.moveTo(x1, y1);
-        ctx.lineTo(x1 + 8, y1);
-        ctx.lineTo(x1 + 8, y2);
-        ctx.lineTo(x2 - ARROW, y2);
-        ctx.stroke();
-        this.arrowHead(ctx, x2 - ARROW, y2, 'right', ARROW);
-      } else {
-        // Backward elbow: exit right → midY → left → vertical → enter
-        const midY = (y1 + y2) / 2;
-        ctx.beginPath();
-        ctx.moveTo(x1, y1);
-        ctx.lineTo(x1 + 8, y1);
-        ctx.lineTo(x1 + 8, midY);
-        ctx.lineTo(x2 - ARROW - 4, midY);
-        ctx.lineTo(x2 - ARROW - 4, y2);
-        ctx.lineTo(x2 - ARROW, y2);
-        ctx.stroke();
-        this.arrowHead(ctx, x2 - ARROW, y2, 'right', ARROW);
-      }
+        // Dedup key
+        const edgeKey = predNode.id + '>' + succNode.id + ':' + type;
+        if (drawnEdges.has(edgeKey)) return;
+        drawnEdges.add(edgeKey);
+
+        const isCrit = succNode.isCritical || predNode.isCritical;
+
+        // ── Tentukan anchor point per tipe relasi ──
+        const pMidY = p.y + rowH / 2;
+        const sMidY = s.y + rowH / 2;
+
+        let sx, sy, tx, ty, arrowDir;
+        switch (type){
+          case 'SS':
+            // pred.start → succ.start (exits left)
+            sx = p.x1 - GAP;   sy = pMidY;
+            tx = s.x1 - GAP;   ty = sMidY;
+            arrowDir = 'right';
+            break;
+          case 'FF':
+            // pred.finish → succ.finish (exits right, enters right)
+            sx = p.x2 + GAP;   sy = pMidY;
+            tx = s.x2 + GAP;   ty = sMidY;
+            arrowDir = 'left';
+            break;
+          case 'SF':
+            // pred.start → succ.finish (exits left, enters right)
+            sx = p.x1 - GAP;   sy = pMidY;
+            tx = s.x2 + GAP;   ty = sMidY;
+            arrowDir = 'left';
+            break;
+          case 'FS':
+          default:
+            // pred.finish → succ.start (exits right, enters left)
+            sx = p.x2 + GAP;   sy = pMidY;
+            tx = s.x1 - GAP;   ty = sMidY;
+            arrowDir = 'right';
+            break;
+        }
+
+        // ── Warna per tipe ──
+        const strokeColor = isCrit ? '#dc2626' : '#94a3b8';
+        ctx.strokeStyle = strokeColor;
+        ctx.fillStyle   = strokeColor;
+
+        // ── Gambar path ──
+        this._drawDependencyPath(ctx, {
+          sx, sy, tx, ty,
+          type, arrowDir,
+          ARROW, ROUTE_OFFSET, DETOUR_EXTRA,
+          srcBar: { x1: p.x1, x2: p.x2, midY: pMidY },
+          tgtBar: { x1: s.x1, x2: s.x2, midY: sMidY }
+        });
+      });
     });
     ctx.restore();
   },
 
-  /* Arrowhead triangle pointing in given direction */
+  /* ── Orthogonal routing per tipe relasi ── */
+  _drawDependencyPath(ctx, o){
+    const { sx, sy, tx, ty, type, arrowDir, ARROW, ROUTE_OFFSET, DETOUR_EXTRA } = o;
+    const sameRow = Math.abs(sy - ty) < 2;
+
+    // Titik berhenti garis (sebelum arrowhead)
+    const stopX = arrowDir === 'right' ? tx - ARROW : tx + ARROW;
+
+    /* ── KASUS 1: SEBARIS → garis horizontal lurus ── */
+    if (sameRow){
+      ctx.beginPath();
+      ctx.moveTo(sx, sy);
+      ctx.lineTo(stopX, ty);
+      ctx.stroke();
+      this._drawArrowHead(ctx, tx, ty, arrowDir, ARROW);
+      return;
+    }
+
+    /* ── KASUS 2: BARIS BERBEDA → orthogonal per tipe ── */
+
+    if (type === 'FS'){
+      // Finish-to-Start: pred.finish → succ.start
+      if (sx < stopX){
+        // Forward: exit right pred → elbow tengah → enter left succ
+        const midX = (sx + stopX) / 2;
+        ctx.beginPath();
+        ctx.moveTo(sx, sy);
+        ctx.lineTo(midX, sy);
+        ctx.lineTo(midX, ty);
+        ctx.lineTo(stopX, ty);
+        ctx.stroke();
+      } else {
+        // Backward: pred di kanan succ.start → detour kanan
+        const detourX = Math.max(sx, stopX) + DETOUR_EXTRA;
+        ctx.beginPath();
+        ctx.moveTo(sx, sy);
+        ctx.lineTo(detourX, sy);
+        ctx.lineTo(detourX, ty);
+        ctx.lineTo(stopX, ty);
+        ctx.stroke();
+      }
+      this._drawArrowHead(ctx, tx, ty, 'right', ARROW);
+    }
+
+    else if (type === 'SS'){
+      // Start-to-Start: pred.start → succ.start (keduanya di kiri)
+      // Detour kiri → geser vertikal → masuk kanan ke succ.start
+      const detourX = Math.min(sx, stopX) - ROUTE_OFFSET;
+      ctx.beginPath();
+      ctx.moveTo(sx, sy);
+      ctx.lineTo(detourX, sy);
+      ctx.lineTo(detourX, ty);
+      ctx.lineTo(stopX, ty);
+      ctx.stroke();
+      this._drawArrowHead(ctx, tx, ty, 'right', ARROW);
+    }
+
+    else if (type === 'FF'){
+      // Finish-to-Finish: pred.finish → succ.finish (keduanya di kanan)
+      // Detour kanan → geser vertikal → masuk kiri ke succ.finish
+      const detourX = Math.max(sx, stopX) + ROUTE_OFFSET;
+      ctx.beginPath();
+      ctx.moveTo(sx, sy);
+      ctx.lineTo(detourX, sy);
+      ctx.lineTo(detourX, ty);
+      ctx.lineTo(stopX, ty);
+      ctx.stroke();
+      this._drawArrowHead(ctx, tx, ty, 'left', ARROW);
+    }
+
+    else if (type === 'SF'){
+      // Start-to-Finish: pred.start (kiri) → succ.finish (kanan)
+      if (sx < stopX){
+        // Forward: elbow tengah
+        const midX = (sx + stopX) / 2;
+        ctx.beginPath();
+        ctx.moveTo(sx, sy);
+        ctx.lineTo(midX, sy);
+        ctx.lineTo(midX, ty);
+        ctx.lineTo(stopX, ty);
+        ctx.stroke();
+      } else {
+        // Backward: detour kanan
+        const detourX = Math.max(sx, stopX) + DETOUR_EXTRA;
+        ctx.beginPath();
+        ctx.moveTo(sx, sy);
+        ctx.lineTo(detourX, sy);
+        ctx.lineTo(detourX, ty);
+        ctx.lineTo(stopX, ty);
+        ctx.stroke();
+      }
+      this._drawArrowHead(ctx, tx, ty, 'left', ARROW);
+    }
+  },
+
+  /* ── Arrowhead: (x,y) adalah TIP (ujung panah) ── */
+  _drawArrowHead(ctx, x, y, dir, size){
+    ctx.beginPath();
+    if (dir === 'right'){
+      ctx.moveTo(x, y);
+      ctx.lineTo(x - size, y - size * 0.55);
+      ctx.lineTo(x - size, y + size * 0.55);
+    } else if (dir === 'left'){
+      ctx.moveTo(x, y);
+      ctx.lineTo(x + size, y - size * 0.55);
+      ctx.lineTo(x + size, y + size * 0.55);
+    } else if (dir === 'down'){
+      ctx.moveTo(x, y);
+      ctx.lineTo(x - size * 0.55, y - size);
+      ctx.lineTo(x + size * 0.55, y - size);
+    } else { // up
+      ctx.moveTo(x, y);
+      ctx.lineTo(x - size * 0.55, y + size);
+      ctx.lineTo(x + size * 0.55, y + size);
+    }
+    ctx.closePath();
+    ctx.fill();
+  },
+
+  /* ── Backward-compat: arrowHead lama (base-anchored) ── */
   arrowHead(ctx, x, y, dir, size){
     ctx.beginPath();
     if (dir === 'right'){
@@ -2490,10 +2633,7 @@ const GanttView = {
       });
     }
 
-    // F. Dependency arrows
-    this.drawDependencies(ctx, state, posMap, rowH);
-
-    // F. Dependency arrows
+    // F. Dependency arrows (Fase 1C — MS Project style)
     this.drawDependencies(ctx, state, posMap, rowH);
 
     // G. Bar drag ghost
