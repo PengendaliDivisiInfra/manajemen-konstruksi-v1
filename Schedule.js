@@ -116,7 +116,9 @@ const SCHEDULE_WRITABLE_FIELDS = Object.freeze([
   'bl2_start','bl2_finish','bl2_set_at',
   'bl3_start','bl3_finish','bl3_set_at',
   // ── NEW (Fase 1A) — Auto vs Manual Scheduling ──
-  'schedule_mode','manual_start','manual_finish'
+  'schedule_mode','manual_start','manual_finish',
+  // ── NEW (Fase 2E) — Work Contour ──
+  'work_contour'
 ]);
 
 function writeScheduleField(wbsItem, field, value){
@@ -128,16 +130,17 @@ function writeScheduleField(wbsItem, field, value){
   return true;
 }
 
-const CONSTRAINT_TYPES = {
-  ASAP: 'As Soon As Possible',
-  ALAP: 'As Late As Possible',
-  SNET: 'Start No Earlier Than',
-  SNLT: 'Start No Later Than',
-  FNET: 'Finish No Earlier Than',
-  FNLT: 'Finish No Later Than',
-  MSO:  'Must Start On',
-  MFO:  'Must Finish On'
-};
+/* ── Fase 2E: Work Contour types (MS Project standard) ── */
+const WORK_CONTOURS = Object.freeze({
+  uniform:     'Uniform (Merata)',
+  front:       'Front Loaded (Berat di Awal)',
+  back:        'Back Loaded (Berat di Akhir)',
+  bell:        'Bell (Lonceng)',
+  early_peak:  'Early Peak (Puncak Awal)',
+  late_peak:   'Late Peak (Puncak Akhir)',
+  double_peak: 'Double Peak (Dua Puncak)',
+  triangular:  'Triangular (Segitiga)'
+});
 
 /* =====================================================================
    BAGIAN 3 — CPM ENGINE v3 (Fase 1B)
@@ -837,25 +840,77 @@ const ResourceLoader = {
     return out;
   },
 
-  /* ── Util: bobot distribusi ternormalisasi ── */
+  /* ── Util: bobot distribusi ternormalisasi (Fase 2E: 8 contour types) ── */
   computeWeights(n, mode){
     if (n <= 0) return [];
     if (n === 1) return [1];
     const w = new Array(n);
-    if (mode === 'triangular'){
-      const c = (n - 1) / 2;
-      for (let i = 0; i < n; i++){
-        w[i] = 1 - Math.abs(i - c) / (c || 1) + 0.05;
-      }
-    } else if (mode === 'bell'){
-      const c = (n - 1) / 2;
-      const sigma = n / 4 || 1;
-      for (let i = 0; i < n; i++){
-        w[i] = Math.exp(-Math.pow((i - c) / sigma, 2)) + 0.02;
-      }
-    } else {
-      for (let i = 0; i < n; i++) w[i] = 1;
+    const c = (n - 1) / 2;
+    const last = n - 1;
+
+    switch (mode){
+      case 'front':
+        // Front Loaded: linier menurun dari 1.5× ke 0.5×
+        for (let i = 0; i < n; i++) w[i] = 1.5 - (i / last);
+        break;
+
+      case 'back':
+        // Back Loaded: linier naik dari 0.5× ke 1.5×
+        for (let i = 0; i < n; i++) w[i] = 0.5 + (i / last);
+        break;
+
+      case 'bell':
+        // Bell: distribusi normal di tengah
+        {
+          const sigma = n / 4 || 1;
+          for (let i = 0; i < n; i++)
+            w[i] = Math.exp(-Math.pow((i - c) / sigma, 2)) + 0.02;
+        }
+        break;
+
+      case 'early_peak':
+        // Early Peak: puncak di 1/3 awal
+        {
+          const peak = n / 3;
+          const sigma = n / 5 || 1;
+          for (let i = 0; i < n; i++)
+            w[i] = Math.exp(-Math.pow((i - peak) / sigma, 2)) + 0.05;
+        }
+        break;
+
+      case 'late_peak':
+        // Late Peak: puncak di 2/3 akhir
+        {
+          const peak = (2 * n) / 3;
+          const sigma = n / 5 || 1;
+          for (let i = 0; i < n; i++)
+            w[i] = Math.exp(-Math.pow((i - peak) / sigma, 2)) + 0.05;
+        }
+        break;
+
+      case 'double_peak':
+        // Double Peak: puncak di 1/4 & 3/4
+        {
+          const p1 = n / 4, p2 = (3 * n) / 4;
+          const sigma = n / 8 || 1;
+          for (let i = 0; i < n; i++){
+            w[i] = Math.exp(-Math.pow((i - p1) / sigma, 2))
+                 + Math.exp(-Math.pow((i - p2) / sigma, 2)) + 0.02;
+          }
+        }
+        break;
+
+      case 'triangular':
+        // Triangular: linier naik lalu turun
+        for (let i = 0; i < n; i++)
+          w[i] = 1 - Math.abs(i - c) / (c || 1) + 0.05;
+        break;
+
+      case 'uniform':
+      default:
+        for (let i = 0; i < n; i++) w[i] = 1;
     }
+
     const sum = w.reduce((s, x) => s + x, 0) || 1;
     return w.map(x => x / sum);
   },
@@ -961,7 +1016,12 @@ const ResourceLoader = {
       );
       if (!days.length) return;
 
-      const weights = this.computeWeights(days.length, dist);
+      // ── Fase 2E: per-task contour override, fallback ke global dist ──
+      const taskContour = String(wbs.work_contour || '').trim().toLowerCase();
+      const effectiveDist = (taskContour && WORK_CONTOURS[taskContour])
+        ? taskContour
+        : dist;
+      const weights = this.computeWeights(days.length, effectiveDist);
 
       const wbsAgg = {
         kode_wbs: wbs.kode_wbs,
