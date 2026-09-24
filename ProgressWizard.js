@@ -371,19 +371,33 @@
     function updateSummary(){
       var el = document.getElementById('pwSummary');
       if (!el) return;
-      var tasks = Object.keys(_state.draft);
+
+      var proj = getActiveProj();
+      var visibleCount = 0;
+      try {
+        if (proj){
+          visibleCount = buildTaskList(proj).tasks.length;
+        }
+      } catch(e){}
+
+      var draftedTasks = Object.keys(_state.draft).filter(function(id){
+        return Object.keys(_state.draft[id] || {}).length > 0;
+      });
       var totalCells = 0;
       var totalVal = 0;
-      tasks.forEach(function(id){
+      draftedTasks.forEach(function(id){
         var weeks = _state.draft[id] || {};
         Object.keys(weeks).forEach(function(m){
           totalCells++;
           totalVal += _num(weeks[m]);
         });
       });
-      el.innerHTML = '<b>' + tasks.length + '</b> task · ' +
-                     '<b>' + totalCells + '</b> entri · ' +
-                     'total vol <b>' + _fmt(totalVal, 2) + '</b>';
+
+      el.innerHTML =
+        '<b>' + visibleCount + '</b> task visible · ' +
+        '<b>' + draftedTasks.length + '</b> dengan draft · ' +
+        '<b>' + totalCells + '</b> entri · ' +
+        'vol <b>' + _fmt(totalVal, 2) + '</b>';
     }
 
     /* ═══════════════════════════════════════════════════════════
@@ -503,24 +517,34 @@
       var el;
 
       el = document.getElementById('pwMFrom');
-      if (el) el.onchange = function(){
-        var v = parseInt(el.value, 10) || 1;
-        _state.mFrom = Math.max(1, Math.min(v, _state.mTo));
-        el.value = _state.mFrom;
-        renderTaskTable(proj);
-      };
+      if (el){
+        var _onFrom = function(){
+          var v = parseInt(el.value, 10);
+          if (isNaN(v) || v < 1) v = 1;
+          if (v > 52) v = 52;
+          _state.mFrom = v;
+          /* Auto-adjust mTo kalau lebih kecil */
+          if (_state.mTo < _state.mFrom) _state.mTo = _state.mFrom;
+          renderTaskTable(proj);
+        };
+        el.oninput = _onFrom;
+        el.onchange = _onFrom;
+      }
 
       el = document.getElementById('pwMTo');
-      if (el) el.onchange = function(){
-        var v = parseInt(el.value, 10) || 1;
-        /* Sync ke _state dengan validasi longgar */
-        if (v < _state.mFrom) v = _state.mFrom;
-        if (v > 52) v = 52;
-        _state.mTo = v;
-        el.value = _state.mTo;
-        renderTaskTable(proj);
-      };
-
+      if (el){
+        var _onTo = function(){
+          var v = parseInt(el.value, 10);
+          if (isNaN(v) || v < 1) v = 1;
+          if (v > 52) v = 52;
+          _state.mTo = v;
+          /* Auto-adjust mFrom kalau lebih besar */
+          if (_state.mFrom > _state.mTo) _state.mFrom = _state.mTo;
+          renderTaskTable(proj);
+        };
+        el.oninput = _onTo;
+        el.onchange = _onTo;
+      }
       el = document.getElementById('pwGrup');
       if (el) el.onchange = function(){
         _state.filterGrup = el.value;
