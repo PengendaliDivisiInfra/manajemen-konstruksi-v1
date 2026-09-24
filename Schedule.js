@@ -5235,30 +5235,17 @@ const ImportExcel = {
     };
     const btnInfo = document.getElementById('btnEvmInfo');
     if (btnInfo) btnInfo.onclick = () => {
-      openModal('ℹ Tentang EVM',
-        '<p style="font-size:13px;line-height:1.7;color:var(--txt)">' +
-          '<b>Earned Value Management (EVM)</b> adalah metode mengukur performa proyek dengan membandingkan 3 nilai:<br><br>' +
-          '• <b>PV (Planned Value)</b> — Nilai pekerjaan yang <i>seharusnya</i> selesai per rencana<br>' +
-          '• <b>EV (Earned Value)</b> — Nilai pekerjaan yang <i>sudah</i> dikerjakan (bobot RAB × progress)<br>' +
-          '• <b>AC (Actual Cost)</b> — Biaya aktual yang sudah dikeluarkan<br><br>' +
-          '<b>Indeks:</b><br>' +
-          '• <b>SPI = EV / PV</b> → &lt;1 = telat, ≥1 = on/ahead schedule<br>' +
-          '• <b>CPI = EV / AC</b> → &lt;1 = over budget, ≥1 = hemat<br><br>' +
-          '<b>Forecast:</b><br>' +
-          '• <b>EAC = BAC / CPI</b> → prediksi biaya akhir<br>' +
-          '• <b>VAC = BAC − EAC</b> → selisih terhadap anggaran<br><br>' +
-          '<i style="color:var(--muted)">Catatan: AC dihitung dari RAP × progress (approximation karena sistem tidak mencatat biaya aktual per transaksi).</i>' +
-        '</p>',
-        () => {}
-      );
+      openModal('ℹ Tentang EVM', '...', () => {});
       setTimeout(() => { document.getElementById('mSubmit').style.display = 'none'; }, 10);
     };
+
+    // ✅ PINDAHKAN BLOK INI KE DALAM READY()
+    if (typeof window._origRenderDashboard === 'undefined'){
+      window._origRenderDashboard = renderDashboard;
+      window.renderDashboard = function(){
+        window._origRenderDashboard();
+        if (typeof EVMView !== 'undefined') EVMView.render();
+      };
+    }
   });
-  if (typeof window._origRenderDashboard === 'undefined'){
-    window._origRenderDashboard = renderDashboard;
-    window.renderDashboard = function(){
-      window._origRenderDashboard();
-      if (typeof EVMView !== 'undefined') EVMView.render();
-    };
-  }
 })();
