@@ -2817,3 +2817,231 @@ canvas:not(.gantt-axis):not(.gantt-bars){
 .grid-chip.is-on:hover{
   filter:brightness(1.15);
 }
+
+/* =====================================================================
+   FASE 2D — RESOURCE SHEET VIEW
+   ===================================================================== */
+
+/* ── View Toggle Tabs ── */
+.sched-view-tabs{
+  display:inline-flex;
+  gap:4px;
+  background:rgba(11,18,32,.6);
+  padding:3px;
+  border-radius:9px;
+  border:1px solid var(--line);
+}
+.sched-view-btn{
+  padding:6px 14px;
+  font-size:12px;
+  font-weight:600;
+  border-radius:6px;
+  background:transparent;
+  border:none;
+  color:var(--muted);
+  cursor:pointer;
+  transition:.15s;
+  white-space:nowrap;
+}
+.sched-view-btn:hover{
+  color:var(--txt);
+  background:rgba(47,129,247,.10);
+}
+.sched-view-btn.is-active{
+  background:linear-gradient(135deg, var(--acc), #1f6fe0);
+  color:#fff;
+  box-shadow:0 2px 8px rgba(47,129,247,.35);
+}
+
+/* ── Resource Sheet Toolbar ── */
+.rs-toolbar{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  padding:10px 14px;
+  background:linear-gradient(180deg, #101d33, #0c1729);
+  border:1px solid var(--line);
+  border-bottom:none;
+  border-radius:10px 10px 0 0;
+  flex-wrap:wrap;
+  font-size:12px;
+}
+.rs-toolbar .rs-lbl{
+  font-size:10px;
+  color:var(--muted);
+  text-transform:uppercase;
+  letter-spacing:.5px;
+  font-weight:700;
+}
+.rs-toolbar select{
+  padding:5px 9px;
+  font-size:12px;
+  width:auto;
+  border-radius:6px;
+  background:#0c1729;
+  border:1px solid var(--line);
+  color:var(--txt);
+}
+.rs-toolbar .rs-chk{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  font-size:11.5px;
+  color:var(--muted);
+  cursor:pointer;
+  user-select:none;
+}
+.rs-toolbar .rs-chk input{
+  width:14px;
+  height:14px;
+  accent-color:var(--acc);
+  cursor:pointer;
+}
+.rs-toolbar .rs-count{
+  margin-left:auto;
+  font-size:11px;
+  color:#7cb3ff;
+  font-weight:700;
+  letter-spacing:.3px;
+  font-variant-numeric:tabular-nums;
+}
+
+/* ── Resource Sheet Wrap ── */
+.rs-wrap{
+  max-height:60vh;
+  overflow:auto;
+  background:#0b1220;
+  border:1px solid var(--line);
+  border-radius:0 0 10px 10px;
+  scrollbar-width:thin;
+}
+.rs-wrap::-webkit-scrollbar{width:10px;height:10px}
+.rs-wrap::-webkit-scrollbar-track{background:#0a1424}
+.rs-wrap::-webkit-scrollbar-thumb{background:#2a3f68;border-radius:5px}
+
+/* ── Resource Sheet Table ── */
+.rs-table{
+  border-collapse:separate;
+  border-spacing:0;
+  font-size:11.5px;
+  min-width:auto;
+  width:max-content;
+  color:var(--txt);
+}
+.rs-table thead th{
+  background:linear-gradient(180deg, #1f4e79, #17395a);
+  color:#fff;
+  font-size:10.5px;
+  text-transform:uppercase;
+  letter-spacing:.5px;
+  font-weight:700;
+  padding:8px 10px;
+  position:sticky;
+  top:0;
+  z-index:5;
+  border-right:1px solid rgba(255,255,255,.1);
+  border-bottom:1px solid var(--line);
+  white-space:nowrap;
+}
+.rs-table thead th:last-child{border-right:none}
+
+/* Column alignment */
+.rs-table .num{text-align:right}
+.rs-table .rs-th-id, .rs-table .rs-td-id{
+  position:sticky;
+  left:0;
+  z-index:4;
+  background:#0e1a30;
+  font-family:'Consolas',monospace;
+  font-size:10.5px;
+  font-weight:700;
+  color:#7cb3ff;
+  border-right:1px solid #24365c;
+  min-width:80px;
+}
+.rs-table thead .rs-th-id{z-index:6; color:#fff; background:linear-gradient(180deg,#1f4e79,#17395a)}
+.rs-table .rs-th-name, .rs-table .rs-td-name{
+  min-width:180px;
+  max-width:240px;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+.rs-table .rs-th-jenis, .rs-table .rs-td-jenis{min-width:70px;text-align:center}
+.rs-table .rs-th-sat, .rs-table .rs-td-sat{min-width:60px}
+.rs-table .rs-th-cap, .rs-table .rs-td-cap{min-width:80px}
+.rs-table .rs-th-col, .rs-table .rs-td-col{min-width:60px}
+.rs-table .rs-th-total, .rs-table .rs-td-total{
+  position:sticky;
+  right:0;
+  z-index:4;
+  background:#0e1a30;
+  border-left:1px solid #24365c;
+  min-width:80px;
+  font-weight:800;
+  color:#4ade80;
+}
+.rs-table thead .rs-th-total{z-index:6; color:#fff; background:linear-gradient(180deg,#1f4e79,#17395a)}
+
+.rs-table tbody td{
+  padding:6px 10px;
+  border-bottom:1px solid rgba(36,54,92,.4);
+  border-right:1px solid rgba(36,54,92,.35);
+  vertical-align:middle;
+}
+.rs-table tbody tr:hover td:not(.rs-td-id):not(.rs-td-total){
+  background:rgba(47,129,247,.08);
+}
+.rs-table tbody tr:hover .rs-td-id,
+.rs-table tbody tr:hover .rs-td-total{
+  background:#1a2b4a;
+}
+
+/* ── Cell types ── */
+.rs-cell{
+  text-align:right;
+  font-variant-numeric:tabular-nums;
+  cursor:pointer;
+  transition:background .12s;
+  padding:6px 10px !important;
+}
+.rs-cell .rs-val{display:inline-block;min-width:22px}
+.rs-cell-empty{color:#475569;font-style:italic}
+.rs-cell-ok{color:#4ade80;background:rgba(34,197,94,.06)}
+.rs-cell-neutral{color:#a8b8d6}
+.rs-cell-warn{
+  color:#fbbf24;
+  background:rgba(245,158,11,.14);
+  font-weight:700;
+}
+.rs-cell-danger{
+  color:#f87171;
+  background:rgba(239,68,68,.16);
+  font-weight:800;
+  box-shadow:inset 0 0 0 1px rgba(239,68,68,.3);
+}
+.rs-cell:hover{
+  filter:brightness(1.3);
+}
+
+/* ── Resource jenis badge di sheet ── */
+.rs-jenis{
+  display:inline-block;
+  padding:2px 8px;
+  border-radius:10px;
+  font-size:10px;
+  font-weight:700;
+  letter-spacing:.3px;
+  text-transform:uppercase;
+}
+.rs-jenis.upah{background:rgba(47,129,247,.20);color:#7cb3ff}
+.rs-jenis.bahan{background:rgba(26,188,156,.20);color:#4fe0c0}
+.rs-jenis.alat{background:rgba(245,158,11,.20);color:#ffc861}
+
+/* ── Horizontal table: sedikit lebih compact ── */
+.rs-table.rs-table-h thead th.rs-th-col{
+  min-width:75px;
+}
+.rs-table.rs-table-h tbody td.rs-td-id{
+  min-width:90px;
+}
