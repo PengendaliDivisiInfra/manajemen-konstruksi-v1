@@ -140,8 +140,9 @@ const CONSTRAINT_TYPES = {
 };
 
 /* =====================================================================
-   BAGIAN 3 — CPM ENGINE v2 (Phase 2)
-   Topological Sort + Forward Pass + Backward Pass + Critical Path
+   BAGIAN 3 — CPM ENGINE v3 (Fase 1B)
+   Topological Sort + Forward/Backward Pass + Critical Path
+   NEW: Multiple Predecessor · Auto/Manual Routing · ALAP
    ===================================================================== */
 const CPM = {
 
@@ -154,38 +155,87 @@ const CPM = {
     return 1;
   },
 
-  /* ── Helper: parse string predecessor ──
-     Didukung:
-       "ID"           → FS, lag 0
-       "IDFS"         → FS, lag 0
-       "IDFS+2"       → FS, lag +2
-       "IDSS-1"       → SS, lag -1
-     Kolom pred_type & lag_days (jika terisi) menang atas string. */
-  parsePred(str){
-    if (!str) return null;
-    const s = String(str).trim();
+  /* ── Helper: MODE jadwal efektif (Fase 1B) ── */
+  getScheduleMode(it){
+    const m = String(it.schedule_mode || 'auto').trim().toLowerCase();
+    return (m === 'manual') ? 'manual' : 'auto';
+  },
+
+  /* ── Helper: parse tanggal toleran (Date | "yyyy-MM-dd" | ISO) ── */
+  _parseDate(v){
+    if (!v) return null;
+    if (v instanceof Date) return isNaN(v.getTime()) ? null : new Date(v);
+    const s = String(v).trim();
+    if (!s) return null;
+    const d = new Date(s.includes('T') ? s : s + 'T00:00:00');
+    return isNaN(d.getTime()) ? null : d;
+  },
+
+  /* ── Helper: parse SATU segmen predecessor ──
+     Format: "<ref><TYPE><lag>"
+     Contoh: "I.1", "I.1FS", "I.1FS+2", "I.2SS-1"
+     Return: { id, type, lag, explicit } */
+  parsePredecessorSegment(seg){
+    const s = String(seg).trim();
+    if (!s) return null;
     const m = s.match(/^(.+?)\s*(FS|SS|FF|SF)\s*([+-]\s*\d+)?$/i);
     if (m) return {
       id:  m[1].trim(),
       type:m[2].toUpperCase(),
-      lag: m[3] ? parseInt(m[3].replace(/\s/g,''), 10) : 0
+      lag: m[3] ? parseInt(m[3].replace(/\s/g,''), 10) : 0,
+      explicit: true
     };
-    return { id: s, type:'FS', lag:0 };
+    return { id: s, type:'FS', lag:0, explicit: false };
   },
 
-  /* ── Helper: relationship efektif untuk sebuah item ── */
+  /* ── Helper: parse STRING predecessor (multi, dipisah ; atau newline) ── */
+  parsePredecessors(str){
+    if (!str) return [];
+    return String(str)
+      .split(/[;\n]+/)
+      .map(s => this.parsePredecessorSegment(s))
+      .filter(Boolean);
+  },
+
+  /* ── Helper backward-compat: pred pertama ── */
+  parsePred(str){
+    const list = this.parsePredecessors(str);
+    return list.length ? list[0] : null;
+  },
+
+  /* ── Helper: relationship efektif untuk sebuah item (MULTI) ──
+     Aturan:
+       - >1 pred  → SEMUA pakai inline type/lag (global override diabaikan).
+       - 1 pred + inline EKSPLISIT ("I.1FS+2") → pakai inline.
+       - 1 pred + inline tidak eksplisit ("I.1") → pakai global override. */
+  getRelationships(it){
+    const parsed = this.parsePredecessors(it.predecessor);
+    if (!parsed.length) return [];
+
+    const multi = parsed.length > 1;
+    const globalType = (it.pred_type && String(it.pred_type).trim())
+                       ? String(it.pred_type).trim().toUpperCase()
+                       : null;
+    const globalLag  = (it.lag_days !== undefined && it.lag_days !== null && it.lag_days !== '')
+                       ? num(it.lag_days)
+                       : null;
+
+    return parsed.map(p => {
+      if (multi || p.explicit){
+        return { predRef: p.id, type: p.type, lag: p.lag };
+      }
+      return {
+        predRef: p.id,
+        type: globalType || p.type,
+        lag:  globalLag !== null ? globalLag : p.lag
+      };
+    });
+  },
+
+  /* ── Helper backward-compat: relationship pertama ── */
   getRelationship(it){
-    const raw = it.predecessor;
-    if (!raw) return null;
-    const parsed = this.parsePred(raw);
-    if (!parsed) return null;
-    const type = (it.pred_type && String(it.pred_type).trim())
-                 ? String(it.pred_type).trim().toUpperCase()
-                 : parsed.type;
-    const lag  = (it.lag_days !== undefined && it.lag_days !== null && it.lag_days !== '')
-                 ? num(it.lag_days)
-                 : parsed.lag;
-    return { predRef: parsed.id, type, lag };
+    const list = this.getRelationships(it);
+    return list.length ? list[0] : null;
   },
 
   /* ── Helper: bangun map id/kode → item ── */
@@ -209,30 +259,35 @@ const CPM = {
     return WorkingCalendar.get(it.calendar_id || proj.calendar_id);
   },
 
-   /* ── Helper: snap tanggal ke hari kerja terdekat ke depan ── */
-snapToWorkDay(iso, cal){
-  let d = iso instanceof Date ? new Date(iso) : new Date(iso + 'T00:00:00');
-  let guard = 0;
-  while (!WorkingCalendar.isWorkDay(d, cal) && guard++ < 90){
-    d.setDate(d.getDate() + 1);
-  }
-  return d;
-},
+  /* ── Helper: snap tanggal ke hari kerja terdekat ke depan ── */
+  snapToWorkDay(iso, cal){
+    let d = iso instanceof Date ? new Date(iso) : new Date(iso + 'T00:00:00');
+    let guard = 0;
+    while (!WorkingCalendar.isWorkDay(d, cal) && guard++ < 90){
+      d.setDate(d.getDate() + 1);
+    }
+    return d;
+  },
 
   /* ═══════════════════════════════════════════════════════════
-     A. TOPOLOGICAL SORT — Kahn's Algorithm (iteratif, aman)
+     A. TOPOLOGICAL SORT — Kahn's Algorithm (multi-pred safe)
      ═══════════════════════════════════════════════════════════ */
   topologicalSort(items, maps){
     const indeg = {}, succs = {};
     items.forEach(it => { indeg[it.id] = 0; succs[it.id] = []; });
 
+    const seenEdges = {};
     items.forEach(it => {
-      const rel = this.getRelationship(it);
-      if (!rel) return;
-      const pred = this.resolveRef(rel.predRef, maps);
-      if (!pred) return;
-      indeg[it.id]++;
-      succs[pred.id].push(it.id);
+      const rels = this.getRelationships(it);
+      rels.forEach(rel => {
+        const pred = this.resolveRef(rel.predRef, maps);
+        if (!pred) return;
+        const key = pred.id + '>' + it.id;
+        if (seenEdges[key]) return;
+        seenEdges[key] = true;
+        indeg[it.id]++;
+        succs[pred.id].push(it.id);
+      });
     });
 
     const queue = items.filter(it => indeg[it.id] === 0).map(it => it.id);
@@ -255,7 +310,7 @@ snapToWorkDay(iso, cal){
   },
 
   /* ═══════════════════════════════════════════════════════════
-     B. FORWARD PASS — ES & EF
+     B. FORWARD PASS — ES & EF (Fase 1B: manual + multi-pred)
      ═══════════════════════════════════════════════════════════ */
   forwardPass(items, order, proj, maps){
     const byId = maps.byId;
@@ -265,13 +320,30 @@ snapToWorkDay(iso, cal){
       const it = byId[id];
       const dur = this.getDuration(it);
       const cal = this.getCalendarFor(it, proj);
+      const mode = this.getScheduleMode(it);
+
+      /* ═══ MANUAL MODE: tanggal terkunci user ═══ */
+      if (mode === 'manual'){
+        const ms = this._parseDate(it.manual_start);
+        if (ms){
+          let mf = this._parseDate(it.manual_finish);
+          if (!mf || mf <= ms){
+            mf = WorkingCalendar.addWorkDays(ms, dur, cal);
+          }
+          it._ES = ms;
+          it._EF = mf;
+          it._isManual = true;
+          return;
+        }
+        // Fallback: manual_start kosong → hitung auto
+      }
 
       let es = new Date(projStart);
 
-      // Constraint awal
+      // Constraint awal (SNET, MSO, FNET)
       const ct = it.constraint_type;
-      const cd = it.constraint_date ? new Date(it.constraint_date) : null;
-      if (ct && cd && !isNaN(cd.getTime())){
+      const cd = this._parseDate(it.constraint_date);
+      if (ct && cd){
         switch (ct){
           case 'SNET':
           case 'MSO':
@@ -285,47 +357,53 @@ snapToWorkDay(iso, cal){
         }
       }
 
-      // Predecessor
-      const rel = this.getRelationship(it);
-      if (rel){
+      // Predecessor (MULTI) — ambil ES paling "ketat" (max)
+      const rels = this.getRelationships(it);
+      rels.forEach(rel => {
         const pred = this.resolveRef(rel.predRef, maps);
-        if (pred && pred._ES && pred._EF){
-          const lag = rel.lag;
-          let cand;
-          switch (rel.type){
-            case 'FS': cand = WorkingCalendar.addWorkDays(pred._EF,  lag, cal); break;
-            case 'SS': cand = WorkingCalendar.addWorkDays(pred._ES,  lag, cal); break;
-            case 'FF': cand = WorkingCalendar.addWorkDays(pred._EF, -dur + lag, cal); break;
-            case 'SF': cand = WorkingCalendar.addWorkDays(pred._ES, -dur + lag, cal); break;
-            default:   cand = pred._EF;
-          }
-          if (cand > es) es = cand;
+        if (!pred || !pred._ES || !pred._EF) return;
+        const lag = rel.lag;
+        let cand;
+        switch (rel.type){
+          case 'FS': cand = WorkingCalendar.addWorkDays(pred._EF,  lag, cal); break;
+          case 'SS': cand = WorkingCalendar.addWorkDays(pred._ES,  lag, cal); break;
+          case 'FF': cand = WorkingCalendar.addWorkDays(pred._EF, -dur + lag, cal); break;
+          case 'SF': cand = WorkingCalendar.addWorkDays(pred._ES, -dur + lag, cal); break;
+          default:   cand = pred._EF;
         }
-      }
+        if (cand > es) es = cand;
+      });
 
       es = this.snapToWorkDay(es, cal);
 
       it._ES = es;
       it._EF = WorkingCalendar.addWorkDays(es, dur, cal);
+      it._isManual = false;
     });
   },
 
   /* ═══════════════════════════════════════════════════════════
-     C. BACKWARD PASS — LF & LS
+     C. BACKWARD PASS — LF & LS (multi-pred + manual-aware)
      ═══════════════════════════════════════════════════════════ */
   backwardPass(items, order, projFinish, proj, maps){
     const byId = maps.byId;
     const succs = {};
     items.forEach(it => { succs[it.id] = []; });
 
+    // Build edge list dengan dedup
+    const seenEdges = {};
     items.forEach(it => {
-      const rel = this.getRelationship(it);
-      if (!rel) return;
-      const pred = this.resolveRef(rel.predRef, maps);
-      if (pred) succs[pred.id].push(it);
+      const rels = this.getRelationships(it);
+      rels.forEach(rel => {
+        const pred = this.resolveRef(rel.predRef, maps);
+        if (!pred) return;
+        const key = pred.id + '>' + it.id;
+        if (seenEdges[key]) return;
+        seenEdges[key] = true;
+        succs[pred.id].push({ succ: it, rel });
+      });
     });
 
-    // Iterasi terbalik → successors selalu sudah diproses
     for (let i = order.length - 1; i >= 0; i--){
       const it = byId[order[i]];
       const dur = this.getDuration(it);
@@ -337,26 +415,25 @@ snapToWorkDay(iso, cal){
         lf = new Date(projFinish);
       } else {
         lf = null;
-        list.forEach(s => {
-          const rel = this.getRelationship(s);
-          const lag = rel ? rel.lag : 0;
-          const type = rel ? rel.type : 'FS';
+        list.forEach(({ succ, rel }) => {
+          const lag = rel.lag;
+          const type = rel.type;
           let cand;
           switch (type){
-            case 'FS': cand = WorkingCalendar.addWorkDays(s._LS, -lag, cal); break;
-            case 'SS': cand = WorkingCalendar.addWorkDays(s._LS, -lag, cal); break;
-            case 'FF': cand = WorkingCalendar.addWorkDays(s._LF, -lag, cal); break;
-            case 'SF': cand = WorkingCalendar.addWorkDays(s._LF, -lag, cal); break;
-            default:   cand = s._LS;
+            case 'FS': cand = WorkingCalendar.addWorkDays(succ._LS, -lag, cal); break;
+            case 'SS': cand = WorkingCalendar.addWorkDays(succ._LS, -lag, cal); break;
+            case 'FF': cand = WorkingCalendar.addWorkDays(succ._LF, -lag, cal); break;
+            case 'SF': cand = WorkingCalendar.addWorkDays(succ._LF, -lag, cal); break;
+            default:   cand = succ._LS;
           }
           if (lf === null || cand < lf) lf = cand;
         });
       }
 
-      // Constraint akhir
+      // Constraint akhir (FNLT, MFO, SNLT, MSO)
       const ct = it.constraint_type;
-      const cd = it.constraint_date ? new Date(it.constraint_date) : null;
-      if (ct && cd && !isNaN(cd.getTime())){
+      const cd = this._parseDate(it.constraint_date);
+      if (ct && cd){
         switch (ct){
           case 'FNLT':
             if (cd < lf) lf = cd;
@@ -388,7 +465,6 @@ snapToWorkDay(iso, cal){
   computeFloat(items, proj){
     items.forEach(it => {
       const cal = this.getCalendarFor(it, proj);
-      // Total Float = LS − ES (dalam hari kerja)
       const flt = WorkingCalendar.diffDays(
         WorkingCalendar.fmt(it._ES),
         WorkingCalendar.fmt(it._LS),
@@ -399,7 +475,7 @@ snapToWorkDay(iso, cal){
   },
 
   /* ═══════════════════════════════════════════════════════════
-     ORCHESTRATOR
+     ORCHESTRATOR (Fase 1B)
      ═══════════════════════════════════════════════════════════ */
   run(projectId){
     const proj = DB.projects.find(p => p.id === projectId);
@@ -423,13 +499,25 @@ snapToWorkDay(iso, cal){
     // 2) Forward pass
     this.forwardPass(items, ts.order, proj, maps);
 
-    // 3) Project finish
+    // 3) Project finish = max(_EF)
     const projStart = new Date(proj.tgl_mulai || new Date());
     let projFinish = projStart;
-    items.forEach(it => { if (it._EF && it._EF > projFinish) projFinish = it._EF; });
+    items.forEach(it => {
+      if (it._EF && it._EF > projFinish) projFinish = it._EF;
+    });
 
     // 4) Backward pass
     this.backwardPass(items, ts.order, projFinish, proj, maps);
+
+    // 4b) ALAP override — task ALAP pindah ke LS/LF
+    items.forEach(it => {
+      if (it._isManual) return;
+      const ct = String(it.constraint_type || '').toUpperCase();
+      if (ct === 'ALAP'){
+        it._ES = new Date(it._LS);
+        it._EF = new Date(it._LF);
+      }
+    });
 
     // 5) Float + critical
     this.computeFloat(items, proj);
@@ -445,11 +533,11 @@ snapToWorkDay(iso, cal){
       const crit      = flt <= 0 ? 1 : 0;
 
       // New fields (Phase 1)
-      writeScheduleField(it, 'durasi_hari',            dur);
-      writeScheduleField(it, 'tgl_mulai_rencana',      startISO);
-      writeScheduleField(it, 'tgl_selesai_rencana',    finishISO);
-      writeScheduleField(it, 'float_total',            flt);
-      writeScheduleField(it, 'is_critical',            crit);
+      writeScheduleField(it, 'durasi_hari',         dur);
+      writeScheduleField(it, 'tgl_mulai_rencana',   startISO);
+      writeScheduleField(it, 'tgl_selesai_rencana', finishISO);
+      writeScheduleField(it, 'float_total',         flt);
+      writeScheduleField(it, 'is_critical',         crit);
 
       // Legacy fields (backward compat)
       writeScheduleField(it, 'start_date',   startISO);
@@ -460,7 +548,9 @@ snapToWorkDay(iso, cal){
       writeScheduleField(it, 'late_finish',  lfISO);
       writeScheduleField(it, 'total_float',  flt);
 
-      delete it._ES; delete it._EF; delete it._LS; delete it._LF; delete it._totalFloat;
+      // Cleanup temp fields
+      delete it._ES; delete it._EF; delete it._LS; delete it._LF;
+      delete it._totalFloat; delete it._isManual;
     });
 
     // 7) Update tanggal selesai proyek
@@ -478,11 +568,14 @@ snapToWorkDay(iso, cal){
     }
 
     const criticalCount = items.filter(it => num(it.is_critical) === 1).length;
+    const manualCount   = items.filter(it => this.getScheduleMode(it) === 'manual').length;
+
     return {
       ok: true,
       message: 'CPM selesai',
       count: items.length,
       critical: criticalCount,
+      manual: manualCount,
       finish: newFinishISO,
       start: WorkingCalendar.fmt(projStart)
     };
