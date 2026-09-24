@@ -1838,7 +1838,10 @@ const GanttView = {
       /* Fase 2C — style */
       barStyle:      styleState.barStyle,
       barStyleCfg:   this.BAR_STYLES[styleState.barStyle] || this.BAR_STYLES.classic,
-      gridlines:     styleState.gridlines
+      gridlines:     styleState.gridlines,
+      /* Fase 3A-1 — Cost Strip */
+      costStrip: localStorage.getItem('mk_gantt_cost_strip') !== 'off',
+      costPerDay: null
     };
 
     this._state = state;
@@ -2170,6 +2173,7 @@ const GanttView = {
             '</select>' +
             '<button class="gantt-btn-tool gantt-btn-bl-set" title="Set Baseline">📌 Set</button>' +
             '<button class="gantt-btn-tool gantt-btn-bl-clear" title="Clear Baseline">🗑 Clear</button>' +
+            '<button class="gantt-btn-cost-toggle' + (state.costStrip ? ' is-on' : '') + '" title="Tampilkan/Sembunyikan Cost Loading Strip">💰 Cost</button>' +
             '<span class="gantt-lbl" style="margin-left:8px">Style</span>' +
             '<select class="gantt-bar-style">' +
               Object.keys(this.BAR_STYLES).map(k =>
@@ -2250,6 +2254,20 @@ const GanttView = {
           '</div>' +
         '</div>' +
 
+        /* Fase 3A-1 — Cost Strip */
+        '<div class="gantt-cost-strip' + (state.costStrip ? '' : ' is-hidden') + '">' +
+          '<div class="gantt-cost-label">' +
+            '<div class="gantt-cost-title">💰 Cost Loading</div>' +
+            '<div class="gantt-cost-legend">' +
+              '<span class="cc-bars">Bar = Biaya / Hari</span>' +
+              '<span class="cc-cum">Kurva = Kumulatif</span>' +
+            '</div>' +
+          '</div>' +
+          '<div class="gantt-cost-chart-wrap">' +
+            '<canvas class="gantt-cost-canvas"></canvas>' +
+          '</div>' +
+        '</div>' +
+
         '<div class="gantt-sel-bar">' +
           '<span class="count"><span class="sel-count">0</span> dipilih</span>' +
           '<button class="sel-btn sel-btn-bulk" style="background:linear-gradient(135deg,#2f81f7,#1f6fe0);border-color:transparent;color:#fff">✎ Bulk Edit</button>' +
@@ -2261,6 +2279,11 @@ const GanttView = {
     this.drawAxis(state, container.querySelector('.gantt-axis'));
     this.drawBars(state, container.querySelector('.gantt-bars'));
     this.updateSelBar(state);
+
+    /* Fase 3A-1: Render Cost Strip kalau ON */
+    if (state.costStrip){
+      this.drawCostStrip(state, container.querySelector('.gantt-cost-canvas'));
+    }
   },
 
   /* ═══════════════════════════════════════════════════════════
@@ -3166,7 +3189,197 @@ const GanttView = {
     }
   },
 
-  /* ── Task bar (MS Project style + Fase 2C presets) ── */
+     /* ═══════════════════════════════════════════════════════════
+     FASE 3A-1 — COST LOADING STRIP
+     Histogram biaya per hari + kurva kumulatif
+     ═══════════════════════════════════════════════════════════ */
+  drawCostStrip(state, canvas){
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    const {proj, startDate, endDate} = state;
+    const px = state.zoomCfg.pxPerDay;
+    const totalDays = state.totalDays;
+    const W = Math.max(400, totalDays * px);
+    const H = 90;
+
+    /* Set canvas size */
+    canvas.width = W;
+    canvas.height = H;
+    canvas.style.width = W + 'px';
+    canvas.style.height = H + 'px';
+
+    /* Background */
+    ctx.fillStyle = '#0a1424';
+    ctx.fillRect(0, 0, W, H);
+
+    /* Ambil data ResourceLoader */
+    let rl;
+    try {
+      rl = ResourceLoader.load(proj.id, {
+        mode: state.mode || 'rab',
+        distribution: 'uniform',
+        granularity: 'daily'
+      });
+    } catch(e){
+      rl = { ok: false };
+    }
+
+    if (!rl || !rl.ok || !rl.resDailyMap){
+      this._drawCostEmptyState(ctx, W, H, 'Data biaya belum tersedia');
+      return;
+    }
+
+    /* Bangun map cost per hari dari resDailyMap × harga rata-rata per unit */
+    const costPerDay = {};
+    Object.keys(rl.resDailyMap).forEach(kode => {
+      const r = rl.byResource.find(x => x.kode === kode);
+      if (!r) return;
+      const hargaUnit = r.total_qty > 0 ? (r.total_cost / r.total_qty) : 0;
+      const map = rl.resDailyMap[kode];
+      Object.keys(map).forEach(iso => {
+        const qty = map[iso];
+        const cost = qty * hargaUnit;
+        costPerDay[iso] = (costPerDay[iso] || 0) + cost;
+      });
+    });
+
+    const days = Object.keys(costPerDay).sort();
+    if (!days.length){
+      this._drawCostEmptyState(ctx, W, H, 'Belum ada data biaya');
+      return;
+    }
+
+    /* Cari max & total */
+    let maxCost = 0, totalCost = 0;
+    days.forEach(d => {
+      if (costPerDay[d] > maxCost) maxCost = costPerDay[d];
+      totalCost += costPerDay[d];
+    });
+    if (maxCost <= 0){
+      this._drawCostEmptyState(ctx, W, H, 'Total biaya nol');
+      return;
+    }
+
+    /* Layout */
+    const barTop = 10;
+    const barBottom = H - 16;
+    const barHeight = barBottom - barTop;
+
+    /* Kumulatif */
+    const cumCost = {};
+    let running = 0;
+    days.forEach(d => { running += costPerDay[d]; cumCost[d] = running; });
+    const totalCum = running;
+
+    /* ── Gridline vertical (tiap hari kerja) ── */
+    const gridGl = state.gridlines || {};
+    if (gridGl.vertical || gridGl.weekSeparator){
+      const dgrid = new Date(startDate);
+      while (dgrid <= endDate){
+        const isWeekStart = dgrid.getDay() === 1;
+        if ((gridGl.vertical && !isWeekStart) || (gridGl.weekSeparator && isWeekStart)){
+          const x = Math.round((dgrid - startDate) / 86400000) * px + 0.5;
+          ctx.strokeStyle = isWeekStart ? 'rgba(58,85,144,.7)' : 'rgba(36,54,92,.35)';
+          ctx.lineWidth = isWeekStart ? 1.5 : 1;
+          ctx.beginPath();
+          ctx.moveTo(x, 0);
+          ctx.lineTo(x, H);
+          ctx.stroke();
+          ctx.lineWidth = 1;
+        }
+        dgrid.setDate(dgrid.getDate() + 1);
+      }
+    }
+
+    /* ── Bar biaya per hari (gradient biru) ── */
+    const gradBar = ctx.createLinearGradient(0, barTop, 0, barBottom);
+    gradBar.addColorStop(0, 'rgba(47,129,247,.95)');
+    gradBar.addColorStop(1, 'rgba(47,129,247,.35)');
+
+    ctx.fillStyle = gradBar;
+    days.forEach(d => {
+      const off = Math.round((new Date(d + 'T00:00:00') - startDate) / 86400000);
+      const x = off * px;
+      const cost = costPerDay[d];
+      const h = (cost / maxCost) * barHeight;
+      const y = barBottom - h;
+      const bw = Math.max(1, px - 0.5);
+      ctx.fillRect(x, y, bw, h);
+    });
+
+    /* ── Kurva kumulatif (garis kuning) ── */
+    ctx.strokeStyle = '#f59e0b';
+    ctx.lineWidth = 1.8;
+    ctx.beginPath();
+    let first = true;
+    days.forEach(d => {
+      const off = Math.round((new Date(d + 'T00:00:00') - startDate) / 86400000);
+      const x = off * px + px / 2;
+      const y = barBottom - (cumCost[d] / totalCum) * barHeight;
+      if (first){ ctx.moveTo(x, y); first = false; }
+      else ctx.lineTo(x, y);
+    });
+    ctx.stroke();
+
+    /* ── Label max/hari (kanan atas) ── */
+    ctx.fillStyle = '#64748b';
+    ctx.font = '9px Segoe UI';
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'top';
+    ctx.fillText('Max/hari: Rp ' + this._fmtJuta(maxCost), W - 6, 3);
+
+    /* ── Label Total (kanan bawah) ── */
+    ctx.fillStyle = '#4ade80';
+    ctx.font = 'bold 10px Segoe UI';
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'bottom';
+    ctx.fillText('Total: Rp ' + this._fmtJuta(totalCum) + ' (' + days.length + ' hari)', W - 6, H - 3);
+
+    /* ── Today marker (kalau di range) ── */
+    const today = new Date(); today.setHours(0,0,0,0);
+    const tOff = Math.round((today - startDate) / 86400000);
+    if (tOff >= 0 && tOff <= totalDays){
+      const tx = tOff * px + 0.5;
+      ctx.strokeStyle = '#f59e0b';
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([4, 3]);
+      ctx.beginPath();
+      ctx.moveTo(tx, 0);
+      ctx.lineTo(tx, H);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.lineWidth = 1;
+    }
+
+    /* ── Border bawah ── */
+    ctx.strokeStyle = '#24365c';
+    ctx.beginPath();
+    ctx.moveTo(0, H - 0.5);
+    ctx.lineTo(W, H - 0.5);
+    ctx.stroke();
+
+    /* Cache untuk tooltip nanti */
+    state.costPerDay = costPerDay;
+  },
+
+  /* Helper: empty state */
+  _drawCostEmptyState(ctx, W, H, msg){
+    ctx.fillStyle = '#475569';
+    ctx.font = '11px Segoe UI';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(msg, W / 2, H / 2);
+  },
+
+  /* Helper: format Rp singkat (jt/m) */
+  _fmtJuta(v){
+    const n = Math.abs(v);
+    if (n >= 1e9) return (v/1e9).toFixed(2) + ' M';
+    if (n >= 1e6) return (v/1e6).toFixed(2) + ' jt';
+    if (n >= 1e3) return (v/1e3).toFixed(1) + ' rb';
+    return Math.round(v).toString();
+  },
+
   /* ── Task bar (MS Project style + Fase 2C presets) ── */
   taskBar(ctx, x, y, w, h, fill, stroke, pct, cfg){
     cfg = cfg || this.BAR_STYLES.classic;
@@ -3359,8 +3572,10 @@ const GanttView = {
     if (!leftBody || !rightScr || !axisTrack) return;
 
     let syncing = false;
+    const costChartWrap = container.querySelector('.gantt-cost-chart-wrap');
     rightScr.addEventListener('scroll', () => {
       axisTrack.style.transform = 'translateX(' + (-rightScr.scrollLeft) + 'px)';
+      if (costChartWrap) costChartWrap.scrollLeft = rightScr.scrollLeft;
       if (!syncing){ syncing = true; leftBody.scrollTop = rightScr.scrollTop; syncing = false; }
     });
     leftBody.addEventListener('scroll', () => {
@@ -3371,6 +3586,16 @@ const GanttView = {
     if (zoomSel) zoomSel.onchange = e => {
       this.mount(state.container, state.proj.id, { mode: state.mode, zoom: e.target.value });
     };
+
+    /* ── Fase 3A-1: Cost Strip Toggle ── */
+    const btnCost = container.querySelector('.gantt-btn-cost-toggle');
+    if (btnCost){
+      btnCost.onclick = () => {
+        const next = !state.costStrip;
+        localStorage.setItem('mk_gantt_cost_strip', next ? 'on' : 'off');
+        this.mount(state.container, state.proj.id, { mode: state.mode, zoom: state.zoom });
+      };
+    }
 
     /* ── Fase 2C: Bar Style dropdown ── */
     const styleSel = container.querySelector('.gantt-bar-style');
