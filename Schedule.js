@@ -140,12 +140,22 @@ const CONSTRAINT_TYPES = {
   MSO:  'Must Start On',
   MFO:  'Must Finish On'
 };
+// Expose ke window agar bisa diakses dari inline script index.html
+window.CONSTRAINT_TYPES = CONSTRAINT_TYPES;
 
 /* ── Fase 2E: Work Contour types (MS Project standard) ── */
 const WORK_CONTOURS = Object.freeze({
   uniform:     'Uniform (Merata)',
-  ...
+  front:       'Front Loaded (Berat di Awal)',
+  back:        'Back Loaded (Berat di Akhir)',
+  bell:        'Bell (Lonceng)',
+  early_peak:  'Early Peak (Puncak Awal)',
+  late_peak:   'Late Peak (Puncak Akhir)',
+  double_peak: 'Double Peak (Dua Puncak)',
+  triangular:  'Triangular (Segitiga)'
 });
+// Expose ke window
+window.WORK_CONTOURS = WORK_CONTOURS;
 
 /* =====================================================================
    BAGIAN 3 — CPM ENGINE v3 (Fase 1B)
