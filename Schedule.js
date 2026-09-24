@@ -1127,7 +1127,7 @@ function renderSchedule(){
               Kapasitas <b>${fmt(a.kapasitas,0)} ${esc(a.satuan)}/hari</b> ·
               Dilampaui <b>${a.jumlah_hari} hari</b> ·
               Puncak <b>${fmt(a.qty_terburuk,2)} ${esc(a.satuan)}</b>
-              (<span class="neg">+${fmt(a.over_terburuk,2)}</span>, <b class="neg">${fmt(a.persen_over,1)}%</span></b>)
+              (<span class="neg">+${fmt(a.over_terburuk,2)}</span>, <b class="neg">${fmt(a.persen_over,1)}%</b>)
               pada <b>${esc(a.tanggal_terburuk)}</b>
             </div>
             <div style="font-size:10.5px;color:var(--muted);margin-top:4px">
@@ -5227,16 +5227,12 @@ const ImportExcel = {
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', fn);
     else fn();
   }
-
   ready(() => {
-    // Tombol Import BQ
     const btn = document.getElementById('btnImportBQ');
     if (btn) btn.onclick = () => {
       if (!STATE.activeProject){ toast('Pilih proyek dulu', false); return; }
       ImportExcel.open(STATE.activeProject);
     };
-
-    // Tombol EVM info
     const btnInfo = document.getElementById('btnEvmInfo');
     if (btnInfo) btnInfo.onclick = () => {
       openModal('ℹ Tentang EVM',
@@ -5256,8 +5252,16 @@ const ImportExcel = {
         () => {}
       );
       setTimeout(() => { document.getElementById('mSubmit').style.display = 'none'; }, 10);
-    });
+    };
   });
+  if (typeof window._origRenderDashboard === 'undefined'){
+    window._origRenderDashboard = renderDashboard;
+    window.renderDashboard = function(){
+      window._origRenderDashboard();
+      if (typeof EVMView !== 'undefined') EVMView.render();
+    };
+  }
+})();
 
   // Hook renderDashboard → tampilkan EVM
   if (typeof window._origRenderDashboard === 'undefined'){
