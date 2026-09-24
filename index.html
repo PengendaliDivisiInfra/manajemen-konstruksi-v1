@@ -7,6 +7,7 @@
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' fill='%231f4e79'/%3E%3Ctext x='50' y='68' font-size='52' font-weight='bold' text-anchor='middle' fill='white' font-family='Arial'%3EMK%3C/text%3E%3C/svg%3E" />
 <link rel="stylesheet" href="Style Schedule.css" />
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 </head>
 <body>
 
@@ -30,14 +31,21 @@
       <button class="btn btn-sm" id="btnHistory" title="History">📜</button>
       <div class="history-menu" id="historyMenu"></div>
     </div>
-    <button class="btn" id="btnExport">⬇ Export</button>
+    <button class="btn btn-sm" id="btnExcel" title="Export ke Excel">📊 XLSX</button>
+    <button class="btn btn-sm" id="btnIcal" title="Export Milestone ke Google Calendar">📅 iCal</button>
+    <span class="live-indicator" id="liveIndicator" title="Status sinkronisasi">
+      <span class="live-dot"></span><span class="live-text">Live</span>
+    </span>
+    <button class="btn" id="btnExport">⬇ JSON</button>
     <button class="btn" id="btnImport">⬆ Import</button>
     <input type="file" id="fileImport" accept=".json" style="display:none" />
   </div>
 </header>
 
 <!-- ===================== TABS ===================== -->
-<nav class="tabs">
+<button class="mobile-menu-btn" id="mobileMenuBtn" title="Menu">☰ Menu</button>
+<nav class="tabs" id="mainTabs">
+  <div class="tab" data-tab="executive">📈 Executive</div>
   <div class="tab active" data-tab="dashboard">📊 Dashboard</div>
   <div class="tab" data-tab="resources">🧱 Master Resources</div>
   <div class="tab" data-tab="ahsp">📐 AHSP &amp; Koefisien</div>
@@ -54,6 +62,41 @@
 </nav>
 
 <main>
+
+  <!-- ===================== EXECUTIVE (multi-project) ===================== -->
+  <section class="section" id="sec-executive">
+    <div class="panel">
+      <div class="panel-head">
+        <div>
+          <h2>📈 Executive Dashboard — Portofolio Proyek</h2>
+          <p>Perbandingan KPI seluruh proyek dalam portofolio</p>
+        </div>
+        <button class="btn btn-sm" id="btnExecRefresh">🔄 Refresh</button>
+      </div>
+      <div class="grid g4" id="execKPI"></div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head">
+        <div><h2>Perbandingan Proyek</h2><p>Klik baris untuk buka proyek</p></div>
+      </div>
+      <div class="tw"><table id="tblExecPortfolio"></table></div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head">
+        <div><h2>📊 Grafik Perbandingan</h2><p>Nilai, biaya, dan margin per proyek</p></div>
+      </div>
+      <canvas id="chartExecCompare" style="max-height:340px"></canvas>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head">
+        <div><h2>🚨 Proyek Perlu Perhatian</h2><p>Health score rendah atau melebihi pagu</p></div>
+      </div>
+      <div id="execAlerts"></div>
+    </div>
+  </section>
 
   <!-- ===================== DASHBOARD ===================== -->
   <section class="section active" id="sec-dashboard">
