@@ -3737,3 +3737,131 @@ canvas:not(.gantt-axis):not(.gantt-bars){
   font-size: 11px;
   padding: 0 8px;
 }
+
+/* =====================================================================
+   FASE 3A-4 — COST TOOLTIP + POLISH
+   ===================================================================== */
+
+/* ── Header cost columns: cegah text terpotong ── */
+.gantt-root.has-cost-cols .gantt-th[data-cost="true"]{
+  padding: 0 8px;
+  font-size: 10px;
+  letter-spacing: .3px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.gantt-root.has-cost-cols .gantt-td[data-cost="true"]{
+  font-size: 11px;
+  padding: 0 8px;
+}
+
+/* ── Extended tooltip — cost section ── */
+.gt-tip-cost{
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed rgba(34, 197, 94, 0.35);
+}
+.gt-tip-cost-title{
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: .5px;
+  color: #4ade80;
+  margin-bottom: 6px;
+}
+
+/* Cost KV compact grid */
+.gt-tip-cost-kv{
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 3px 8px;
+  font-size: 11px;
+  margin-bottom: 8px;
+}
+.gt-tip-cost-kv .k{
+  color: #8fa3c4;
+  font-weight: 500;
+}
+.gt-tip-cost-kv .v{
+  color: #e6edf7;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+.gt-tip-cost-kv .v.hi{
+  color: #4ade80;
+}
+
+/* Breakdown bars — Upah/Bahan/Alat */
+.gt-tip-breakdown{
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+.gt-tip-bd-row{
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10.5px;
+}
+.gt-tip-bd-label{
+  width: 42px;
+  color: #8fa3c4;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .3px;
+  flex-shrink: 0;
+  font-size: 9.5px;
+}
+.gt-tip-bd-bar{
+  flex: 1;
+  height: 6px;
+  background: rgba(36, 54, 92, .6);
+  border-radius: 3px;
+  overflow: hidden;
+  position: relative;
+}
+.gt-tip-bd-fill{
+  display: block;
+  height: 100%;
+  border-radius: 3px;
+  transition: width .2s;
+}
+.gt-tip-bd-fill.upah  { background: linear-gradient(90deg, #2f81f7, #1f6fe0); }
+.gt-tip-bd-fill.bahan { background: linear-gradient(90deg, #1abc9c, #16a34a); }
+.gt-tip-bd-fill.alat  { background: linear-gradient(90deg, #f59e0b, #d97706); }
+.gt-tip-bd-val{
+  width: 78px;
+  text-align: right;
+  color: #a8b8d6;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  font-size: 10px;
+  flex-shrink: 0;
+}
+
+/* Top resources mini-list */
+.gt-tip-topres{
+  font-size: 10.5px;
+}
+.gt-tip-topres-row{
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 2px 0;
+}
+.gt-tip-topres-row .k{
+  color: #a8b8d6;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+}
+.gt-tip-topres-row .v{
+  color: #4ade80;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+}
