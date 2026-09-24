@@ -751,6 +751,74 @@ function toast(msg, ok=true){
   t._tm = setTimeout(()=>t.classList.remove('show'), 2600);
 }
 
+  /* ═══════════════════════════════════════════════════════════
+   DATE WIDGET (Fase 2G) — Format "dd Mmm yyyy" untuk semua form
+   ═══════════════════════════════════════════════════════════ */
+const _MONTHS_SHORT = ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'];
+
+function _fmtDateDisplay(iso){
+  if (!iso) return '';
+  const parts = String(iso).split('T')[0].split('-');
+  if (parts.length !== 3) return String(iso);
+  const y = parseInt(parts[0], 10);
+  const m = parseInt(parts[1], 10);
+  const d = parseInt(parts[2], 10);
+  if (isNaN(y) || isNaN(m) || isNaN(d)) return String(iso);
+  return String(d).padStart(2,'0') + ' ' + _MONTHS_SHORT[m-1] + ' ' + y;
+}
+
+/* Generate HTML untuk date widget: native input (tersembunyi) + face (tampilan) */
+function _dateWidgetHTML(id, isoValue, opts){
+  opts = opts || {};
+  const readonly    = !!opts.readonly;
+  const placeholder = opts.placeholder || 'Pilih tanggal';
+  const iso         = String(isoValue || '').split('T')[0];
+  const display     = _fmtDateDisplay(iso) || placeholder;
+  const emptyCls    = display === placeholder ? ' empty' : '';
+  const roCls       = readonly ? ' is-readonly' : '';
+  const disAttr     = readonly ? ' disabled' : '';
+  return (
+    '<div class="dw-wrap' + roCls + '">' +
+      '<input type="date" id="' + id + '" class="dw-native" ' +
+        'value="' + esc(iso) + '"' + disAttr + ' />' +
+      '<div class="dw-face">' +
+        '<span class="dw-text' + emptyCls + '">' + esc(display) + '</span>' +
+        '<span class="dw-icon">📅</span>' +
+      '</div>' +
+    '</div>'
+  );
+}
+
+/* Sinkronkan face dari native input value */
+function _syncDateWidgetFace(native){
+  if (!native) return;
+  const wrap = native.closest('.dw-wrap');
+  if (!wrap) return;
+  const text = wrap.querySelector('.dw-text');
+  if (!text) return;
+  const placeholder = 'Pilih tanggal';
+  const v = native.value;
+  if (v){
+    text.textContent = _fmtDateDisplay(v);
+    text.classList.remove('empty');
+  } else {
+    text.textContent = placeholder;
+    text.classList.add('empty');
+  }
+}
+
+/* Init semua date widget dalam container */
+function _initDateWidgets(container){
+  (container || document).querySelectorAll('.dw-wrap').forEach(wrap => {
+    const native = wrap.querySelector('.dw-native');
+    if (!native) return;
+    const sync = () => _syncDateWidgetFace(native);
+    native.addEventListener('change', sync);
+    native.addEventListener('input', sync);
+    sync();
+  });
+}
+
 /* ---------- DATA LAYER ---------- */
 let DB = null;
 let SET = { overhead: 10, ppn: 11, sheetUrl: '' };
@@ -1862,7 +1930,7 @@ function renderWbs(){
   });
 }
 
-/* ---------- FORM WBS (Fase 1D: Auto/Manual + Multiple Predecessor) ---------- */
+/* ---------- FORM WBS (Fase 1D + 2G: Auto/Manual + Date Widget) ---------- */
 function formWbs(id, forceGroup){
   const pid = STATE.activeProject;
   if (!pid){ toast('Pilih proyek terlebih dahulu', false); return; }
@@ -1870,14 +1938,13 @@ function formWbs(id, forceGroup){
   const isGroup = forceGroup || (w ? !!w.is_group : false);
   const proj = activeProj();
 
-  // ── Prepare options ──
+  // ── Options ──
   const ahspOpts = DB.ahsp_headers.map(a =>
     `<option value="${a.id}" ${w?.ahsp_id === a.id?'selected':''}>${esc(a.kode)} — ${esc(a.nama)} (${esc(a.satuan)})</option>`
   ).join('');
   const grupOpts = `<option value="">— Root —</option>` +
     DB.project_wbs.filter(x => x.project_id === pid && x.is_group && x.id !== id)
       .map(g => `<option value="${g.id}" ${w?.parent_id === g.id?'selected':''}>${esc(g.kode_wbs)} — ${esc(g.uraian)}</option>`).join('');
-  // Datalist: kode_wbs untuk auto-suggest multi predecessor
   const predSuggestions = DB.project_wbs
     .filter(x => x.project_id === pid && !x.is_group && x.id !== id)
     .map(x => `<option value="${esc(x.kode_wbs)}"></option>`).join('');
@@ -1885,9 +1952,15 @@ function formWbs(id, forceGroup){
     `<option value="${c.id}" ${(w?.calendar_id || proj?.calendar_id) === c.id?'selected':''}>${esc(c.kode)} — ${esc(c.nama)}</option>`
   ).join('');
 
-  // ── Fase 1D: schedule mode state ──
+  // ── Mode state ──
   const schedMode = String(w?.schedule_mode || 'auto').toLowerCase();
   const isManual = schedMode === 'manual';
+
+  // Start/Finish default
+  const startISO  = isManual ? (w?.manual_start  || w?.tgl_mulai_rencana   || proj?.tgl_mulai || today())
+                             : (w?.tgl_mulai_rencana   || proj?.tgl_mulai || today());
+  const finishISO = isManual ? (w?.manual_finish || w?.tgl_selesai_rencana || today())
+                             : (w?.tgl_selesai_rencana || today());
 
   const body = `
     <div class="row">
@@ -1920,26 +1993,6 @@ function formWbs(id, forceGroup){
       </div>
 
       <div class="sep"></div>
-      <p class="hint" style="color:var(--acc2)"><b>⚙ Mode Penjadwalan</b> — Auto (mengikuti CPM) atau Manual (tanggal dikunci user)</p>
-      <div class="row">
-        <div class="field">
-          <label class="f">Mode</label>
-          <select id="fw_sched_mode">
-            <option value="auto"   ${!isManual?'selected':''}>Auto — ikuti CPM</option>
-            <option value="manual" ${isManual?'selected':''}>Manual — tanggal terkunci</option>
-          </select>
-        </div>
-        <div class="field" id="fw_man_start_box" style="display:${isManual?'block':'none'}">
-          <label class="f">Manual Start</label>
-          <input id="fw_man_start" type="date" value="${esc(w?.manual_start||'')}" />
-        </div>
-        <div class="field" id="fw_man_finish_box" style="display:${isManual?'block':'none'}">
-          <label class="f">Manual Finish</label>
-          <input id="fw_man_finish" type="date" value="${esc(w?.manual_finish||'')}" />
-        </div>
-      </div>
-
-      <div class="sep"></div>
       <p class="hint" style="color:var(--acc2)"><b>⚙ Master Schedule</b> — Field ini hanya memengaruhi jadwal, tidak mengubah RAB/RAP</p>
       <div class="row">
         <div class="field" style="flex:3">
@@ -1962,6 +2015,7 @@ function formWbs(id, forceGroup){
         </div>
         <div class="field"><label class="f">Lag Default (hari)</label><input id="fw_lag" type="number" step="1" value="${num(w?.lag_days)||0}" /></div>
       </div>
+
       <div class="row" style="margin-top:12px">
         <div class="field"><label class="f">Durasi (hari kerja)</label><input id="fw_dur" type="number" step="1" min="1" value="${num(w?.duration)||1}" /></div>
         <div class="field"><label class="f">Kalender</label><select id="fw_cal">${calOpts}</select></div>
@@ -1974,6 +2028,7 @@ function formWbs(id, forceGroup){
           </select>
         </div>
       </div>
+
       <div class="row" style="margin-top:12px">
         <div class="field"><label class="f">Constraint</label>
           <select id="fw_ct">
@@ -1983,12 +2038,37 @@ function formWbs(id, forceGroup){
             ).join('')}
           </select>
         </div>
-        <div class="field"><label class="f">Constraint Date</label><input id="fw_cd" type="date" value="${esc(w?.constraint_date||'')}" /></div>
+        <div class="field">
+          <label class="f">Constraint Date</label>
+          ${_dateWidgetHTML('fw_cd', w?.constraint_date || '', { placeholder: 'Pilih tanggal' })}
+        </div>
       </div>
+
+      <div class="sep"></div>
+      <p class="hint" style="color:var(--acc2)"><b>⚙ Mode & Timeline</b> — Auto = CPM menghitung tanggal; Manual = tanggal dikunci user</p>
+      <div class="row">
+        <div class="field" style="flex:2">
+          <label class="f">Mode Penjadwalan</label>
+          <select id="fw_sched_mode">
+            <option value="auto"   ${!isManual?'selected':''}>🔄 Auto — ikuti CPM</option>
+            <option value="manual" ${isManual?'selected':''}>🔒 Manual — tanggal dikunci user</option>
+          </select>
+        </div>
+      </div>
+
       <div class="row" style="margin-top:12px">
-        <div class="field"><label class="f">Start (auto)</label><input id="fw_start" readonly /></div>
-        <div class="field"><label class="f">Finish (auto)</label><input id="fw_finish" readonly /></div>
-        <div class="field"><label class="f">Kritis?</label><input id="fw_crit" readonly /></div>
+        <div class="field">
+          <label class="f" id="fw_start_label">Start ${isManual ? '(Manual)' : '(Auto)'}</label>
+          ${_dateWidgetHTML('fw_start', startISO, { readonly: !isManual, placeholder: '— Auto —' })}
+        </div>
+        <div class="field">
+          <label class="f" id="fw_finish_label">Finish ${isManual ? '(Manual)' : '(Auto)'}</label>
+          ${_dateWidgetHTML('fw_finish', finishISO, { readonly: !isManual, placeholder: '— Auto —' })}
+        </div>
+        <div class="field">
+          <label class="f">Status</label>
+          <input id="fw_crit" readonly value="${num(w?.is_critical)===1 ? '★ KRITIS' : '— (simpan untuk menghitung)'}" />
+        </div>
       </div>
     </div>
   `;
@@ -2013,27 +2093,24 @@ function formWbs(id, forceGroup){
       obj.volume_rab = num($('#fw_vrab').value);
       obj.volume_rap = num($('#fw_vrap').value);
 
-      // ── Fase 1D: schedule_mode + manual dates ──
       const schedMode = $('#fw_sched_mode').value || 'auto';
       writeScheduleField(obj, 'schedule_mode', schedMode);
       if (schedMode === 'manual'){
-        writeScheduleField(obj, 'manual_start',  $('#fw_man_start').value  || '');
-        writeScheduleField(obj, 'manual_finish', $('#fw_man_finish').value || '');
+        writeScheduleField(obj, 'manual_start',  $('#fw_start').value  || '');
+        writeScheduleField(obj, 'manual_finish', $('#fw_finish').value || '');
       } else {
         writeScheduleField(obj, 'manual_start',  '');
         writeScheduleField(obj, 'manual_finish', '');
       }
 
-      // ── Fase 1D: predecessor multi (text input) ──
-      writeScheduleField(obj, 'predecessor', $('#fw_pred').value.trim());
-      writeScheduleField(obj, 'pred_type',   $('#fw_pred_type').value);
-      writeScheduleField(obj, 'lag_days',    num($('#fw_lag').value));
-      writeScheduleField(obj, 'duration',    num($('#fw_dur').value) || 1);
-      writeScheduleField(obj, 'calendar_id', $('#fw_cal').value);
-      writeScheduleField(obj, 'constraint_type', $('#fw_ct').value);
-      writeScheduleField(obj, 'constraint_date', $('#fw_cd').value);
-      // ── Fase 2E: Work Contour ──
-      writeScheduleField(obj, 'work_contour', $('#fw_contour').value || '');
+      writeScheduleField(obj, 'predecessor',      $('#fw_pred').value.trim());
+      writeScheduleField(obj, 'pred_type',        $('#fw_pred_type').value);
+      writeScheduleField(obj, 'lag_days',         num($('#fw_lag').value));
+      writeScheduleField(obj, 'duration',         num($('#fw_dur').value) || 1);
+      writeScheduleField(obj, 'calendar_id',      $('#fw_cal').value);
+      writeScheduleField(obj, 'constraint_type',  $('#fw_ct').value);
+      writeScheduleField(obj, 'constraint_date',  $('#fw_cd').value);
+      writeScheduleField(obj, 'work_contour',     $('#fw_contour').value || '');
     } else {
       obj.ahsp_id = ''; obj.satuan = ''; obj.volume_rab = 0; obj.volume_rap = 0;
       writeScheduleField(obj, 'predecessor', '');
@@ -2048,6 +2125,9 @@ function formWbs(id, forceGroup){
   });
 
   if (!isGroup){
+    // ── Init date widgets ──
+    _initDateWidgets(document.getElementById('mBody'));
+
     const sync = () => {
       const aid = $('#fw_ahsp').value;
       const a = DB.ahsp_headers.find(x => x.id === aid);
@@ -2058,30 +2138,39 @@ function formWbs(id, forceGroup){
     $('#fw_ahsp').onchange = sync;
     sync();
 
-    // ── Fase 1D: toggle manual date fields visibility ──
-    const syncModeFields = () => {
-      const m = $('#fw_sched_mode').value;
-      const show = (m === 'manual');
-      $('#fw_man_start_box').style.display  = show ? 'block' : 'none';
-      $('#fw_man_finish_box').style.display = show ? 'block' : 'none';
+    // ── Mode toggle: Start/Finish jadi editable/readonly ──
+    const syncMode = () => {
+      const isManual = $('#fw_sched_mode').value === 'manual';
+      const startNative = $('#fw_start');
+      const finishNative = $('#fw_finish');
+
+      startNative.disabled  = !isManual;
+      finishNative.disabled = !isManual;
+
+      startNative.closest('.dw-wrap').classList.toggle('is-readonly', !isManual);
+      finishNative.closest('.dw-wrap').classList.toggle('is-readonly', !isManual);
+
+      $('#fw_start_label').textContent  = 'Start '  + (isManual ? '(Manual)' : '(Auto)');
+      $('#fw_finish_label').textContent = 'Finish ' + (isManual ? '(Manual)' : '(Auto)');
+
+      // Kalau switch ke Manual & field kosong → pre-fill dari auto
+      if (isManual){
+        if (!startNative.value && w?.tgl_mulai_rencana){
+          startNative.value = w.tgl_mulai_rencana;
+          _syncDateWidgetFace(startNative);
+        }
+        if (!finishNative.value && w?.tgl_selesai_rencana){
+          finishNative.value = w.tgl_selesai_rencana;
+          _syncDateWidgetFace(finishNative);
+        }
+      }
     };
-    $('#fw_sched_mode').onchange = syncModeFields;
-    syncModeFields();
+    $('#fw_sched_mode').onchange = syncMode;
+    syncMode();
 
     $('#fw_group').onchange = e => {
       $('#itemBox').style.display = num(e.target.value) === 1 ? 'none' : 'block';
     };
-    const previewCPM = () => {
-      const dur = num($('#fw_dur').value) || 1;
-      const proj = activeProj();
-      const startBase = proj?.tgl_mulai || today();
-      const endBase = new Date(new Date(startBase).getTime() + dur * 86400000);
-      $('#fw_start').value = startBase;
-      $('#fw_finish').value = endBase.toISOString().slice(0, 10);
-      $('#fw_crit').value = '— (simpan untuk menghitung)';
-    };
-    $('#fw_dur').oninput = previewCPM;
-    previewCPM();
   }
 
   AUTOSAVE.attachForm('form_wbs_' + (id || 'new'));
