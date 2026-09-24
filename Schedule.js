@@ -4751,24 +4751,24 @@ const ExecDashboard = {
       if (document.visibilityState === 'visible') LiveSync.resume();
       else LiveSync.pause();
     });
+
+    // ── Hook ke switchTab untuk Executive (DIPINDAH KE SINI) ──
+    if (typeof window._origSwitchTab === 'undefined'){
+      window._origSwitchTab = switchTab;
+      window.switchTab = function(name){
+        window._origSwitchTab(name);
+        if (name === 'executive') ExecDashboard.render();
+      };
+    }
+
+    // ── Hook renderAll → pastikan Executive ikut (DIPINDAH KE SINI) ──
+    if (typeof window._origRenderAll === 'undefined'){
+      window._origRenderAll = renderAll;
+      window.renderAll = function(){
+        window._origRenderAll();
+        const cur = document.querySelector('.tab.active')?.dataset.tab;
+        if (cur === 'executive') ExecDashboard.render();
+      };
+    }
   });
-
-  // ── Hook ke switchTab untuk Executive ──
-  if (typeof window._origSwitchTab === 'undefined'){
-    window._origSwitchTab = switchTab;
-    window.switchTab = function(name){
-      window._origSwitchTab(name);
-      if (name === 'executive') ExecDashboard.render();
-    };
-  }
-
-  // ── Hook renderAll → pastikan Executive ikut ──
-  if (typeof window._origRenderAll === 'undefined'){
-    window._origRenderAll = renderAll;
-    window.renderAll = function(){
-      window._origRenderAll();
-      const cur = document.querySelector('.tab.active')?.dataset.tab;
-      if (cur === 'executive') ExecDashboard.render();
-    };
-  }
 })();
