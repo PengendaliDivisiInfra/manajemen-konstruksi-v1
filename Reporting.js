@@ -231,26 +231,34 @@
         return;
       }
 
-      var html;
-      try {
-        switch (templateId){
-          case 'executive':   html = buildExecutive(proj, opts); break;
-          case 'task_detail': html = buildTaskDetail(proj, opts); break;
-          case 'cost':        html = buildCostReport(proj, opts); break;
-          case 'critical':    html = buildCriticalPath(proj, opts); break;
-          case 'variance':    html = buildVariance(proj, opts); break;
-          default:
-            if (typeof toast === 'function') toast('Template belum tersedia', false);
-            return;
+      var _doGenerate = function(){
+        var html;
+        try {
+          switch (templateId){
+            case 'executive':   html = buildExecutive(proj, opts); break;
+            case 'task_detail': html = buildTaskDetail(proj, opts); break;
+            case 'cost':        html = buildCostReport(proj, opts); break;
+            case 'critical':    html = buildCriticalPath(proj, opts); break;
+            case 'variance':    html = buildVariance(proj, opts); break;
+            default:
+              if (typeof toast === 'function') toast('Template belum tersedia', false);
+              return;
+          }
+        } catch (e){
+          console.error('[Reporting] generate error:', e);
+          if (typeof toast === 'function') toast('Gagal generate report: ' + e.message, false);
+          return;
         }
-      } catch (e){
-        console.error('[Reporting] generate error:', e);
-        if (typeof toast === 'function') toast('Gagal generate report: ' + e.message, false);
-        return;
-      }
 
-      printWindow(html, proj, tpl);
-      if (typeof toast === 'function') toast('📄 Report ' + tpl.label + ' siap dicetak');
+        printWindow(html, proj, tpl);
+        if (typeof toast === 'function') toast('📄 Report ' + tpl.label + ' siap dicetak');
+      };
+
+      if (window.Loading && Loading.wrapSync){
+        Loading.wrapSync(_doGenerate, 'Menyiapkan report…', 120);
+      } else {
+        _doGenerate();
+      }
     }
 
     /* ═══════════════════════════════════════════════════════════
