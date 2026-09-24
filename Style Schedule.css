@@ -1131,7 +1131,7 @@ canvas:not(.gantt-axis):not(.gantt-bars){
 .nowrap{white-space:nowrap}
 
 /* =====================================================================
-   GANTT CHART — MS PROJECT STYLE (Fase 1.3 — Visible Summary + Strict Align)
+   GANTT CHART — MODERN PROFESSIONAL (Fase 1.4)
    ===================================================================== */
 .gantt-root{
   --gantt-row-h:26px;
@@ -1139,41 +1139,45 @@ canvas:not(.gantt-axis):not(.gantt-bars){
   display:flex;
   flex-direction:column;
   border:1px solid var(--line);
-  border-radius:var(--radius);
+  border-radius:12px;
   overflow:hidden;
   background:#0c1729;
   font-size:12px;
+  box-shadow:0 8px 32px rgba(0,0,0,.35);
 }
 
+/* ── Toolbar ── */
 .gantt-toolbar{
   display:flex;
   align-items:center;
   justify-content:space-between;
   gap:12px;
-  padding:10px 14px;
-  background:#0e1a30;
+  padding:12px 16px;
+  background:linear-gradient(180deg, #101d33, #0c1729);
   border-bottom:1px solid var(--line);
   flex-wrap:wrap;
   flex-shrink:0;
 }
-.gantt-toolbar-left{display:flex;flex-direction:column;gap:2px}
-.gantt-title{font-weight:700;color:var(--txt);font-size:13px}
+.gantt-toolbar-left{display:flex;flex-direction:column;gap:3px}
+.gantt-title{font-weight:700;color:var(--txt);font-size:13px;letter-spacing:.2px}
 .gantt-subtitle{font-size:11px;color:var(--muted)}
 .gantt-toolbar-right{display:flex;align-items:center;gap:8px}
-.gantt-lbl{font-size:10.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
-.gantt-zoom{padding:5px 9px;font-size:12px;width:auto}
+.gantt-lbl{font-size:10.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;font-weight:600}
+.gantt-zoom{padding:5px 10px;font-size:12px;width:auto;border-radius:6px}
 
 /* ── Grid 2×2 ── */
 .gantt-body{
   display:grid;
-  grid-template-columns: var(--gantt-table-w,640px) 1fr;
+  grid-template-columns: var(--gantt-table-w,708px) 1fr;
   grid-template-rows: var(--gantt-head-h) 1fr;
   height:60vh;
   min-height:340px;
   overflow:hidden;
 }
 
-/* ── R1 C1: Header tabel — FORCE 60px ── */
+/* ═══════════════════════════════════════════════════════════
+   R1 C1 — HEADER TABEL (60px fixed)
+   ═══════════════════════════════════════════════════════════ */
 .gantt-thead{
   grid-column:1;
   grid-row:1;
@@ -1182,21 +1186,21 @@ canvas:not(.gantt-axis):not(.gantt-bars){
   max-height:var(--gantt-head-h);
   display:flex;
   align-items:stretch;
-  background:#1f4e79;
+  background:linear-gradient(180deg, #1f4e79, #17395a);
   color:#fff;
   font-size:10.5px;
   font-weight:700;
   text-transform:uppercase;
-  letter-spacing:.5px;
+  letter-spacing:.7px;
   overflow:hidden;
   box-sizing:border-box;
   border-right:1px solid var(--line);
 }
 .gantt-th{
-  padding:0 8px;
+  padding:0 12px;
   display:flex;
   align-items:center;
-  border-right:1px solid rgba(255,255,255,.08);
+  border-right:1px solid rgba(255,255,255,.10);
   white-space:nowrap;
   overflow:hidden;
   text-overflow:ellipsis;
@@ -1204,8 +1208,12 @@ canvas:not(.gantt-axis):not(.gantt-bars){
   flex-shrink:0;
 }
 .gantt-th:last-child{border-right:none}
+.gantt-th.center{justify-content:center}
+.gantt-th.right{justify-content:flex-end}
 
-/* ── R1 C2: Axis kanan (skala waktu) ── */
+/* ═══════════════════════════════════════════════════════════
+   R1 C2 — AXIS KANAN (60px fixed)
+   ═══════════════════════════════════════════════════════════ */
 .gantt-axis-wrap{
   grid-column:2;
   grid-row:1;
@@ -1219,13 +1227,14 @@ canvas:not(.gantt-axis):not(.gantt-bars){
 }
 .gantt-axis-track{
   position:absolute;
-  top:0;
-  left:0;
+  top:0; left:0;
   height:var(--gantt-head-h);
   will-change:transform;
 }
 
-/* ── R2 C1: Tabel body (scroll Y) ── */
+/* ═══════════════════════════════════════════════════════════
+   R2 C1 — TABEL BODY
+   ═══════════════════════════════════════════════════════════ */
 .gantt-tbody{
   grid-column:1;
   grid-row:2;
@@ -1235,23 +1244,211 @@ canvas:not(.gantt-axis):not(.gantt-bars){
   border-right:1px solid var(--line);
   box-sizing:border-box;
   align-content:flex-start;
-  scrollbar-width:none;
+  scrollbar-width:thin;
 }
-.gantt-tbody::-webkit-scrollbar{width:0;height:0}
+.gantt-tbody::-webkit-scrollbar{width:8px}
+.gantt-tbody::-webkit-scrollbar-track{background:#0a1424}
+.gantt-tbody::-webkit-scrollbar-thumb{background:#2a3f68;border-radius:4px}
 
+/* ── Row ── */
 .gantt-row{
   display:flex;
   height:var(--gantt-row-h);
   min-height:var(--gantt-row-h);
   max-height:var(--gantt-row-h);
   box-sizing:border-box;
-  line-height:var(--gantt-row-h);
-  border-bottom:1px solid rgba(36,54,92,.6);
-  transition:background .1s;
+  border-bottom:1px solid rgba(36,54,92,.4);
+  transition:background .12s;
   cursor:default;
+  position:relative;
+  overflow:hidden;             /* ← KUNCI: clip content yang overflow */
+  align-items:stretch;
+  line-height:1;               /* ← KUNCI: jangan pakai line-height parent */
+}
+.gantt-row::before{
+  content:'';
+  position:absolute;
+  left:0; top:0; bottom:0;
+  width:0;
+  background:var(--acc);
+  transition:width .15s;
+  pointer-events:none;
+}
+.gantt-row:hover{background:rgba(47,129,247,.08)}
+.gantt-row:hover::before{width:3px}
+
+/* Zebra */
+.gantt-row:nth-child(even){background:rgba(255,255,255,.012)}
+.gantt-row:nth-child(even):hover{background:rgba(47,129,247,.08)}
+
+/* Summary */
+.gantt-row.is-summary{
+  background:linear-gradient(90deg, rgba(47,129,247,.10), rgba(47,129,247,.03));
+  font-weight:700;
+}
+.gantt-row.is-summary::before{background:#2f81f7}
+.gantt-row.is-summary .gantt-td{color:#e6edf7}
+
+/* Critical */
+.gantt-row.is-critical{
+  background:linear-gradient(90deg, rgba(220,38,38,.09), rgba(220,38,38,.02));
+}
+.gantt-row.is-critical::before{background:#dc2626}
+.gantt-row.is-critical:hover{background:rgba(220,38,38,.14)}
+
+/* ── Cell ── */
+.gantt-td{
+  padding:0 12px;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  border-right:1px solid rgba(36,54,92,.5);
+  font-variant-numeric:tabular-nums;
+  font-size:11.5px;
+  color:var(--txt);
+  box-sizing:border-box;
+  flex-shrink:0;
+  display:flex;
+  align-items:center;
+  gap:6px;
+  min-width:0;
+}
+.gantt-td > *{
+  min-width:0;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+.gantt-td:last-child{border-right:none}
+
+/* ═══════════════════════════════════════════════════════════
+   CELL CONTENT — Modern Components
+   ═══════════════════════════════════════════════════════════ */
+
+/* ID Badge */
+.gt-id-badge{
+  display:inline-block;
+  padding:2px 8px;
+  border-radius:6px;
+  background:rgba(47,129,247,.14);
+  color:#7cb3ff;
+  font-family:'Consolas','Courier New',monospace;
+  font-size:10.5px;
+  font-weight:700;
+  letter-spacing:.3px;
+  max-width:100%;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+  border:1px solid rgba(47,129,247,.20);
+  line-height:1.4;
+}
+.is-critical .gt-id-badge{
+  background:rgba(220,38,38,.20);
+  color:#fca5a5;
+  border-color:rgba(220,38,38,.30);
+}
+.is-summary .gt-id-badge{
+  background:rgba(47,129,247,.22);
+  color:#a8c8ff;
+  border-color:rgba(47,129,247,.32);
 }
 
-/* ── R2 C2: Bars area (scroll X & Y) ── */
+/* Tree & expander */
+.gt-tree{
+  display:inline-block;
+  height:1px;
+  flex-shrink:0;
+}
+.gt-expand{
+  display:inline-block;
+  width:12px;
+  color:var(--muted);
+  font-size:9px;
+  flex-shrink:0;
+  text-align:center;
+}
+
+/* Milestone diamond */
+.gt-ms{
+  color:#e6edf7;
+  font-size:11px;
+  flex-shrink:0;
+  text-shadow:0 0 4px rgba(255,255,255,.4);
+}
+
+/* Task name */
+.gt-name{
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+  min-width:0;
+  flex:1;
+}
+
+/* Inline progress badge */
+.gt-prog{
+  display:inline-block;
+  padding:2px 7px;
+  border-radius:10px;
+  background:rgba(26,188,156,.18);
+  color:#4fe0c0;
+  font-size:9.5px;
+  font-weight:700;
+  flex-shrink:0;
+  letter-spacing:.3px;
+}
+
+/* Number */
+.gt-num{
+  font-weight:700;
+  font-variant-numeric:tabular-nums;
+  color:#e6edf7;
+}
+.gt-dim{
+  color:var(--muted);
+  font-weight:400;
+  margin-left:2px;
+  font-size:10.5px;
+}
+
+/* Date */
+.gt-date{
+  font-size:10.5px;
+  color:#a8b8d6;
+  font-variant-numeric:tabular-nums;
+}
+
+/* Predecessor chip */
+.gt-pred{
+  display:inline-block;
+  padding:2px 8px;
+  border-radius:4px;
+  background:rgba(245,158,11,.14);
+  color:#fbbf24;
+  font-size:10px;
+  font-weight:600;
+  border:1px solid rgba(245,158,11,.20);
+  max-width:100%;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+  line-height:1.4;
+}
+
+/* Resources text */
+.gt-res{
+  font-size:10.5px;
+  color:#a8b8d6;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+  min-width:0;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   R2 C2 — BARS AREA
+   ═══════════════════════════════════════════════════════════ */
 .gantt-bars-wrap{
   grid-column:2;
   grid-row:2;
@@ -1261,7 +1458,6 @@ canvas:not(.gantt-axis):not(.gantt-bars){
   box-sizing:border-box;
 }
 
-/* Canvas block-level, no stretch, no inline-gap */
 .gantt-axis,
 .gantt-bars{
   display:block;
