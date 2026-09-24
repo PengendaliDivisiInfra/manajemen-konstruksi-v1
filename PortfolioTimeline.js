@@ -200,7 +200,7 @@
                   '<div class="pt-side-nama" title="' + _esc(r.proj.nama) + '">' + _esc(r.proj.nama) + '</div>' +
                   '<div class="pt-side-meta">' +
                     '<span class="pt-health ' + r.healthCls + '">' + r.health + '</span>' +
-                    '<span class="pt-prog">' + _fmt(r.progressPct, 1) + '%</span>' +
+                    '<span class="pt-prog">' + Math.min(100, _num(r.progressPct)).toFixed(1).replace('.', ',') + '%</span>' +
                   '</div>' +
                 '</div>';
               }).join('') +
