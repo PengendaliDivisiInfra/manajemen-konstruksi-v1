@@ -1703,7 +1703,6 @@ const GanttEngine = {
         else n.status = 'not-started';
       });
     }
-  }
 },
 
   makeNode(w, level, proj, mode){
