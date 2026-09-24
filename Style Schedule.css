@@ -4046,3 +4046,219 @@ canvas:not(.gantt-axis):not(.gantt-bars){
 .gantt-td[data-col-key="slip"]{
   padding: 0 6px;
 }
+
+/* =====================================================================
+   FASE 3C — PROGRESS UPDATE WIZARD
+   ===================================================================== */
+.pw-intro{
+  padding: 10px 14px;
+  background: linear-gradient(135deg, rgba(168,85,247,.10), rgba(168,85,247,.03));
+  border-left: 4px solid #a855f7;
+  border-radius: 8px;
+  font-size: 12px;
+  color: #e6edf7;
+  margin-bottom: 14px;
+}
+
+.pw-filter-bar{
+  display: grid;
+  grid-template-columns: 1fr 1fr 1.5fr 1.3fr;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+.pw-f-item label{
+  display: block;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .5px;
+  color: var(--muted);
+  margin-bottom: 4px;
+}
+.pw-f-item input,
+.pw-f-item select{
+  width: 100%;
+  padding: 7px 10px;
+  font-size: 12.5px;
+}
+
+.pw-action-bar{
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 10px 12px;
+  background: rgba(11,18,32,.55);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  margin-bottom: 12px;
+  align-items: center;
+}
+.pw-btn{
+  padding: 6px 12px;
+  font-size: 11.5px;
+  font-weight: 700;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+  background: #16233f;
+  color: var(--txt);
+  cursor: pointer;
+  transition: .12s;
+  font-family: inherit;
+  white-space: nowrap;
+}
+.pw-btn:hover{
+  background: #1d2f52;
+  border-color: #33507f;
+  transform: translateY(-1px);
+}
+.pw-btn-auto  { background: linear-gradient(135deg, #2f81f7, #1f6fe0); border-color: transparent; color: #fff; }
+.pw-btn-tri   { background: linear-gradient(135deg, #06b6d4, #0891b2); border-color: transparent; color: #fff; }
+.pw-btn-bell  { background: linear-gradient(135deg, #16a34a, #0f8a3f); border-color: transparent; color: #fff; }
+.pw-btn-clear { background: linear-gradient(135deg, #dc2626, #b91c1c); border-color: transparent; color: #fff; }
+.pw-btn-csv   { background: linear-gradient(135deg, #f59e0b, #d97706); border-color: transparent; color: #fff; }
+.pw-summary{
+  margin-left: auto;
+  font-size: 11px;
+  color: #7cb3ff;
+  font-weight: 700;
+  letter-spacing: .3px;
+  white-space: nowrap;
+}
+.pw-summary b{ color: #4ade80; font-weight: 800; }
+
+.pw-table-wrap{
+  max-height: 52vh;
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #0b1220;
+}
+.pw-empty{
+  padding: 40px;
+  text-align: center;
+  color: var(--muted);
+  font-style: italic;
+  font-size: 12.5px;
+}
+
+.pw-table{
+  width: 100%;
+  min-width: auto;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 11.5px;
+}
+.pw-table thead th{
+  background: linear-gradient(180deg, #1f4e79, #17395a);
+  color: #fff;
+  padding: 8px 10px;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: .5px;
+  font-weight: 700;
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  white-space: nowrap;
+  border-right: 1px solid rgba(255,255,255,.1);
+  border-bottom: 1px solid var(--line);
+}
+.pw-table thead th:last-child{ border-right: none; }
+.pw-th-kode    { min-width: 70px; }
+.pw-th-uraian  { min-width: 200px; }
+.pw-th-sat     { min-width: 55px; text-align: center; }
+.pw-th-vol     { min-width: 80px; text-align: right; }
+.pw-th-week    { min-width: 70px; text-align: center; background: linear-gradient(180deg, #1a4a3a, #143a2e) !important; }
+.pw-th-input   { min-width: 80px; text-align: right; background: linear-gradient(180deg, #4a3a1a, #3a2e14) !important; }
+.pw-th-pct     { min-width: 60px; text-align: center; background: linear-gradient(180deg, #4a3a1a, #3a2e14) !important; }
+
+.pw-table tbody td{
+  padding: 4px 8px;
+  border-bottom: 1px solid rgba(36,54,92,.4);
+  border-right: 1px solid rgba(36,54,92,.3);
+  vertical-align: middle;
+}
+.pw-table tbody tr:hover td{ background: rgba(47,129,247,.06); }
+.pw-td-kode{
+  font-family: 'Consolas', monospace;
+  color: #7cb3ff;
+  font-weight: 700;
+  font-size: 11px;
+}
+.pw-td-uraian{
+  max-width: 240px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #e6edf7;
+}
+.pw-td-sat{
+  text-align: center;
+  color: var(--muted);
+  font-size: 10.5px;
+}
+.pw-td-vol{
+  text-align: right;
+  color: #a8b8d6;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+.pw-td-input{
+  text-align: right;
+  color: #fbbf24;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  background: rgba(245,158,11,.06);
+}
+.pw-td-pct{
+  text-align: center;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  background: rgba(245,158,11,.06);
+  color: var(--muted);
+}
+.pw-td-pct.ok  { color: #4ade80; }
+.pw-td-pct.warn{ color: #fbbf24; }
+
+.pw-cell{
+  padding: 2px 4px !important;
+  background: rgba(26,188,156,.04);
+}
+.pw-input{
+  width: 100%;
+  padding: 5px 6px;
+  font-size: 11.5px;
+  text-align: right;
+  background: #0c1729;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  color: #e6edf7;
+  font-family: inherit;
+  font-variant-numeric: tabular-nums;
+  transition: .12s;
+}
+.pw-input:hover{
+  border-color: var(--line);
+  background: #101d33;
+}
+.pw-input:focus{
+  border-color: var(--acc);
+  outline: none;
+  background: #152341;
+  box-shadow: 0 0 0 2px rgba(47,129,247,.25);
+}
+.pw-input::placeholder{
+  color: #475569;
+}
+
+/* Mobile */
+@media (max-width: 900px){
+  .pw-filter-bar{
+    grid-template-columns: 1fr 1fr;
+  }
+  .pw-action-bar{
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .pw-summary{ margin-left: 0; text-align: center; }
+}
