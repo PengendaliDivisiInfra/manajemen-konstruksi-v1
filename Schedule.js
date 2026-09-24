@@ -4258,6 +4258,7 @@ const SyncManager = {
       return { ok: false, code: 'NET', message: e.message };
     }
   }
+};
 
 /* =====================================================================
    BAGIAN 11 — UNDO/REDO KEYBOARD SHORTCUTS + TOPBAR WIRING (Fase 4C)
