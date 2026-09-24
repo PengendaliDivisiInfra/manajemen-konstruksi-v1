@@ -193,6 +193,20 @@
       var wrap = document.getElementById('pwTableWrap');
       if (!wrap) return;
 
+      /* ── SELF-HEALING: sync state dari DOM input ── */
+      var inputFrom = document.getElementById('pwMFrom');
+      var inputTo   = document.getElementById('pwMTo');
+      if (inputFrom){
+        var fv = parseInt(inputFrom.value, 10);
+        if (!isNaN(fv) && fv >= 1 && fv <= 52) _state.mFrom = fv;
+      }
+      if (inputTo){
+        var tv = parseInt(inputTo.value, 10);
+        if (!isNaN(tv) && tv >= 1 && tv <= 52) _state.mTo = tv;
+      }
+      /* Pastikan mTo >= mFrom */
+      if (_state.mTo < _state.mFrom) _state.mTo = _state.mFrom;
+
       var list = buildTaskList(proj);
       var tasks = list.tasks;
 
