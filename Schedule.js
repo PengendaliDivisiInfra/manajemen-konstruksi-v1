@@ -2531,7 +2531,9 @@ const GanttView = {
                         '" data-select-id="' + esc(node.id) + '"></span>';
           const badge = '<span class="gt-id-badge" draggable="true" data-drag-id="' + esc(node.id) + '">' +
                         esc(node.kode || '—') + '</span>';
-          inner = check + badge;
+          const info  = '<span class="gt-info" data-info-id="' + esc(node.id) + '" ' +
+                        'title="Task Inspector — kenapa tanggalnya begitu?">ⓘ</span>';
+          inner = check + badge + info;
           break;
         }
         case 'nama': {
@@ -3441,6 +3443,40 @@ const GanttView = {
       toast('🗑 Baseline BL' + idx + ' dihapus');
     };
 
+    // ── Fase 2F: Task Inspector wire ──
+    leftBody.addEventListener('click', e => {
+      // Info button (ⓘ)
+      const infoBtn = e.target.closest('[data-info-id]');
+      if (infoBtn){
+        e.stopPropagation();
+        const id = infoBtn.getAttribute('data-info-id');
+        if (id && typeof TaskInspector !== 'undefined') TaskInspector.toggle(id);
+      }
+    });
+
+    // Double-click row → open inspector
+    leftBody.addEventListener('dblclick', e => {
+      const row = e.target.closest('.gantt-row');
+      if (!row || row.classList.contains('is-group-header')) return;
+      const id = row.getAttribute('data-node-id');
+      if (id && typeof TaskInspector !== 'undefined') TaskInspector.open(id);
+    });
+
+    // Double-click bar di Gantt canvas → open inspector
+    if (rightScr){
+      rightScr.addEventListener('dblclick', e => {
+        const canvas = rightScr.querySelector('.gantt-bars');
+        if (!canvas) return;
+        const rect = canvas.getBoundingClientRect();
+        const cy = e.clientY - rect.top;
+        const rowIdx = Math.floor(cy / GanttView.ROW_H);
+        if (rowIdx < 0 || rowIdx >= state.visibleNodes.length) return;
+        const node = state.visibleNodes[rowIdx];
+        if (!node || node.isGroupHeader) return;
+        if (typeof TaskInspector !== 'undefined') TaskInspector.open(node.id);
+      });
+    }
+
     // ── Expand/Collapse individual ──
     leftBody.addEventListener('click', e => {
       const tog = e.target.closest('[data-toggle-id]');
@@ -4014,6 +4050,338 @@ const GanttView = {
     rightScr.addEventListener('mouseleave', hideTip);
   }
 };
+
+/* =====================================================================
+   BAGIAN 9C.2 — TASK INSPECTOR (Fase 2F)
+   Slide-out panel: analisis kenapa task punya tanggal tertentu
+   ===================================================================== */
+const TaskInspector = {
+  _currentTaskId: null,
+
+  /* ── Buka panel untuk task tertentu ── */
+  open(taskId){
+    if (!taskId) return;
+    const task = DB.project_wbs.find(w => w.id === taskId);
+    if (!task){ toast('Task tidak ditemukan', false); return; }
+    this._currentTaskId = taskId;
+
+    const panel = document.getElementById('taskInspectorPanel');
+    if (!panel) return;
+
+    panel.innerHTML = this._buildHTML(task);
+    panel.classList.add('show');
+
+    // Wire close button
+    const closeBtn = panel.querySelector('.ti-close');
+    if (closeBtn) closeBtn.onclick = () => this.close();
+
+    // Wire navigation klik pada pred/succ
+    panel.querySelectorAll('[data-ti-goto]').forEach(el => {
+      el.onclick = () => {
+        const id = el.getAttribute('data-ti-goto');
+        if (id) this.open(id);
+      };
+    });
+  },
+
+  close(){
+    const panel = document.getElementById('taskInspectorPanel');
+    if (panel) panel.classList.remove('show');
+    this._currentTaskId = null;
+  },
+
+  toggle(taskId){
+    if (this._currentTaskId === taskId) this.close();
+    else this.open(taskId);
+  },
+
+  /* ── Helper: format tanggal ── */
+  _fmt(d){
+    if (!d) return '—';
+    if (d instanceof Date) return WorkingCalendar.fmt(d);
+    return String(d);
+  },
+
+  /* ── Bangun HTML inspector ── */
+  _buildHTML(task){
+    const proj = DB.projects.find(p => p.id === task.project_id);
+    const cal = WorkingCalendar.get(task.calendar_id || proj?.calendar_id);
+
+    /* ── Section 1: Header ── */
+    const schedMode = String(task.schedule_mode || 'auto').toLowerCase();
+    const isManual = schedMode === 'manual';
+    const ct = String(task.constraint_type || '').toUpperCase();
+    const isCritical = num(task.is_critical) === 1;
+    const floatTotal = num(task.float_total ?? task.total_float);
+
+    const headerHTML =
+      '<div class="ti-head">' +
+        '<div class="ti-head-top">' +
+          '<span class="ti-kode">' + esc(task.kode_wbs || '?') + '</span>' +
+          (isCritical ? '<span class="ti-badge crit">KRITIS</span>' : '') +
+          (isManual ? '<span class="ti-badge manual">MANUAL</span>' : '') +
+          (ct ? '<span class="ti-badge ct">' + esc(ct) + '</span>' : '') +
+          '<button class="ti-close" title="Tutup">×</button>' +
+        '</div>' +
+        '<div class="ti-title">' + esc(task.uraian || '') + '</div>' +
+      '</div>';
+
+    /* ── Section 2: Timeline ── */
+    const dur = num(task.durasi_hari) || num(task.duration) || 1;
+    const startISO = this._fmt(task.tgl_mulai_rencana || task.start_date);
+    const finishISO = this._fmt(task.tgl_selesai_rencana || task.finish_date);
+    const timelineHTML =
+      '<div class="ti-section">' +
+        '<div class="ti-section-title">📅 Timeline</div>' +
+        '<div class="ti-kv">' +
+          '<span class="ti-k">Mulai</span><span class="ti-v">' + esc(startISO) + '</span>' +
+          '<span class="ti-k">Selesai</span><span class="ti-v">' + esc(finishISO) + '</span>' +
+          '<span class="ti-k">Durasi</span><span class="ti-v">' + dur + ' hari kerja</span>' +
+          '<span class="ti-k">Float</span><span class="ti-v' + (floatTotal <= 0 ? ' crit' : '') + '">' + floatTotal + ' hari' + (isCritical ? ' ★' : '') + '</span>' +
+        '</div>' +
+      '</div>';
+
+    /* ── Section 3: Predecessors ── */
+    const rels = (typeof CPM !== 'undefined' && CPM.getRelationships) ? CPM.getRelationships(task) : [];
+    const items = DB.project_wbs.filter(w => w.project_id === task.project_id && !w.is_group);
+    const byId = {}, byKode = {};
+    items.forEach(it => {
+      byId[it.id] = it;
+      if (it.kode_wbs) byKode[String(it.kode_wbs).trim()] = it;
+    });
+
+    let predRowsHTML = '';
+    if (!rels.length){
+      predRowsHTML = '<div class="ti-empty">Tidak ada predecessor — task mulai bebas (mengikuti tanggal proyek atau constraint).</div>';
+    } else {
+      predRowsHTML = rels.map((rel, i) => {
+        const pred = byId[rel.predRef] || byKode[String(rel.predRef).trim()];
+        const kode = pred?.kode_wbs || rel.predRef;
+        const uraian = pred?.uraian || '(tidak ditemukan)';
+        const lagLabel = rel.lag !== 0 ? (rel.lag > 0 ? '+' + rel.lag : String(rel.lag)) + 'd' : '0d';
+        const lagCls = rel.lag > 0 ? ' lag-pos' : rel.lag < 0 ? ' lag-neg' : '';
+        return '<div class="ti-rel-row" data-ti-goto="' + esc(pred?.id || '') + '" title="Klik untuk buka ' + esc(kode) + '">' +
+          '<span class="ti-rel-num">#' + (i + 1) + '</span>' +
+          '<span class="ti-rel-kode">' + esc(kode) + '</span>' +
+          '<span class="ti-rel-type">' + esc(rel.type) + '</span>' +
+          '<span class="ti-rel-lag' + lagCls + '">' + esc(lagLabel) + '</span>' +
+          '<span class="ti-rel-uraian">' + esc(uraian) + '</span>' +
+        '</div>';
+      }).join('');
+    }
+
+    const predSection =
+      '<div class="ti-section">' +
+        '<div class="ti-section-title">🔗 Predecessor (' + rels.length + ')</div>' +
+        '<div class="ti-rels">' + predRowsHTML + '</div>' +
+      '</div>';
+
+    /* ── Section 4: Successors ── */
+    const succs = [];
+    items.forEach(succ => {
+      if (succ.id === task.id) return;
+      const succRels = (typeof CPM !== 'undefined' && CPM.getRelationships) ? CPM.getRelationships(succ) : [];
+      succRels.forEach(rel => {
+        const refTask = byId[rel.predRef] || byKode[String(rel.predRef).trim()];
+        if (refTask && refTask.id === task.id) succs.push({ succ, rel });
+      });
+    });
+
+    let succRowsHTML = '';
+    if (!succs.length){
+      succRowsHTML = '<div class="ti-empty">Tidak ada successor — task tidak mengikatkan task lain.</div>';
+    } else {
+      succRowsHTML = succs.map(({ succ, rel }) => {
+        const lagLabel = rel.lag !== 0 ? (rel.lag > 0 ? '+' + rel.lag : String(rel.lag)) + 'd' : '0d';
+        return '<div class="ti-rel-row" data-ti-goto="' + esc(succ.id) + '" title="Klik untuk buka ' + esc(succ.kode_wbs) + '">' +
+          '<span class="ti-rel-kode">' + esc(succ.kode_wbs) + '</span>' +
+          '<span class="ti-rel-type">' + esc(rel.type) + '</span>' +
+          '<span class="ti-rel-lag">' + esc(lagLabel) + '</span>' +
+          '<span class="ti-rel-uraian">' + esc(succ.uraian) + '</span>' +
+        '</div>';
+      }).join('');
+    }
+
+    const succSection =
+      '<div class="ti-section">' +
+        '<div class="ti-section-title">➡ Successor (' + succs.length + ')</div>' +
+        '<div class="ti-rels">' + succRowsHTML + '</div>' +
+      '</div>';
+
+    /* ── Section 5: Constraint ── */
+    const cdISO = this._fmt(task.constraint_date);
+    const constraintHTML =
+      '<div class="ti-section">' +
+        '<div class="ti-section-title">📌 Constraint</div>' +
+        '<div class="ti-kv">' +
+          '<span class="ti-k">Tipe</span><span class="ti-v">' +
+            (ct ? '<code>' + esc(ct) + '</code> — ' + esc(CONSTRAINT_TYPES[ct] || '') : '—') +
+          '</span>' +
+          '<span class="ti-k">Tanggal</span><span class="ti-v">' + esc(cdISO) + '</span>' +
+        '</div>' +
+      '</div>';
+
+    /* ── Section 6: Schedule Mode ── */
+    const msISO = this._fmt(task.manual_start);
+    const mfISO = this._fmt(task.manual_finish);
+    const modeHTML =
+      '<div class="ti-section">' +
+        '<div class="ti-section-title">⚙ Mode Penjadwalan</div>' +
+        '<div class="ti-kv">' +
+          '<span class="ti-k">Mode</span><span class="ti-v">' +
+            (isManual ? '<span style="color:#a855f7;font-weight:700">Manual</span>' : 'Auto (mengikuti CPM)') +
+          '</span>' +
+          (isManual
+            ? '<span class="ti-k">Manual Start</span><span class="ti-v">' + esc(msISO) + '</span>' +
+              '<span class="ti-k">Manual Finish</span><span class="ti-v">' + esc(mfISO) + '</span>'
+            : '') +
+        '</div>' +
+      '</div>';
+
+    /* ── Section 7: Kalender ── */
+    const calName = cal ? (cal.kode + ' — ' + cal.nama) : '—';
+    const calendarHTML =
+      '<div class="ti-section">' +
+        '<div class="ti-section-title">🗓 Kalender Kerja</div>' +
+        '<div class="ti-kv">' +
+          '<span class="ti-k">Kalender</span><span class="ti-v">' + esc(calName) + '</span>' +
+        '</div>' +
+      '</div>';
+
+    /* ── Section 8: Resources ── */
+    let resHTML = '';
+    if (task.ahsp_id){
+      const dets = DB.project_ahsp_details.filter(d =>
+        d.project_id === task.project_id && d.ahsp_id === task.ahsp_id
+      );
+      const vol = num(task.volume_rab);
+      if (dets.length && vol > 0){
+        const rows = dets.map(d => {
+          const r = DB.master_resources.find(x => x.id === d.resource_id);
+          if (!r) return '';
+          const k = Calc.koefRAB(d, r);
+          const qty = k * vol;
+          return '<tr>' +
+            '<td>' + esc(r.kode) + '</td>' +
+            '<td>' + esc(r.nama) + '</td>' +
+            '<td><span class="rs-jenis ' + esc(r.jenis) + '">' + esc(r.jenis) + '</span></td>' +
+            '<td class="num">' + fmt(k, 4) + '</td>' +
+            '<td class="num">' + fmt(qty, 2) + ' ' + esc(r.satuan) + '</td>' +
+          '</tr>';
+        }).join('');
+        resHTML = '<div class="ti-section">' +
+          '<div class="ti-section-title">🧱 Resource Requirement</div>' +
+          '<div class="ti-res-wrap">' +
+            '<table class="ti-res-tbl">' +
+              '<thead><tr><th>Kode</th><th>Nama</th><th>Jenis</th><th class="num">Koef</th><th class="num">Qty</th></tr></thead>' +
+              '<tbody>' + rows + '</tbody>' +
+            '</table>' +
+          '</div>' +
+        '</div>';
+      } else {
+        resHTML = '<div class="ti-section"><div class="ti-section-title">🧱 Resource</div><div class="ti-empty">Tidak ada resource (AHSP kosong atau volume nol).</div></div>';
+      }
+    } else {
+      resHTML = '<div class="ti-section"><div class="ti-section-title">🧱 Resource</div><div class="ti-empty">Task tidak punya AHSP.</div></div>';
+    }
+
+    /* ── Section 9: "Why this date?" ── */
+    const explanationHTML = this._buildExplanation(task, rels, ct, isManual, byId, byKode);
+
+    return headerHTML + timelineHTML + explanationHTML + predSection + succSection +
+           modeHTML + constraintHTML + calendarHTML + resHTML;
+  },
+
+  /* ── "Kenapa tanggalnya begitu?" ── */
+  _buildExplanation(task, rels, ct, isManual, byId, byKode){
+    const reasons = [];
+
+    if (isManual){
+      reasons.push({
+        icon: '🔒',
+        text: 'Task dijadwalkan <b>manual</b> (tanggal dikunci user). ' +
+              'Start: <b>' + this._fmt(task.manual_start) + '</b>, Finish: <b>' + this._fmt(task.manual_finish) + '</b>. ' +
+              'CPM tidak akan menggeser task ini meskipun predecessor berubah.'
+      });
+    } else {
+      if (ct && ct !== ''){
+        const ctName = CONSTRAINT_TYPES[ct] || ct;
+        reasons.push({
+          icon: '📌',
+          text: 'Task dipengaruhi constraint <code>' + esc(ct) + '</code> — ' + esc(ctName) +
+                ' pada <b>' + this._fmt(task.constraint_date) + '</b>.'
+        });
+      }
+
+      if (rels.length){
+        const proj = DB.projects.find(p => p.id === task.project_id);
+        const cal = WorkingCalendar.get(task.calendar_id || proj?.calendar_id);
+        let driving = null;
+        let maxDate = null;
+
+        rels.forEach(rel => {
+          const pred = byId[rel.predRef] || byKode[String(rel.predRef).trim()];
+          if (!pred) return;
+          const predEF = CPM._parseDate(pred.tgl_selesai_rencana);
+          const predES = CPM._parseDate(pred.tgl_mulai_rencana);
+          let candidate = null;
+          if (rel.type === 'FS' && predEF) candidate = WorkingCalendar.addWorkDays(predEF, rel.lag, cal);
+          else if (rel.type === 'SS' && predES) candidate = WorkingCalendar.addWorkDays(predES, rel.lag, cal);
+          if (candidate && (!maxDate || candidate > maxDate)){
+            maxDate = candidate;
+            driving = { pred, rel, candidate };
+          }
+        });
+
+        if (driving){
+          reasons.push({
+            icon: '🔗',
+            text: 'Start dihitung dari <b>' + esc(driving.pred.kode_wbs) + '</b> dengan relasi <code>' +
+                  esc(driving.rel.type) + '</code>' +
+                  (driving.rel.lag !== 0
+                    ? ' lag <b>' + (driving.rel.lag > 0 ? '+' : '') + driving.rel.lag + 'd</b>'
+                    : '') +
+                  ' → menghasilkan start <b>' + WorkingCalendar.fmt(driving.candidate) + '</b>.'
+          });
+        } else {
+          reasons.push({
+            icon: 'ℹ',
+            text: 'Task punya ' + rels.length + ' predecessor, tapi belum semuanya terjadwal.'
+          });
+        }
+      } else {
+        reasons.push({
+          icon: '🚀',
+          text: 'Task <b>tidak punya predecessor</b> — mulai bebas sejak tanggal proyek atau constraint.'
+        });
+      }
+    }
+
+    const flt = num(task.float_total ?? task.total_float);
+    if (flt < 0){
+      reasons.push({
+        icon: '⚠',
+        text: 'Task punya <b>negative float (' + flt + ' hari)</b> — ' +
+              'kombinasi constraint dan predecessor tidak dapat dipenuhi.'
+      });
+    }
+
+    return '<div class="ti-section ti-explain">' +
+      '<div class="ti-section-title">💡 Kenapa tanggalnya begitu?</div>' +
+      reasons.map(r =>
+        '<div class="ti-reason">' +
+          '<span class="ti-reason-icon">' + r.icon + '</span>' +
+          '<div class="ti-reason-text">' + r.text + '</div>' +
+        '</div>'
+      ).join('') +
+    '</div>';
+  }
+};
+
+/* =====================================================================
+   BAGIAN 9D — RESOURCE HISTOGRAM
+   Kebutuhan harian/periodik per resource + garis kapasitas
+   ===================================================================== */
 
 /* =====================================================================
    BAGIAN 9D — RESOURCE HISTOGRAM
