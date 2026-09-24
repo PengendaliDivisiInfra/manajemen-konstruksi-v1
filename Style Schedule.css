@@ -3986,3 +3986,46 @@ canvas:not(.gantt-axis):not(.gantt-bars){
   letter-spacing: .5px;
   margin-top: 4px;
 }
+
+/* =====================================================================
+   FASE 3B-3 — TRACKING COLUMNS
+   ===================================================================== */
+.gt-track-date{
+  color: #a8b8d6;
+  font-variant-numeric: tabular-nums;
+  font-size: 10.5px;
+}
+.gt-track-done{
+  color: #4ade80;
+  font-weight: 700;
+}
+.gt-track-ongoing{
+  color: #fbbf24;
+  font-style: italic;
+  font-size: 10px;
+}
+.gt-track-slip{
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 10px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: .2px;
+}
+.gt-track-slip.late   { background: rgba(220,38,38,.20); color: #fca5a5; }
+.gt-track-slip.early  { background: rgba(34,197,94,.20); color: #4ade80; }
+.gt-track-slip.ontime { background: rgba(47,129,247,.15); color: #7cb3ff; }
+
+.gt-track-badge{
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 9.5px;
+  font-weight: 700;
+  white-space: nowrap;
+  letter-spacing: .2px;
+}
+.gt-track-badge.complete    { background: rgba(34,197,94,.22); color: #4ade80; }
+.gt-track-badge.in-progress { background: rgba(245,158,11,.22); color: #fbbf24; }
+.gt-track-badge.not-started { background: rgba(143,163,196,.15); color: #8fa3c4; }
