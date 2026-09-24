@@ -58,11 +58,11 @@
 
       /* Auto-hide fallback */
       clearTimeout(_timeout);
+      var _actualTimeout = opts.timeout || MAX_TIMEOUT_MS;
       _timeout = setTimeout(function(){
-        console.warn('[Loading] Auto-hide triggered after ' + (MAX_TIMEOUT_MS/1000) + 's — check for stuck operation');
+        console.warn('[Loading] Auto-hide triggered after ' + (_actualTimeout/1000) + 's — check for stuck operation');
         hide();
-      }, opts.timeout || MAX_TIMEOUT_MS);
-    }
+      }, _actualTimeout);
 
     /* ═══════════════════════════════════════════════════════════
        HIDE
