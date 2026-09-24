@@ -470,10 +470,30 @@
         });
       });
 
-      /* Save + recompute */
-      if (typeof saveDB === 'function') saveDB();
+            /* ── Fase E-3: wrap dengan loading indicator ── */
+      if (typeof closeModal === 'function') closeModal();
+
+      var _doSave = function(){
+        if (typeof saveDB === 'function') saveDB();
+        if (typeof runCPM === 'function') runCPM(proj.id);
+        if (typeof saveDB === 'function') saveDB();
+
+        if (typeof renderProgress === 'function') renderProgress();
+        if (typeof renderSchedule === 'function') renderSchedule();
+
+        if (typeof toast === 'function'){
+          toast('✅ ' + added + ' entri progress disimpan untuk ' + tasks.length + ' task');
+        }
+      };
+
+      if (window.Loading && Loading.wrapSync){
+        Loading.wrapSync(_doSave, 'Menyimpan progress…', 80);
+      } else {
+        _doSave();
+      }
+     
       if (typeof runCPM === 'function') runCPM(proj.id);
-      if (typeof saveDB === 'function') saveDB();
+     
 
       /* Refresh UI */
       if (typeof renderProgress === 'function') renderProgress();
