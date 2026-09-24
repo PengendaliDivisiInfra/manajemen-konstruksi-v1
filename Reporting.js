@@ -36,8 +36,20 @@
       var n = parseFloat(String(v == null ? '' : v).replace(/[^\d.-]/g,''));
       return isFinite(n) ? n : 0;
     };
+    /* Format Rp penuh (untuk kolom tabel kecil) */
     var _rp = function(n){
       return 'Rp ' + Math.round(Number(n)||0).toLocaleString('id-ID');
+    };
+
+    /* Format Rp singkat (untuk KPI/value besar — anti wrap) */
+    var _rpShort = function(n){
+      var v = Number(n) || 0;
+      var abs = Math.abs(v);
+      if (abs >= 1e12) return 'Rp ' + (v/1e12).toFixed(2).replace('.', ',') + ' T';
+      if (abs >= 1e9)  return 'Rp ' + (v/1e9).toFixed(2).replace('.', ',')  + ' M';
+      if (abs >= 1e6)  return 'Rp ' + (v/1e6).toFixed(2).replace('.', ',')  + ' jt';
+      if (abs >= 1e3)  return 'Rp ' + (v/1e3).toFixed(1).replace('.', ',')  + ' rb';
+      return 'Rp ' + Math.round(v).toLocaleString('id-ID');
     };
     var _fmt = function(n, d){
       d = d == null ? 2 : d;
@@ -243,6 +255,10 @@
         return;
       }
 
+      /* Auto-enforce orientasi sesuai template */
+      var orientationCSS =
+        '<style>@page { size: A4 ' + (tpl.orientation === 'landscape' ? 'landscape' : 'portrait') + '; margin: 15mm 12mm; }</style>';
+
       var fullHTML =
         '<!DOCTYPE html>' +
         '<html lang="id">' +
@@ -250,6 +266,7 @@
           '<meta charset="UTF-8">' +
           '<title>' + _esc(proj.kode) + ' — ' + _esc(tpl.label.replace(/^[^\s]+\s/, '')) + '</title>' +
           '<style>' + REPORT_CSS + '</style>' +
+          orientationCSS +
         '</head>' +
         '<body>' +
           bodyHTML +
@@ -289,12 +306,12 @@
 
       var kpiCards =
         '<div class="rpt-kpi-grid">' +
-          kpiCard('Nilai Kontrak', _rp(nilaiKontrak), 'Netto: ' + _rp(netto)) +
-          kpiCard('Total RAB', _rp(t.rab), (t.rab/(netto||1)*100).toFixed(2) + '% dari kontrak netto', 'blue') +
-          kpiCard('Total RAP', _rp(t.rap), 'Bersih tanpa profit', 'orange') +
-          kpiCard('Margin / Deviasi', _rp(t.dev), _fmt(margin, 2) + '% dari RAB', t.dev >= 0 ? 'green' : 'red') +
-          kpiCard('Sisa Terhadap Kontrak', _rp(sisaKontrak), t.rap <= netto ? '✅ Di bawah pagu' : '⚠ Melebihi pagu', t.rap <= netto ? 'green' : 'red') +
-          kpiCard('Total Task', String(items.length), critical.length + ' kritis', 'blue') +
+          kpiCard('Nilai Kontrak',            _rpShort(nilaiKontrak),   'Netto: ' + _rpShort(netto)) +
+          kpiCard('Total RAB',                _rpShort(t.rab),          (t.rab/(netto||1)*100).toFixed(2) + '% dari kontrak netto', 'blue') +
+          kpiCard('Total RAP',                _rpShort(t.rap),          'Bersih tanpa profit', 'orange') +
+          kpiCard('Margin / Deviasi',         _rpShort(t.dev),          _fmt(margin, 2) + '% dari RAB', t.dev >= 0 ? 'green' : 'red') +
+          kpiCard('Sisa Terhadap Kontrak',    _rpShort(sisaKontrak),    t.rap <= netto ? '✅ Di bawah pagu' : '⚠ Melebihi pagu', t.rap <= netto ? 'green' : 'red') +
+          kpiCard('Total Task',               String(items.length),     critical.length + ' kritis', 'blue') +
         '</div>';
 
       var projectInfo =
@@ -669,16 +686,21 @@
 
       '.rpt-watermark {' +
         'position: fixed;' +
-        'top: 50%; left: 50%;' +
-        'transform: translate(-50%, -50%) rotate(-30deg);' +
-        'font-size: 140px;' +
+        'top: 0; left: 0; right: 0; bottom: 0;' +
+        'display: flex;' +
+        'align-items: center;' +
+        'justify-content: center;' +
+        'font-size: 160px;' +
         'font-weight: 900;' +
-        'color: rgba(31, 78, 121, .04);' +
+        'color: rgba(31, 78, 121, .035);' +
         'pointer-events: none;' +
-        'z-index: 1;' +
+        'z-index: 0;' +
         'white-space: nowrap;' +
-        'letter-spacing: 6px;' +
+        'letter-spacing: 8px;' +
+        'transform: rotate(-30deg);' +
+        'transform-origin: center;' +
       '}' +
+      '.rpt-watermark > * { transform: translate(-50%, -50%); }' +
 
       '.rpt-header {' +
         'display: flex;' +
@@ -728,9 +750,12 @@
       /* KPI grid */
       '.rpt-kpi-grid {' +
         'display: grid;' +
-        'grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));' +
+        'grid-template-columns: repeat(3, 1fr);' +
         'gap: 12px;' +
         'margin-bottom: 8px;' +
+      '}' +
+      '@media (max-width: 700px) {' +
+        '.rpt-kpi-grid { grid-template-columns: repeat(2, 1fr); }' +
       '}' +
       '.rpt-kpi {' +
         'padding: 12px 14px;' +
@@ -743,7 +768,18 @@
       '.rpt-kpi.red { border-color: #dc2626; }' +
       '.rpt-kpi.orange { border-color: #f59e0b; }' +
       '.rpt-kpi-lbl { font-size: 10px; text-transform: uppercase; letter-spacing: .5px; color: #64748b; font-weight: 700; }' +
-      '.rpt-kpi-val { font-size: 18px; font-weight: 800; color: #0f172a; margin-top: 5px; font-variant-numeric: tabular-nums; }' +
+      '.rpt-kpi-val {' +
+        'font-size: 17px;' +
+        'font-weight: 800;' +
+        'color: #0f172a;' +
+        'margin-top: 5px;' +
+        'font-variant-numeric: tabular-nums;' +
+        'white-space: nowrap;' +
+        'overflow: hidden;' +
+        'text-overflow: ellipsis;' +
+        'line-height: 1.2;' +
+      '}' +
+      '.rpt-kpi-val small { font-size: 11px; font-weight: 600; color: #64748b; }' +
       '.rpt-kpi-sub { font-size: 10.5px; color: #64748b; margin-top: 3px; }' +
 
       /* Tables */
