@@ -3055,6 +3055,7 @@ const GanttView = {
   },
 
   /* ── Task bar (MS Project style + Fase 2C presets) ── */
+  /* ── Task bar (MS Project style + Fase 2C presets) ── */
   taskBar(ctx, x, y, w, h, fill, stroke, pct, cfg){
     cfg = cfg || this.BAR_STYLES.classic;
     const radius = Math.min(cfg.radius || 3, h/2);
@@ -3128,6 +3129,7 @@ const GanttView = {
       ctx.fillText(Math.round(pct) + '%', x + w/2, y + h/2);
     }
   },
+   
     const bg = this.lighten(fill, 0.55);
 
     /* Background bar (light) */
