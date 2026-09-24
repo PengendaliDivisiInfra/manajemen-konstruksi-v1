@@ -1590,9 +1590,12 @@ const GanttEngine = {
 const GanttView = {
 
   ZOOM: {
-    daily:   { pxPerDay: 32, label: 'Harian'   },
-    weekly:  { pxPerDay: 12, label: 'Mingguan' },
-    monthly: { pxPerDay: 4,  label: 'Bulanan'  }
+    hourly:    { pxPerDay: 96, label: 'Per Jam',  tier1: 'day',     tier2: 'hour'    },
+    daily:     { pxPerDay: 32, label: 'Harian',   tier1: 'month',   tier2: 'day'     },
+    weekly:    { pxPerDay: 12, label: 'Mingguan', tier1: 'month',   tier2: 'week'    },
+    monthly:   { pxPerDay: 4,  label: 'Bulanan',  tier1: 'quarter', tier2: 'month'   },
+    quarterly: { pxPerDay: 2,  label: 'Triwulan', tier1: 'year',    tier2: 'quarter' },
+    yearly:    { pxPerDay: 0.8,label: 'Tahunan',  tier1: 'year',    tier2: 'month'   }
   },
 
   COLUMNS: [
@@ -1666,7 +1669,16 @@ const GanttView = {
     const zoomCfg = this.ZOOM[zoom] || this.ZOOM.weekly;
 
     const totalDays   = Math.round((endDate - startDate) / 86400000) + 1;
-    const chartWidth  = Math.max(400, totalDays * zoomCfg.pxPerDay);
+    let chartWidth;
+    if (zoom === 'hourly'){
+      // Hourly: 1 hari = 24 jam, tapi kita punya pxPerDay = 96 → 4px/jam
+      chartWidth = Math.max(800, totalDays * zoomCfg.pxPerDay);
+    } else if (zoom === 'yearly'){
+      // Yearly: pxPerDay sangat kecil — pastikan minimum lebar
+      chartWidth = Math.max(600, totalDays * zoomCfg.pxPerDay);
+    } else {
+      chartWidth = Math.max(400, totalDays * zoomCfg.pxPerDay);
+    }
 
     const state = {
       container, nodes, proj, startDate, endDate, totalDays,
@@ -2012,9 +2024,12 @@ const GanttView = {
             '<button class="gantt-btn-tool gantt-btn-bl-clear" title="Clear Baseline">🗑 Clear</button>' +
             '<span class="gantt-lbl" style="margin-left:8px">Zoom</span>' +
             '<select class="gantt-zoom">' +
-              '<option value="daily"   ' + (zoom==='daily'   ?'selected':'') + '>Harian</option>' +
-              '<option value="weekly"  ' + (zoom==='weekly'  ?'selected':'') + '>Mingguan</option>' +
-              '<option value="monthly" ' + (zoom==='monthly' ?'selected':'') + '>Bulanan</option>' +
+              '<option value="hourly"    ' + (zoom==='hourly'    ?'selected':'') + '>Per Jam</option>' +
+              '<option value="daily"     ' + (zoom==='daily'     ?'selected':'') + '>Harian</option>' +
+              '<option value="weekly"    ' + (zoom==='weekly'    ?'selected':'') + '>Mingguan</option>' +
+              '<option value="monthly"   ' + (zoom==='monthly'   ?'selected':'') + '>Bulanan</option>' +
+              '<option value="quarterly" ' + (zoom==='quarterly' ?'selected':'') + '>Triwulan</option>' +
+              '<option value="yearly"    ' + (zoom==='yearly'    ?'selected':'') + '>Tahunan</option>' +
             '</select>' +
             '<button class="btn btn-sm gantt-btn-today">📍 Hari Ini</button>' +
           '</div>' +
@@ -2455,113 +2470,274 @@ const GanttView = {
     '</div>';
   },
 
-  /* ─────── AXIS ─────── */
+  /* ── AXIS (Fase 2B — Two-tier + multi-zoom) ──
+     Tier 1 (atas)   : unit besar (tahun/triwulan/bulan/hari)
+     Tier 2 (tengah) : unit kecil (bulan/minggu/hari/jam)
+     Tier 3 (bawah)  : label detail (tanggal/jam) — opsional per zoom */
   drawAxis(state, canvas){
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     const {startDate, endDate, chartWidth, zoom, cal} = state;
     const H = this.AXIS_H, W = chartWidth;
     const px = state.zoomCfg.pxPerDay;
+    const cfg = state.zoomCfg;
+    const tier1 = cfg.tier1 || 'month';
+    const tier2 = cfg.tier2 || 'week';
 
+    /* ── Background ── */
     ctx.fillStyle = '#0e1a30';
     ctx.fillRect(0, 0, W, H);
 
-    const d = new Date(startDate);
-    while (d <= endDate){
-      if (!WorkingCalendar.isWorkDay(d, cal)){
-        const x = Math.round((d - startDate) / 86400000) * px;
-        ctx.fillStyle = 'rgba(255,255,255,.025)';
-        ctx.fillRect(x, 0, px, H);
+    /* ── Helper: offset pixel dari startDate ── */
+    const pxOf = (d) => Math.round((d - startDate) / 86400000) * px;
+    const pxOfF = (d) => ((d - startDate) / 86400000) * px;   // float (untuk hourly)
+
+    /* ── Shading non-work days (kecuali hourly — terlalu padat) ── */
+    if (zoom !== 'hourly'){
+      const dSh = new Date(startDate);
+      while (dSh <= endDate){
+        if (!WorkingCalendar.isWorkDay(dSh, cal)){
+          const x = Math.round((dSh - startDate) / 86400000) * px;
+          ctx.fillStyle = 'rgba(255,255,255,.025)';
+          ctx.fillRect(x, 0, px, H);
+        }
+        dSh.setDate(dSh.getDate() + 1);
       }
-      d.setDate(d.getDate() + 1);
     }
 
-    const d2 = new Date(startDate);
-    ctx.strokeStyle = 'rgba(36,54,92,.5)';
-    ctx.lineWidth = 1;
-    while (d2 <= endDate){
-      const x = Math.round((d2 - startDate) / 86400000) * px + 0.5;
-      ctx.beginPath();
-      ctx.moveTo(x, 0);
-      ctx.lineTo(x, H);
-      ctx.stroke();
-
-      const showDay = (zoom === 'daily') || (zoom === 'weekly' && d2.getDate() % 7 === 1);
-      if (showDay){
-        ctx.fillStyle = '#8fa3c4';
-        ctx.font = '9px Segoe UI';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(String(d2.getDate()).padStart(2,'0'), x + px/2, H * 0.78);
-      }
-      d2.setDate(d2.getDate() + 1);
-    }
-
-    const wd = new Date(startDate);
-    const dayNr = (wd.getDay() + 6) % 7;
-    wd.setDate(wd.getDate() - dayNr);
-    while (wd <= endDate){
-      const x = Math.round((wd - startDate) / 86400000) * px + 0.5;
-      if (x >= 0 && x <= W){
-        ctx.strokeStyle = '#3a5590';
-        ctx.lineWidth = 1.5;
+    /* ── Gridlines vertikal per hari (kecuali hourly & yearly) ── */
+    if (zoom !== 'hourly' && zoom !== 'yearly'){
+      const dg = new Date(startDate);
+      ctx.strokeStyle = 'rgba(36,54,92,.5)';
+      ctx.lineWidth = 1;
+      while (dg <= endDate){
+        const x = Math.round((dg - startDate) / 86400000) * px + 0.5;
         ctx.beginPath();
         ctx.moveTo(x, 0);
         ctx.lineTo(x, H);
         ctx.stroke();
-        ctx.lineWidth = 1;
-
-        if (zoom !== 'monthly'){
-          ctx.fillStyle = '#8fa3c4';
-          ctx.font = 'bold 9px Segoe UI';
-          ctx.textAlign = 'left';
-          ctx.textBaseline = 'middle';
-          ctx.fillText('W' + String(this.isoWeek(wd)).padStart(2,'0'), x + 4, H * 0.30);
-        }
+        dg.setDate(dg.getDate() + 1);
       }
-      wd.setDate(wd.getDate() + 7);
     }
 
-    let md = new Date(startDate.getFullYear(), startDate.getMonth(), 1);
-    while (md <= endDate){
-      const x = Math.round((md - startDate) / 86400000) * px + 0.5;
-      if (x >= 0 && x <= W){
+    /* ── Helper: gambar label tier ── */
+    const drawTierLabel = (cx, cy, text, isBold, size){
+      if (cx < -50 || cx > W + 50) return;   // skip offscreen
+      ctx.fillStyle = isBold ? '#e6edf7' : '#a8b8d6';
+      ctx.font = (isBold ? 'bold ' : '') + (size || 10) + 'px Segoe UI';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(text, cx, cy);
+    };
+
+    /* ── Batas tier vertikal (H = 60) ── */
+    const Y_TIER1 = H * 0.22;   // baris atas
+    const Y_TIER2 = H * 0.50;   // baris tengah
+    const Y_TIER3 = H * 0.80;   // baris bawah
+
+    /* ═══════════════════════════════════════════════════════
+       RENDER TIER 1 (Besar): Year / Quarter / Month / Day
+       ═══════════════════════════════════════════════════════ */
+    if (tier1 === 'year'){
+      let y = startDate.getFullYear();
+      const yEnd = endDate.getFullYear();
+      while (y <= yEnd){
+        const d1 = new Date(y, 0, 1);
+        const d2 = new Date(y + 1, 0, 1);
+        const x1 = pxOfF(d1), x2 = pxOfF(d2);
+        const cx = (x1 + x2) / 2;
+        // Garis pemisah tahun
         ctx.strokeStyle = '#5a7ab0';
         ctx.lineWidth = 2;
         ctx.beginPath();
-        ctx.moveTo(x, 0);
-        ctx.lineTo(x, H);
+        ctx.moveTo(Math.max(0, x1) + 0.5, 0);
+        ctx.lineTo(Math.max(0, x1) + 0.5, H);
         ctx.stroke();
         ctx.lineWidth = 1;
-
-        const nm = new Date(md.getFullYear(), md.getMonth() + 1, 1);
-        const nx = Math.round((nm - startDate) / 86400000) * px;
-        const cx = (x + nx) / 2;
-        ctx.fillStyle = '#e6edf7';
+        drawTierLabel(cx, Y_TIER1, String(y), true, 12);
+        y++;
+      }
+    }
+    else if (tier1 === 'quarter'){
+      let d = new Date(startDate.getFullYear(), Math.floor(startDate.getMonth()/3)*3, 1);
+      while (d <= endDate){
+        const q = Math.floor(d.getMonth() / 3) + 1;
+        const dNext = new Date(d.getFullYear(), d.getMonth() + 3, 1);
+        const x1 = pxOfF(d), x2 = pxOfF(dNext);
+        const cx = (x1 + x2) / 2;
+        ctx.strokeStyle = '#5a7ab0';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(Math.max(0, x1) + 0.5, 0);
+        ctx.lineTo(Math.max(0, x1) + 0.5, H);
+        ctx.stroke();
+        ctx.lineWidth = 1;
+        drawTierLabel(cx, Y_TIER1, 'Q' + q + ' ' + String(d.getFullYear()).slice(-2), true, 11);
+        d = dNext;
+      }
+    }
+    else if (tier1 === 'month'){
+      let m = new Date(startDate.getFullYear(), startDate.getMonth(), 1);
+      while (m <= endDate){
+        const mNext = new Date(m.getFullYear(), m.getMonth() + 1, 1);
+        const x1 = pxOfF(m), x2 = pxOfF(mNext);
+        const cx = (x1 + x2) / 2;
+        ctx.strokeStyle = '#5a7ab0';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(Math.max(0, x1) + 0.5, 0);
+        ctx.lineTo(Math.max(0, x1) + 0.5, H);
+        ctx.stroke();
+        ctx.lineWidth = 1;
+        drawTierLabel(cx, Y_TIER1,
+          m.toLocaleDateString('id-ID', {month:'short', year:'2-digit'}).toUpperCase(),
+          true, 11);
+        m = mNext;
+      }
+    }
+    else if (tier1 === 'day'){
+      /* Top tier = day (untuk hourly view) — tampil "Sen 15 Jan" */
+      const dd = new Date(startDate);
+      while (dd <= endDate){
+        const dNext = new Date(dd); dNext.setDate(dNext.getDate() + 1);
+        const x1 = pxOfF(dd), x2 = pxOfF(dNext);
+        const cx = (x1 + x2) / 2;
+        ctx.strokeStyle = '#5a7ab0';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(x1 + 0.5, 0);
+        ctx.lineTo(x1 + 0.5, H);
+        ctx.stroke();
+        ctx.lineWidth = 1;
+        const isWknd = !WorkingCalendar.isWorkDay(dd, cal);
+        ctx.fillStyle = isWknd ? '#94a3b8' : '#e6edf7';
         ctx.font = 'bold 11px Segoe UI';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.fillText(
-          md.toLocaleDateString('id-ID', {month:'short', year:'2-digit'}).toUpperCase(),
-          cx, H * 0.52
+          dd.toLocaleDateString('id-ID', {weekday:'short', day:'2-digit', month:'short'}),
+          cx, Y_TIER1
         );
+        dd.setDate(dd.getDate() + 1);
       }
-      md = new Date(md.getFullYear(), md.getMonth() + 1, 1);
     }
 
+    /* ═══════════════════════════════════════════════════════
+       RENDER TIER 2 (Kecil): Month / Week / Day / Hour
+       ═══════════════════════════════════════════════════════ */
+    if (tier2 === 'month'){
+      /* Bulan — untuk monthly/quarterly/yearly view */
+      const startMonth = new Date(startDate.getFullYear(), startDate.getMonth(), 1);
+      const endMonth   = new Date(endDate.getFullYear(), endDate.getMonth() + 1, 1);
+      let m = new Date(startMonth);
+      while (m <= endMonth){
+        const mNext = new Date(m.getFullYear(), m.getMonth() + 1, 1);
+        const x1 = pxOfF(m), x2 = pxOfF(mNext);
+        const cx = (x1 + x2) / 2;
+        ctx.strokeStyle = 'rgba(90,122,176,.7)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(x1 + 0.5, H * 0.35);
+        ctx.lineTo(x1 + 0.5, H);
+        ctx.stroke();
+        drawTierLabel(cx, Y_TIER2,
+          m.toLocaleDateString('id-ID', {month:'short'}).toUpperCase(), true, 10);
+        m = mNext;
+      }
+    }
+    else if (tier2 === 'week'){
+      /* Minggu — untuk weekly view */
+      const wd = new Date(startDate);
+      const dayNr = (wd.getDay() + 6) % 7;
+      wd.setDate(wd.getDate() - dayNr);
+      while (wd <= endDate){
+        const x = Math.round((wd - startDate) / 86400000) * px + 0.5;
+        if (x >= 0 && x <= W){
+          ctx.strokeStyle = '#3a5590';
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          ctx.moveTo(x, H * 0.35);
+          ctx.lineTo(x, H);
+          ctx.stroke();
+          ctx.lineWidth = 1;
+          ctx.fillStyle = '#a8b8d6';
+          ctx.font = 'bold 9px Segoe UI';
+          ctx.textAlign = 'left';
+          ctx.textBaseline = 'middle';
+          ctx.fillText('W' + String(this.isoWeek(wd)).padStart(2,'0'), x + 4, Y_TIER2);
+        }
+        wd.setDate(wd.getDate() + 7);
+      }
+    }
+    else if (tier2 === 'day'){
+      /* Hari — untuk daily view */
+      const dd = new Date(startDate);
+      while (dd <= endDate){
+        const x = Math.round((dd - startDate) / 86400000) * px + 0.5;
+        if (x >= 0 && x <= W){
+          ctx.strokeStyle = 'rgba(36,54,92,.6)';
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.moveTo(x, H * 0.35);
+          ctx.lineTo(x, H);
+          ctx.stroke();
+          const isWknd = !WorkingCalendar.isWorkDay(dd, cal);
+          ctx.fillStyle = isWknd ? '#64748b' : '#a8b8d6';
+          ctx.font = '9px Segoe UI';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(String(dd.getDate()).padStart(2,'0'), x + px/2, Y_TIER3);
+        }
+        dd.setDate(dd.getDate() + 1);
+      }
+    }
+    else if (tier2 === 'hour'){
+      /* Jam — untuk hourly view. Tampil 08:00, 12:00, 16:00 */
+      const dd = new Date(startDate);
+      while (dd <= endDate){
+        const dayStart = new Date(dd); dayStart.setHours(0,0,0,0);
+        // Tampil label jam pada jam kerja (8, 12, 16)
+        [8, 12, 16].forEach(h => {
+          const t = new Date(dayStart); t.setHours(h, 0, 0, 0);
+          if (t < startDate || t > endDate) return;
+          const x = pxOfF(t);
+          if (x < 0 || x > W) return;
+          ctx.strokeStyle = 'rgba(36,54,92,.6)';
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.moveTo(x + 0.5, H * 0.35);
+          ctx.lineTo(x + 0.5, H);
+          ctx.stroke();
+          ctx.fillStyle = '#a8b8d6';
+          ctx.font = '9px Segoe UI';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(String(h).padStart(2,'0') + ':00', x, Y_TIER3);
+        });
+        dd.setDate(dd.getDate() + 1);
+      }
+    }
+
+    /* ── Batas bawah axis ── */
     ctx.strokeStyle = '#24365c';
     ctx.beginPath();
     ctx.moveTo(0, H - 0.5);
     ctx.lineTo(W, H - 0.5);
     ctx.stroke();
-  },
 
-  isoWeek(d){
-    const t = new Date(d.valueOf());
-    const dn = (d.getDay() + 6) % 7;
-    t.setDate(t.getDate() - dn + 3);
-    const ft = new Date(t.getFullYear(), 0, 4);
-    return 1 + Math.round((t - ft) / (7 * 86400000));
+    /* ── Today marker (garis vertikal orange solid di axis) ── */
+    const today = new Date(); today.setHours(0,0,0,0);
+    const tOff = Math.round((today - startDate) / 86400000);
+    if (tOff >= 0 && tOff <= state.totalDays){
+      const x = tOff * px + 0.5;
+      ctx.strokeStyle = '#f59e0b';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(x, 0);
+      ctx.lineTo(x, H);
+      ctx.stroke();
+      ctx.lineWidth = 1;
+    }
   },
 
   /* ─────── BARS ─────── */
@@ -3461,7 +3637,9 @@ const GanttView = {
         const bd = state.barDrag;
         if (!bd) return;
         const dx = ev.clientX - bd.startMouseX;
-        const deltaDays = Math.round(dx / bd.pxPerDay);
+        // Untuk zoom sangat kecil (yearly/quarterly), pakai pendekatan berbeda
+        const pxPerDay = state.zoomCfg.pxPerDay;
+        const deltaDays = Math.round(dx / Math.max(2, pxPerDay));
         bd.deltaDays = deltaDays;
         const sOff = Math.round((new Date(bd.origStartISO)  - state.startDate) / 86400000);
         const fOff = Math.round((new Date(bd.origFinishISO) - state.startDate) / 86400000);
