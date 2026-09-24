@@ -1832,7 +1832,7 @@ function renderWbs(){
   });
 }
 
-/* ---------- FORM WBS ---------- */
+/* ---------- FORM WBS (Fase 1D: Auto/Manual + Multiple Predecessor) ---------- */
 function formWbs(id, forceGroup){
   const pid = STATE.activeProject;
   if (!pid){ toast('Pilih proyek terlebih dahulu', false); return; }
@@ -1840,18 +1840,24 @@ function formWbs(id, forceGroup){
   const isGroup = forceGroup || (w ? !!w.is_group : false);
   const proj = activeProj();
 
+  // ── Prepare options ──
   const ahspOpts = DB.ahsp_headers.map(a =>
     `<option value="${a.id}" ${w?.ahsp_id === a.id?'selected':''}>${esc(a.kode)} — ${esc(a.nama)} (${esc(a.satuan)})</option>`
   ).join('');
   const grupOpts = `<option value="">— Root —</option>` +
     DB.project_wbs.filter(x => x.project_id === pid && x.is_group && x.id !== id)
       .map(g => `<option value="${g.id}" ${w?.parent_id === g.id?'selected':''}>${esc(g.kode_wbs)} — ${esc(g.uraian)}</option>`).join('');
-  const predOpts = `<option value="">— Mulai bebas —</option>` +
-    DB.project_wbs.filter(x => x.project_id === pid && !x.is_group && x.id !== id)
-      .map(x => `<option value="${x.id}" ${w?.predecessor === x.id?'selected':''}>${esc(x.kode_wbs)} — ${esc(x.uraian)}</option>`).join('');
+  // Datalist: kode_wbs untuk auto-suggest multi predecessor
+  const predSuggestions = DB.project_wbs
+    .filter(x => x.project_id === pid && !x.is_group && x.id !== id)
+    .map(x => `<option value="${esc(x.kode_wbs)}"></option>`).join('');
   const calOpts = (DB.working_calendars || []).map(c =>
     `<option value="${c.id}" ${(w?.calendar_id || proj?.calendar_id) === c.id?'selected':''}>${esc(c.kode)} — ${esc(c.nama)}</option>`
   ).join('');
+
+  // ── Fase 1D: schedule mode state ──
+  const schedMode = String(w?.schedule_mode || 'auto').toLowerCase();
+  const isManual = schedMode === 'manual';
 
   const body = `
     <div class="row">
@@ -1884,10 +1890,39 @@ function formWbs(id, forceGroup){
       </div>
 
       <div class="sep"></div>
+      <p class="hint" style="color:var(--acc2)"><b>⚙ Mode Penjadwalan</b> — Auto (mengikuti CPM) atau Manual (tanggal dikunci user)</p>
+      <div class="row">
+        <div class="field">
+          <label class="f">Mode</label>
+          <select id="fw_sched_mode">
+            <option value="auto"   ${!isManual?'selected':''}>Auto — ikuti CPM</option>
+            <option value="manual" ${isManual?'selected':''}>Manual — tanggal terkunci</option>
+          </select>
+        </div>
+        <div class="field" id="fw_man_start_box" style="display:${isManual?'block':'none'}">
+          <label class="f">Manual Start</label>
+          <input id="fw_man_start" type="date" value="${esc(w?.manual_start||'')}" />
+        </div>
+        <div class="field" id="fw_man_finish_box" style="display:${isManual?'block':'none'}">
+          <label class="f">Manual Finish</label>
+          <input id="fw_man_finish" type="date" value="${esc(w?.manual_finish||'')}" />
+        </div>
+      </div>
+
+      <div class="sep"></div>
       <p class="hint" style="color:var(--acc2)"><b>⚙ Master Schedule</b> — Field ini hanya memengaruhi jadwal, tidak mengubah RAB/RAP</p>
       <div class="row">
-        <div class="field" style="flex:3"><label class="f">Predecessor</label><select id="fw_pred">${predOpts}</select></div>
-        <div class="field"><label class="f">Tipe</label>
+        <div class="field" style="flex:3">
+          <label class="f">Predecessor (Multi)</label>
+          <input id="fw_pred" list="fw_pred_list"
+                 placeholder="mis. I.1FS+2; I.2SS-1 (kosongkan untuk mulai bebas)"
+                 value="${esc(w?.predecessor||'')}" />
+          <datalist id="fw_pred_list">${predSuggestions}</datalist>
+          <p class="hint" style="margin-top:4px;font-size:10px">
+            Format: <code>KODE[FS|SS|FF|SF][+/-lag]</code> · Multi pakai <code>;</code> sebagai pemisah
+          </p>
+        </div>
+        <div class="field"><label class="f">Tipe Default</label>
           <select id="fw_pred_type">
             <option value="FS" ${w?.pred_type==='FS'?'selected':''}>FS</option>
             <option value="SS" ${w?.pred_type==='SS'?'selected':''}>SS</option>
@@ -1895,7 +1930,7 @@ function formWbs(id, forceGroup){
             <option value="SF" ${w?.pred_type==='SF'?'selected':''}>SF</option>
           </select>
         </div>
-        <div class="field"><label class="f">Lag (hari)</label><input id="fw_lag" type="number" step="1" value="${num(w?.lag_days)||0}" /></div>
+        <div class="field"><label class="f">Lag Default (hari)</label><input id="fw_lag" type="number" step="1" value="${num(w?.lag_days)||0}" /></div>
       </div>
       <div class="row" style="margin-top:12px">
         <div class="field"><label class="f">Durasi (hari kerja)</label><input id="fw_dur" type="number" step="1" min="1" value="${num(w?.duration)||1}" /></div>
@@ -1940,10 +1975,22 @@ function formWbs(id, forceGroup){
       obj.volume_rab = num($('#fw_vrab').value);
       obj.volume_rap = num($('#fw_vrap').value);
 
-      writeScheduleField(obj, 'predecessor', $('#fw_pred').value);
-      writeScheduleField(obj, 'pred_type', $('#fw_pred_type').value);
-      writeScheduleField(obj, 'lag_days', num($('#fw_lag').value));
-      writeScheduleField(obj, 'duration', num($('#fw_dur').value) || 1);
+      // ── Fase 1D: schedule_mode + manual dates ──
+      const schedMode = $('#fw_sched_mode').value || 'auto';
+      writeScheduleField(obj, 'schedule_mode', schedMode);
+      if (schedMode === 'manual'){
+        writeScheduleField(obj, 'manual_start',  $('#fw_man_start').value  || '');
+        writeScheduleField(obj, 'manual_finish', $('#fw_man_finish').value || '');
+      } else {
+        writeScheduleField(obj, 'manual_start',  '');
+        writeScheduleField(obj, 'manual_finish', '');
+      }
+
+      // ── Fase 1D: predecessor multi (text input) ──
+      writeScheduleField(obj, 'predecessor', $('#fw_pred').value.trim());
+      writeScheduleField(obj, 'pred_type',   $('#fw_pred_type').value);
+      writeScheduleField(obj, 'lag_days',    num($('#fw_lag').value));
+      writeScheduleField(obj, 'duration',    num($('#fw_dur').value) || 1);
       writeScheduleField(obj, 'calendar_id', $('#fw_cal').value);
       writeScheduleField(obj, 'constraint_type', $('#fw_ct').value);
       writeScheduleField(obj, 'constraint_date', $('#fw_cd').value);
@@ -1970,6 +2017,17 @@ function formWbs(id, forceGroup){
     };
     $('#fw_ahsp').onchange = sync;
     sync();
+
+    // ── Fase 1D: toggle manual date fields visibility ──
+    const syncModeFields = () => {
+      const m = $('#fw_sched_mode').value;
+      const show = (m === 'manual');
+      $('#fw_man_start_box').style.display  = show ? 'block' : 'none';
+      $('#fw_man_finish_box').style.display = show ? 'block' : 'none';
+    };
+    $('#fw_sched_mode').onchange = syncModeFields;
+    syncModeFields();
+
     $('#fw_group').onchange = e => {
       $('#itemBox').style.display = num(e.target.value) === 1 ? 'none' : 'block';
     };
