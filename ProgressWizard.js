@@ -22,20 +22,14 @@
     if (window._progressWizardInstalled) return;
     window._progressWizardInstalled = true;
 
-    /* ═══════════════════════════════════════════════════════════
-       STATE (dialog)
-       ═══════════════════════════════════════════════════════════ */
     var _state = {
       mFrom: 1,
       mTo: 4,
       filterGrup: '',
-      criteria: 'all',       // all | critical | no-progress
-      draft: {}              // { wbsId: { minggu: volume } }
+      criteria: 'all',
+      draft: {}
     };
 
-    /* ═══════════════════════════════════════════════════════════
-       HELPERS
-       ═══════════════════════════════════════════════════════════ */
     function _num(v){
       var n = parseFloat(String(v == null ? '' : v).replace(/[^\d.-]/g,''));
       return isFinite(n) ? n : 0;
@@ -61,9 +55,6 @@
       return Math.max(1, Math.round(_num(proj && proj.durasi_minggu) || 1));
     }
 
-    /* ═══════════════════════════════════════════════════════════
-       BUILD TASK LIST (dengan filter)
-       ═══════════════════════════════════════════════════════════ */
     function buildTaskList(proj){
       if (!proj || !proj.id) return { tasks: [], allGroups: [] };
       var pid = proj.id;
@@ -74,12 +65,10 @@
         return w.project_id === pid && !w.is_group;
       });
 
-      /* Filter by grup */
       if (_state.filterGrup){
         tasks = tasks.filter(function(t){ return t.parent_id === _state.filterGrup; });
       }
 
-      /* Filter by criteria */
       if (_state.criteria === 'critical'){
         tasks = tasks.filter(function(t){ return _num(t.is_critical) === 1; });
       } else if (_state.criteria === 'no-progress'){
@@ -93,9 +82,6 @@
       return { tasks: tasks, allGroups: allGroups };
     }
 
-    /* ═══════════════════════════════════════════════════════════
-       OPEN WIZARD DIALOG
-       ═══════════════════════════════════════════════════════════ */
     function openWizard(){
       var proj = getActiveProj();
       if (!proj){
@@ -107,7 +93,6 @@
         return;
       }
 
-      /* Reset state */
       _state.mFrom = 1;
       _state.mTo = Math.min(4, maxMinggu(proj));
       _state.filterGrup = '';
@@ -117,7 +102,6 @@
       var html = buildWizardHTML(proj);
       openModal('📊 Progress Update Wizard', html, function(){ return false; });
 
-      /* Hide default submit, inject custom footer */
       setTimeout(function(){
         var submitBtn = document.getElementById('mSubmit');
         if (submitBtn){
@@ -130,9 +114,6 @@
       }, 10);
     }
 
-    /* ═══════════════════════════════════════════════════════════
-       WIZARD HTML
-       ═══════════════════════════════════════════════════════════ */
     function buildWizardHTML(proj){
       var maxM = maxMinggu(proj);
       var groups = DB.project_wbs.filter(function(w){
@@ -145,6 +126,7 @@
           _esc(proj.kode) + ' — ' + _esc(proj.nama) + '</b>' +
         '</div>' +
 
+        '<div class="pw-filter-bar">' +
           '<div class="pw-f-item">' +
             '<label>Minggu Dari</label>' +
             '<input type="number" id="pwMFrom" min="1" max="52" value="' + _state.mFrom + '" />' +
@@ -153,7 +135,7 @@
             '<label>Minggu Ke</label>' +
             '<input type="number" id="pwMTo" min="1" max="52" value="' + _state.mTo + '" />' +
           '</div>' +
-         
+          '<div class="pw-f-item">' +
             '<label>Filter Grup</label>' +
             '<select id="pwGrup">' +
               '<option value="">— Semua Grup —</option>' +
@@ -162,7 +144,7 @@
               }).join('') +
             '</select>' +
           '</div>' +
-         
+          '<div class="pw-f-item">' +
             '<label>Kriteria</label>' +
             '<select id="pwCrit">' +
               '<option value="all">Semua Task</option>' +
@@ -186,14 +168,11 @@
         '</div>';
     }
 
-    /* ═══════════════════════════════════════════════════════════
-       RENDER TABLE PREVIEW
-       ═══════════════════════════════════════════════════════════ */
     function renderTaskTable(proj){
       var wrap = document.getElementById('pwTableWrap');
       if (!wrap) return;
 
-      /* ── SELF-HEALING: sync state dari DOM input ── */
+      /* SELF-HEALING: sync state dari DOM input */
       var inputFrom = document.getElementById('pwMFrom');
       var inputTo   = document.getElementById('pwMTo');
       if (inputFrom){
@@ -204,7 +183,6 @@
         var tv = parseInt(inputTo.value, 10);
         if (!isNaN(tv) && tv >= 1 && tv <= 52) _state.mTo = tv;
       }
-      /* Pastikan mTo >= mFrom */
       if (_state.mTo < _state.mFrom) _state.mTo = _state.mFrom;
 
       var list = buildTaskList(proj);
@@ -229,7 +207,6 @@
       var weeks = [];
       for (var m = mFrom; m <= mTo; m++) weeks.push(m);
 
-      /* Header */
       var head = '<thead><tr>' +
         '<th class="pw-th-kode">Kode</th>' +
         '<th class="pw-th-uraian">Uraian</th>' +
@@ -240,16 +217,10 @@
         '<th class="pw-th-pct">%</th>' +
         '</tr></thead>';
 
-      /* Body */
       var body = tasks.map(function(t){
         var target = _num(t.volume_rab) || 0;
         var draft = _state.draft[t.id] || {};
         var sum = weeks.reduce(function(s, m){ return s + _num(draft[m]); }, 0);
-
-        /* Volume existing dari progress (untuk referensi) */
-        var existing = DB.progress
-          .filter(function(p){ return p.project_id === proj.id && p.wbs_id === t.id; })
-          .reduce(function(s, p){ return s + _num(p.volume); }, 0);
 
         var pct = target > 0 ? (sum / target * 100) : 0;
         var pctCls = pct >= 100 ? 'ok' : pct > 0 ? 'warn' : '';
@@ -277,19 +248,14 @@
 
       wrap.innerHTML = '<table class="pw-table">' + head + '<tbody>' + body + '</tbody></table>';
 
-      /* Wire input events */
       wrap.querySelectorAll('.pw-input').forEach(function(inp){
         inp.addEventListener('input', onCellInput);
         inp.addEventListener('change', onCellInput);
       });
 
-      /* Auto-scroll kolom minggu ke minggu awal */
       updateSummary();
     }
 
-    /* ═══════════════════════════════════════════════════════════
-       INPUT HANDLER
-       ═══════════════════════════════════════════════════════════ */
     function onCellInput(e){
       var inp = e.target;
       var wbsId = inp.getAttribute('data-wbs');
@@ -300,12 +266,10 @@
       if (val > 0) _state.draft[wbsId][minggu] = val;
       else delete _state.draft[wbsId][minggu];
 
-      /* Update row summary */
       var sum = Object.keys(_state.draft[wbsId]).reduce(function(s, m){
         return s + _num(_state.draft[wbsId][m]);
       }, 0);
 
-      var proj = getActiveProj();
       var task = DB.project_wbs.find(function(t){ return t.id === wbsId; });
       var target = task ? _num(task.volume_rab) : 0;
       var pct = target > 0 ? (sum / target * 100) : 0;
@@ -323,9 +287,6 @@
       updateSummary();
     }
 
-    /* ═══════════════════════════════════════════════════════════
-       AUTO-DISTRIBUTE
-       ═══════════════════════════════════════════════════════════ */
     function autoDistribute(mode){
       var proj = getActiveProj();
       if (!proj) return;
@@ -336,7 +297,6 @@
       var nWeeks = mTo - mFrom + 1;
       if (nWeeks <= 0) return;
 
-      /* Bobot distribusi */
       var weights = [];
       if (mode === 'tri'){
         var c = (nWeeks - 1) / 2;
@@ -356,7 +316,6 @@
       var wSum = weights.reduce(function(s, x){ return s + x; }, 0) || 1;
       weights = weights.map(function(x){ return x / wSum; });
 
-      /* Clear draft dulu */
       list.tasks.forEach(function(t){
         _state.draft[t.id] = {};
         var target = _num(t.volume_rab) || 0;
@@ -364,7 +323,6 @@
           var m = mFrom + w;
           var v = target * weights[w];
           if (v > 0.001){
-            /* Round ke 3 desimal */
             _state.draft[t.id][m] = Math.round(v * 1000) / 1000;
           }
         }
@@ -377,9 +335,6 @@
       }
     }
 
-    /* ═══════════════════════════════════════════════════════════
-       CLEAR
-       ═══════════════════════════════════════════════════════════ */
     function clearDraft(){
       _state.draft = {};
       var proj = getActiveProj();
@@ -387,9 +342,6 @@
       if (typeof toast === 'function') toast('🗑 Draft dikosongkan');
     }
 
-    /* ═══════════════════════════════════════════════════════════
-       SUMMARY BAR
-       ═══════════════════════════════════════════════════════════ */
     function updateSummary(){
       var el = document.getElementById('pwSummary');
       if (!el) return;
@@ -397,9 +349,7 @@
       var proj = getActiveProj();
       var visibleCount = 0;
       try {
-        if (proj){
-          visibleCount = buildTaskList(proj).tasks.length;
-        }
+        if (proj) visibleCount = buildTaskList(proj).tasks.length;
       } catch(e){}
 
       var draftedTasks = Object.keys(_state.draft).filter(function(id){
@@ -422,9 +372,6 @@
         'vol <b>' + _fmt(totalVal, 2) + '</b>';
     }
 
-    /* ═══════════════════════════════════════════════════════════
-       SAVE ALL — batch insert to DB.progress
-       ═══════════════════════════════════════════════════════════ */
     function saveAll(){
       var proj = getActiveProj();
       if (!proj){ if (typeof toast === 'function') toast('Proyek tidak ditemukan', false); return; }
@@ -435,19 +382,16 @@
         return;
       }
 
-      /* Konfirmasi */
       var totalEntries = 0;
       tasks.forEach(function(id){
         totalEntries += Object.keys(_state.draft[id]).length;
       });
       if (!confirm('Simpan ' + totalEntries + ' entri progress untuk ' + tasks.length + ' task?')) return;
 
-      /* Undo snapshot */
       if (typeof Undo !== 'undefined' && Undo.snapshot){
         Undo.snapshot('Progress Wizard: ' + totalEntries + ' entri');
       }
 
-      /* Insert / update */
       var added = 0;
       tasks.forEach(function(wbsId){
         var weeks = _state.draft[wbsId] || {};
@@ -456,7 +400,6 @@
           var vol = _num(weeks[m]);
           if (vol <= 0) return;
 
-          /* Cek existing entry (project + wbs + minggu) */
           var existing = DB.progress.find(function(p){
             return p.project_id === proj.id && p.wbs_id === wbsId && _num(p.minggu) === minggu;
           });
@@ -478,7 +421,6 @@
         });
       });
 
-            /* ── Fase E-3: wrap dengan loading indicator ── */
       if (typeof closeModal === 'function') closeModal();
 
       var _doSave = function(){
@@ -499,25 +441,8 @@
       } else {
         _doSave();
       }
-     
-      if (typeof runCPM === 'function') runCPM(proj.id);
-     
-
-      /* Refresh UI */
-      if (typeof renderProgress === 'function') renderProgress();
-      if (typeof renderSchedule === 'function') renderSchedule();
-
-      /* Close modal */
-      if (typeof closeModal === 'function') closeModal();
-
-      if (typeof toast === 'function'){
-        toast('✅ ' + added + ' entri progress disimpan untuk ' + tasks.length + ' task');
-      }
     }
 
-    /* ═══════════════════════════════════════════════════════════
-       EXPORT TEMPLATE CSV
-       ═══════════════════════════════════════════════════════════ */
     function exportTemplateCSV(){
       var proj = getActiveProj();
       if (!proj) return;
@@ -552,9 +477,6 @@
       if (typeof toast === 'function') toast('📥 Template CSV diunduh');
     }
 
-    /* ═══════════════════════════════════════════════════════════
-       WIRE CONTROLS
-       ═══════════════════════════════════════════════════════════ */
     function wireWizardControls(proj){
       var el;
 
@@ -565,7 +487,6 @@
           if (isNaN(v) || v < 1) v = 1;
           if (v > 52) v = 52;
           _state.mFrom = v;
-          /* Auto-adjust mTo kalau lebih kecil */
           if (_state.mTo < _state.mFrom) _state.mTo = _state.mFrom;
           renderTaskTable(proj);
         };
@@ -580,13 +501,13 @@
           if (isNaN(v) || v < 1) v = 1;
           if (v > 52) v = 52;
           _state.mTo = v;
-          /* Auto-adjust mFrom kalau lebih besar */
           if (_state.mFrom > _state.mTo) _state.mFrom = _state.mTo;
           renderTaskTable(proj);
         };
         el.oninput = _onTo;
         el.onchange = _onTo;
       }
+
       el = document.getElementById('pwGrup');
       if (el) el.onchange = function(){
         _state.filterGrup = el.value;
@@ -615,15 +536,10 @@
       if (el) el.onclick = exportTemplateCSV;
     }
 
-    /* ═══════════════════════════════════════════════════════════
-       PUBLIC API
-       ═══════════════════════════════════════════════════════════ */
     window.openProgressWizard = openWizard;
     window.ProgressWizard = { open: openWizard };
 
-    /* ── Auto wire tombol di tab Progress (kalau ada) ── */
     function wireTopbarBtn(){
-      /* Cari tombol di section Progress */
       var btn = document.getElementById('btnProgressWizard');
       if (btn && !btn._wired){
         btn._wired = true;
@@ -636,7 +552,6 @@
     } else {
       wireTopbarBtn();
     }
-    /* Retry wiring karena tab bisa di-render setelah init */
     setTimeout(wireTopbarBtn, 1000);
     setTimeout(wireTopbarBtn, 3000);
 
