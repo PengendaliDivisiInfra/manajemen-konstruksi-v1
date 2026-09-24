@@ -5227,19 +5227,38 @@ const ImportExcel = {
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', fn);
     else fn();
   }
+
   ready(() => {
+    // Tombol Import BQ
     const btn = document.getElementById('btnImportBQ');
     if (btn) btn.onclick = () => {
       if (!STATE.activeProject){ toast('Pilih proyek dulu', false); return; }
       ImportExcel.open(STATE.activeProject);
     };
+
+    // Tombol EVM info
     const btnInfo = document.getElementById('btnEvmInfo');
     if (btnInfo) btnInfo.onclick = () => {
-      openModal('ℹ Tentang EVM', '...', () => {});
+      openModal('ℹ Tentang EVM',
+        '<p style="font-size:13px;line-height:1.7;color:var(--txt)">' +
+          '<b>Earned Value Management (EVM)</b> adalah metode mengukur performa proyek dengan membandingkan 3 nilai:<br><br>' +
+          '• <b>PV (Planned Value)</b> — Nilai pekerjaan yang <i>seharusnya</i> selesai per rencana<br>' +
+          '• <b>EV (Earned Value)</b> — Nilai pekerjaan yang <i>sudah</i> dikerjakan (bobot RAB × progress)<br>' +
+          '• <b>AC (Actual Cost)</b> — Biaya aktual yang sudah dikeluarkan<br><br>' +
+          '<b>Indeks:</b><br>' +
+          '• <b>SPI = EV / PV</b> → &lt;1 = telat, ≥1 = on/ahead schedule<br>' +
+          '• <b>CPI = EV / AC</b> → &lt;1 = over budget, ≥1 = hemat<br><br>' +
+          '<b>Forecast:</b><br>' +
+          '• <b>EAC = BAC / CPI</b> → prediksi biaya akhir<br>' +
+          '• <b>VAC = BAC − EAC</b> → selisih terhadap anggaran<br><br>' +
+          '<i style="color:var(--muted)">Catatan: AC dihitung dari RAP × progress (approximation karena sistem tidak mencatat biaya aktual per transaksi).</i>' +
+        '</p>',
+        () => {}
+      );
       setTimeout(() => { document.getElementById('mSubmit').style.display = 'none'; }, 10);
     };
 
-    // ✅ PINDAHKAN BLOK INI KE DALAM READY()
+    // ✅ PINDAHKAN HOOK INI KE DALAM READY()
     if (typeof window._origRenderDashboard === 'undefined'){
       window._origRenderDashboard = renderDashboard;
       window.renderDashboard = function(){
