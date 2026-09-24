@@ -2775,7 +2775,6 @@ const GanttView = {
           else inner = '<span class="gt-num">' + (node.duration || 0) + '</span><span class="gt-dim">d</span>';
           break;
         case 'startISO':
-        case 'startISO':
         case 'finishISO':
           inner = '<span class="gt-date">' + esc(node[c.key] || '—') + '</span>';
           break;
@@ -2885,9 +2884,8 @@ const GanttView = {
     ctx.fillStyle = '#0e1a30';
     ctx.fillRect(0, 0, W, H);
 
-    /* ── Helper: offset pixel dari startDate ── */
-    const pxOf = (d) => Math.round((d - startDate) / 86400000) * px;
-    const pxOfF = (d) => ((d - startDate) / 86400000) * px;   // float (untuk hourly)
+    /* ── Helper: offset pixel dari startDate (float, untuk hourly) ── */
+    const pxOfF = (d) => ((d - startDate) / 86400000) * px;
 
     /* ── Shading non-work days (kecuali hourly — terlalu padat) ── */
     if (zoom !== 'hourly'){
@@ -4521,22 +4519,45 @@ const GanttView = {
       root.style.setProperty('--gantt-table-w', this.tableWidth() + 'px');
     };
 
-    const onUp = () => {
-      document.removeEventListener('mousemove', onMove);
-      document.removeEventListener('mouseup', onUp);
-      handle.classList.remove('is-active');
-      body.style.cursor = prevCursor;
-      body.style.userSelect = '';
-      this.saveColWidths(state.colWidths);
-      state._lastResizeAt = Date.now();
-      /* Fase 3A-3: update table width setelah resize */
-      const root = state.container.querySelector('.gantt-root');
-      if (root) root.style.setProperty('--gantt-table-w', this.tableWidth(state.costColumns) + 'px');
-    };
-    document.addEventListener('mousemove', onMove);
-    document.addEventListener('mouseup', onUp);
-  },
+      let isFinishing = false;
+      const finishDrag = () => {
+        if (isFinishing) return;
+        isFinishing = true;
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onUp);
+        document.removeEventListener('blur', finishDrag);
+        window.removeEventListener('blur', finishDrag);
 
+        state.container.querySelector('.gantt-bars-wrap').classList.remove('is-dragging-bar');
+
+        const bd = state.barDrag;
+        state.barDrag = null;
+        if (!bd || !bd.deltaDays) { this.drawBars(state, canvas); return; }
+
+        const origStart = new Date(bd.origStartISO + 'T00:00:00');
+        const wbsItem = DB.project_wbs.find(w => w.id === bd.nodeId);
+        if (!wbsItem){ this.drawBars(state, canvas); return; }
+        if (typeof Undo !== 'undefined') Undo.snapshot('Drag bar: ' + (wbsItem.kode_wbs || ''));
+
+        const cal = WorkingCalendar.get(wbsItem.calendar_id || state.proj.calendar_id);
+        const snapped = WorkingCalendar.addWorkDays(origStart, bd.deltaDays, cal);
+        const newStartISO = WorkingCalendar.fmt(snapped);
+
+        writeScheduleField(wbsItem, 'constraint_type', 'SNET');
+        writeScheduleField(wbsItem, 'constraint_date', newStartISO);
+
+        runCPM(state.proj.id);
+        saveDB();
+        this.mount(state.container, state.proj.id, { mode: state.mode, zoom: state.zoom });
+        toast('Jadwal ' + (wbsItem.kode_wbs || '') + ' diubah → ' + newStartISO);
+      };
+      const onUp = finishDrag;
+
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onUp);
+      document.addEventListener('blur', finishDrag);
+      window.addEventListener('blur', finishDrag);
+     
   /* ═══════════════════════════════════════════════════════════
      (b) ROW REORDER
      ═══════════════════════════════════════════════════════════ */
@@ -7380,12 +7401,22 @@ const ExecDashboard = {
       else LiveSync.pause();
     });
 
-    // ── Hook ke switchTab untuk Executive (DIPINDAH KE SINI) ──
-    if (typeof window._origSwitchTab === 'undefined'){
-      window._origSwitchTab = switchTab;
+    // ── Hook switchTab → Executive (CHAIN, jangan overwrite) ──
+    if (typeof switchTab === 'function'){
+      var _prevSwitchTabF5 = window.switchTab;
       window.switchTab = function(name){
-        window._origSwitchTab(name);
+        if (typeof _prevSwitchTabF5 === 'function') _prevSwitchTabF5.apply(this, arguments);
         if (name === 'executive') ExecDashboard.render();
+      };
+    }
+
+    // ── Hook renderAll → Executive (CHAIN) ──
+    if (typeof renderAll === 'function'){
+      var _prevRenderAllF5 = window.renderAll;
+      window.renderAll = function(){
+        if (typeof _prevRenderAllF5 === 'function') _prevRenderAllF5.apply(this, arguments);
+        var cur = document.querySelector('.tab.active')?.dataset.tab;
+        if (cur === 'executive') ExecDashboard.render();
       };
     }
 
@@ -7886,11 +7917,11 @@ const ImportExcel = {
       setTimeout(() => { document.getElementById('mSubmit').style.display = 'none'; }, 10);
     };
 
-    // ✅ PINDAHKAN HOOK INI KE DALAM READY()
-    if (typeof window._origRenderDashboard === 'undefined'){
-      window._origRenderDashboard = renderDashboard;
+    // ── Hook renderDashboard → EVM (CHAIN) ──
+    if (typeof renderDashboard === 'function'){
+      var _prevRenderDashboardF6 = window.renderDashboard;
       window.renderDashboard = function(){
-        window._origRenderDashboard();
+        if (typeof _prevRenderDashboardF6 === 'function') _prevRenderDashboardF6.apply(this, arguments);
         if (typeof EVMView !== 'undefined') EVMView.render();
       };
     }
