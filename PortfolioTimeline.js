@@ -23,7 +23,13 @@
     window._portfolioTimelineInstalled = true;
 
     var ZOOM_KEY = 'mk_portfolio_zoom';
-    var _state = { zoom: localStorage.getItem(ZOOM_KEY) || 'monthly' };
+    var _defaultZoom = 'monthly';
+    /* Auto-zoom: di mobile/tablet pakai quarterly untuk hemat ruang */
+    if (typeof window !== 'undefined' && window.innerWidth){
+      if (window.innerWidth < 480) _defaultZoom = 'yearly';
+      else if (window.innerWidth < 1024) _defaultZoom = 'quarterly';
+    }
+    var _state = { zoom: localStorage.getItem(ZOOM_KEY) || _defaultZoom };
 
     var ZOOM_CFG = {
       monthly:   { pxPerDay: 3.5, label: 'Bulanan' },
