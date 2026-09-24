@@ -546,13 +546,17 @@
       if (!baselineIdx){
         var noBL =
           '<div class="rpt-section">' +
-            '<p class="rpt-p">⚠ <b>Baseline belum di-set.</b> ' +
-            'Untuk analisis variance, jalankan:</p>' +
-            '<ol class="rpt-ol">' +
-              '<li>Buka tab <b>Master Schedule</b> → Gantt</li>' +
-              '<li>Pilih Baseline di dropdown → klik 📌 Set</li>' +
-              '<li>Ulangi report ini</li>' +
-            '</ol>' +
+            (window.EmptyState
+              ? EmptyState.build({
+                  icon: 'baseline',
+                  title: 'Baseline belum di-set',
+                  message: 'Untuk analisis variance, ikuti langkah berikut:',
+                  hint: '1. Buka tab <b>Master Schedule</b> → Gantt<br>' +
+                        '2. Pilih Baseline di dropdown → klik <b>📌 Set</b><br>' +
+                        '3. Ulangi generate report ini'
+                })
+              : '<p>Baseline belum di-set.</p>'
+            ) +
           '</div>';
         return wrapPage(header + noBL, proj);
       }
