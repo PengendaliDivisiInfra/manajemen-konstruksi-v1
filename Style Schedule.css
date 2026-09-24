@@ -1491,8 +1491,10 @@ canvas:not(.gantt-axis):not(.gantt-bars){
 .gt-tip{
   position:absolute;
   z-index:100;
-  min-width:220px;
-  max-width:300px;
+  min-width:240px;
+  max-width:340px;
+  max-height:520px;
+  overflow-y:auto;
   padding:10px 12px;
   background:rgba(15, 23, 42, .98);
   border:1px solid #3a5590;
@@ -1504,6 +1506,12 @@ canvas:not(.gantt-axis):not(.gantt-bars){
   opacity:0;
   transition:opacity .12s;
   line-height:1.5;
+}
+.gt-tip::-webkit-scrollbar{ width:5px }
+.gt-tip::-webkit-scrollbar-track{ background:transparent }
+.gt-tip::-webkit-scrollbar-thumb{
+  background:rgba(58, 85, 144, .6);
+  border-radius:3px;
 }
 .gt-tip.show{opacity:1}
 .gt-tip-title{
