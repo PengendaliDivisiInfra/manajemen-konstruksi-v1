@@ -131,7 +131,21 @@
         return String(a.tgl_mulai || '').localeCompare(String(b.tgl_mulai || ''));
       });
       if (!projects.length){
-        container.innerHTML = '<div class="pt-empty">Belum ada proyek</div>';
+        container.innerHTML = window.EmptyState
+          ? EmptyState.build({
+              icon: 'project',
+              title: 'Belum ada proyek',
+              message: 'Tambahkan proyek terlebih dahulu untuk melihat portfolio timeline.',
+              cta: {
+                label: '+ Proyek Baru',
+                action: function(){
+                  if (typeof closeModal === 'function') closeModal();
+                  if (typeof switchTab === 'function') switchTab('projects');
+                  if (typeof formProject === 'function') setTimeout(function(){ formProject(null); }, 200);
+                }
+              }
+            })
+          : '<div class="pt-empty">Belum ada proyek</div>';
         return;
       }
 
