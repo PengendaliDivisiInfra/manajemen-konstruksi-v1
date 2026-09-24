@@ -102,18 +102,19 @@ function hitungDurasiLengkap(tglMulai, tglSelesai, cal, mode){
    BAGIAN 2 — SCHEDULE WHITELIST (Anti-Interference dengan RAB/RAP)
    ===================================================================== */
 const SCHEDULE_WRITABLE_FIELDS = Object.freeze([
-  // relationship & kalender
   'predecessor','pred_type','lag_days','duration','calendar_id',
-  // legacy schedule fields (backward compat)
   'start_date','finish_date',
   'early_start','early_finish','late_start','late_finish',
   'total_float','is_critical',
   'constraint_type','constraint_date',
-  // NEW schedule fields (Phase 1)
   'durasi_hari',
   'tgl_mulai_rencana','tgl_selesai_rencana',
   'tgl_mulai_aktual','tgl_selesai_aktual',
-  'float_total'
+  'float_total',
+  // ── NEW: Baseline fields (Fase 4A) ──
+  'bl1_start','bl1_finish','bl1_set_at',
+  'bl2_start','bl2_finish','bl2_set_at',
+  'bl3_start','bl3_finish','bl3_set_at'
 ]);
 
 function writeScheduleField(wbsItem, field, value){
@@ -1199,6 +1200,111 @@ function initScheduleEvents(){
 }
 
 /* =====================================================================
+   BAGIAN 8B — BASELINE & VARIANCE ENGINE (Fase 4A)
+   Menyimpan snapshot jadwal sebagai acuan + menghitung slip
+   ===================================================================== */
+const Baseline = {
+  INDICES: [1, 2, 3],
+
+  fieldFor(idx, kind){
+    // kind: 'start' | 'finish' | 'set_at'
+    return 'bl' + idx + '_' + kind;
+  },
+
+  /* Apakah baseline ke-idx sudah pernah di-set untuk proyek ini? */
+  isSet(projectId, idx){
+    if (!idx) return false;
+    const items = DB.project_wbs.filter(w => w.project_id === projectId && !w.is_group);
+    if (!items.length) return false;
+    const f = this.fieldFor(idx, 'set_at');
+    return items.some(w => w[f] && String(w[f]).trim() !== '');
+  },
+
+  /* Ambil timestamp baseline (ISO string) */
+  getTimestamp(projectId, idx){
+    if (!idx) return null;
+    const items = DB.project_wbs.filter(w => w.project_id === projectId && !w.is_group);
+    const f = this.fieldFor(idx, 'set_at');
+    for (const w of items){
+      const v = w[f];
+      if (v && String(v).trim() !== '') return String(v);
+    }
+    return null;
+  },
+
+  /* Snapshot jadwal saat ini ke baseline ke-idx */
+  set(projectId, idx){
+    const items = DB.project_wbs.filter(w => w.project_id === projectId && !w.is_group);
+    if (!items.length) return { ok:false, msg:'Tidak ada item WBS' };
+    const now = new Date().toISOString();
+    const fS = this.fieldFor(idx, 'start');
+    const fF = this.fieldFor(idx, 'finish');
+    const fT = this.fieldFor(idx, 'set_at');
+    items.forEach(w => {
+      writeScheduleField(w, fS, w.tgl_mulai_rencana   || '');
+      writeScheduleField(w, fF, w.tgl_selesai_rencana || '');
+      writeScheduleField(w, fT, now);
+    });
+    saveDB();
+    return { ok:true, count: items.length, timestamp: now };
+  },
+
+  /* Hapus baseline ke-idx */
+  clear(projectId, idx){
+    const items = DB.project_wbs.filter(w => w.project_id === projectId);
+    const fS = this.fieldFor(idx, 'start');
+    const fF = this.fieldFor(idx, 'finish');
+    const fT = this.fieldFor(idx, 'set_at');
+    items.forEach(w => {
+      writeScheduleField(w, fS, '');
+      writeScheduleField(w, fF, '');
+      writeScheduleField(w, fT, '');
+    });
+    saveDB();
+    return { ok:true };
+  },
+
+  /* Hitung variance per task */
+  variance(projectId, idx){
+    if (!idx || !this.isSet(projectId, idx)) return [];
+    const fS = this.fieldFor(idx, 'start');
+    const fF = this.fieldFor(idx, 'finish');
+    const items = DB.project_wbs.filter(w => w.project_id === projectId && !w.is_group);
+    return items.map(w => {
+      const bStart  = w[fS] || '';
+      const bFinish = w[fF] || '';
+      const cStart  = w.tgl_mulai_rencana   || '';
+      const cFinish = w.tgl_selesai_rencana || '';
+      if (!bFinish || !cFinish){
+        return { w, bStart, bFinish, cStart, cFinish, slip: null, slipStart: null };
+      }
+      const cal = WorkingCalendar.get(w.calendar_id);
+      const slip      = WorkingCalendar.diffDays(bFinish, cFinish, cal, 'working');
+      const slipStart = WorkingCalendar.diffDays(bStart,  cStart,  cal, 'working');
+      return { w, bStart, bFinish, cStart, cFinish, slip, slipStart };
+    });
+  },
+
+  /* KPI agregat */
+  kpi(projectId, idx){
+    const rows = this.variance(projectId, idx);
+    const valid   = rows.filter(r => r.slip !== null);
+    const late    = valid.filter(r => r.slip > 0);
+    const early   = valid.filter(r => r.slip < 0);
+    const onTime  = valid.filter(r => r.slip === 0);
+    const totalSlip = late.reduce((s, r) => s + r.slip, 0);
+    const maxSlip   = late.reduce((m, r) => Math.max(m, r.slip), 0);
+    const avgSlip   = late.length ? (totalSlip / late.length) : 0;
+    return {
+      total: valid.length,
+      late: late.length, onTime: onTime.length, early: early.length,
+      totalSlip, avgSlip, maxSlip,
+      pctLate: valid.length ? (late.length / valid.length * 100) : 0
+    };
+  }
+};
+
+/* =====================================================================
    BAGIAN 9 — GANTT CHART MS PROJECT STYLE
    A. GanttEngine          — Data layer (tree, rollup, progress)
    B. GanttView            — Presentation layer (table + canvas)
@@ -1349,12 +1455,13 @@ const GanttView = {
 
   COLUMNS: [
     { key:'kode',         label:'ID',        width: 78, align:'left'  },
-    { key:'nama',         label:'Task Name', width:240, align:'left'  },
+    { key:'nama',         label:'Task Name', width:230, align:'left'  },
     { key:'duration',     label:'Dur',       width: 48, align:'right' },
     { key:'startISO',     label:'Start',     width: 78, align:'center'},
     { key:'finishISO',    label:'Finish',    width: 78, align:'center'},
-    { key:'predecessors', label:'Pred',      width: 68, align:'left'  },
-    { key:'resources',    label:'Resources', width:118, align:'left'  }
+    { key:'variance',     label:'Var',       width: 56, align:'center'},  // ← NEW
+    { key:'predecessors', label:'Pred',      width: 62, align:'left'  },
+    { key:'resources',    label:'Resources', width:108, align:'left'  }
   ],
 
   COL_STORE_KEY: 'mk_gantt_col_widths_v1',
@@ -1383,6 +1490,9 @@ const GanttView = {
 
     const collapsed = container._collapsed || new Set();
     const selected  = container._selected  || new Set();
+    const baselineIdx = (opts.baselineIdx !== undefined)
+                        ? opts.baselineIdx
+                        : (container._baselineIdx || null);
 
     const childrenOf = {};
     nodes.forEach(n => {
@@ -1417,6 +1527,7 @@ const GanttView = {
       chartWidth, zoom, zoomCfg,
       mode: opts.mode || 'rab', cal,
       collapsed, childrenOf, selected,
+      baselineIdx,                    // ← NEW
       visibleNodes: [],
       totalHeight: 0,
       posMap: {},
@@ -1427,6 +1538,7 @@ const GanttView = {
     container._lastZoom = zoom;
     container._collapsed = collapsed;
     container._selected  = selected;
+    container._baselineIdx = baselineIdx;   // ← NEW
 
     this.applyColWidths(state);
     this.computeVisible(state);
@@ -1483,9 +1595,38 @@ const GanttView = {
 
   /* ─────── LAYOUT (Fase 1.2 — grid 2×2) ─────── */
   renderLayout(state){
-    const {container, proj, zoom, chartWidth, totalHeight, visibleNodes, selected} = state;
+    const {container, proj, zoom, chartWidth, totalHeight, visibleNodes, selected, baselineIdx} = state;
     const tableW = this.tableWidth();
-    const allSelected = selected.size > 0 && selected.size === visibleNodes.length;
+
+    const blIsSet = baselineIdx && Baseline.isSet(proj.id, baselineIdx);
+
+    // ── Toolbar baseline options ──
+    const blOpts = Baseline.INDICES.map(i => {
+      const isSet = Baseline.isSet(proj.id, i);
+      const sel = (baselineIdx === i) ? ' selected' : '';
+      return '<option value="' + i + '"' + sel + '>BL' + i + (isSet ? ' ✓' : '') + '</option>';
+    }).join('');
+
+    // ── KPI bar (hanya muncul bila baseline aktif) ──
+    let kpiBar = '';
+    if (blIsSet){
+      const k = Baseline.kpi(proj.id, baselineIdx);
+      const ts = Baseline.getTimestamp(proj.id, baselineIdx);
+      const tsFmt = ts ? new Date(ts).toLocaleString('id-ID', {dateStyle:'medium', timeStyle:'short'}) : '—';
+      kpiBar =
+        '<div class="gantt-kpi-bar">' +
+          '<div class="kpi-item"><div class="lbl">Baseline</div><div class="val ok">BL' + baselineIdx + '</div></div>' +
+          '<div class="kpi-divider"></div>' +
+          '<div class="kpi-item"><div class="lbl">Total Task</div><div class="val">' + k.total + '</div></div>' +
+          '<div class="kpi-item"><div class="lbl">On-Time</div><div class="val ok">' + k.onTime + '</div></div>' +
+          '<div class="kpi-item"><div class="lbl">Late</div><div class="val late">' + k.late + ' (' + k.pctLate.toFixed(1) + '%)</div></div>' +
+          '<div class="kpi-item"><div class="lbl">Early</div><div class="val early">' + k.early + '</div></div>' +
+          '<div class="kpi-divider"></div>' +
+          '<div class="kpi-item"><div class="lbl">Avg Slip</div><div class="val ' + (k.avgSlip > 0 ? 'late' : 'ok') + '">' + k.avgSlip.toFixed(1) + 'd</div></div>' +
+          '<div class="kpi-item"><div class="lbl">Max Slip</div><div class="val ' + (k.maxSlip > 0 ? 'late' : 'ok') + '">' + k.maxSlip + 'd</div></div>' +
+          '<div class="kpi-timestamp">📌 Diset: ' + esc(tsFmt) + '</div>' +
+        '</div>';
+    }
 
     container.innerHTML =
       '<div class="gantt-root" style="--gantt-table-w:' + tableW + 'px">' +
@@ -1499,6 +1640,12 @@ const GanttView = {
             '<button class="gantt-btn-tool gantt-btn-collapse-all" title="Collapse All">⊟</button>' +
             '<button class="gantt-btn-export gantt-btn-export-png" title="Export PNG">⬇ PNG</button>' +
             '<button class="gantt-btn-export gantt-btn-export-pdf" title="Export PDF" style="background:linear-gradient(135deg,#dc2626,#b91c1c)">📄 PDF</button>' +
+            '<span class="gantt-lbl" style="margin-left:8px">Baseline</span>' +
+            '<select class="gantt-baseline-sel">' +
+              '<option value="">— Tidak ada —</option>' + blOpts +
+            '</select>' +
+            '<button class="gantt-btn-tool gantt-btn-bl-set" title="Set Baseline">📌 Set</button>' +
+            '<button class="gantt-btn-tool gantt-btn-bl-clear" title="Clear Baseline">🗑 Clear</button>' +
             '<span class="gantt-lbl" style="margin-left:8px">Zoom</span>' +
             '<select class="gantt-zoom">' +
               '<option value="daily"   ' + (zoom==='daily'   ?'selected':'') + '>Harian</option>' +
@@ -1508,9 +1655,9 @@ const GanttView = {
             '<button class="btn btn-sm gantt-btn-today">📍 Hari Ini</button>' +
           '</div>' +
         '</div>' +
+        kpiBar +
 
         '<div class="gantt-body">' +
-          /* R1 C1 — Header + resize handle */
           '<div class="gantt-thead">' +
             this.COLUMNS.map((c, idx) => {
               const cls = c.align === 'right' ? ' right' : c.align === 'center' ? ' center' : '';
@@ -1521,7 +1668,6 @@ const GanttView = {
             }).join('') +
           '</div>' +
 
-          /* R1 C2 — Axis */
           '<div class="gantt-axis-wrap">' +
             '<div class="gantt-axis-track" style="width:' + chartWidth + 'px;height:' + this.AXIS_H + 'px">' +
               '<canvas class="gantt-axis" width="' + chartWidth + '" height="' + this.AXIS_H + '" ' +
@@ -1529,19 +1675,16 @@ const GanttView = {
             '</div>' +
           '</div>' +
 
-          /* R2 C1 — Tabel body */
           '<div class="gantt-tbody">' +
             visibleNodes.map((n,i) => this.rowHtml(n,i)).join('') +
           '</div>' +
 
-          /* R2 C2 — Bars */
           '<div class="gantt-bars-wrap">' +
             '<canvas class="gantt-bars" width="' + chartWidth + '" height="' + totalHeight + '" ' +
                     'style="width:' + chartWidth + 'px;height:' + totalHeight + 'px;display:block"></canvas>' +
           '</div>' +
         '</div>' +
 
-        /* Selection toolbar */
         '<div class="gantt-sel-bar">' +
           '<span class="count"><span class="sel-count">0</span> dipilih</span>' +
           '<button class="sel-btn sel-btn-clear">Batal Pilih</button>' +
@@ -1715,9 +1858,35 @@ const GanttView = {
           else inner = '<span class="gt-num">' + (node.duration || 0) + '</span><span class="gt-dim">d</span>';
           break;
         case 'startISO':
+        case 'startISO':
         case 'finishISO':
           inner = '<span class="gt-date">' + esc(node[c.key] || '—') + '</span>';
           break;
+        case 'variance': {
+          const st = this._state;
+          if (!st.baselineIdx || !Baseline.isSet(st.proj.id, st.baselineIdx)){
+            inner = '<span class="gt-var gt-var-na">—</span>';
+          } else if (node.isSummary){
+            inner = '<span class="gt-dim">—</span>';
+          } else {
+            const fF = Baseline.fieldFor(st.baselineIdx, 'finish');
+            const bFinish = node.raw[fF] || '';
+            if (!bFinish || !node.finishISO){
+              inner = '<span class="gt-var gt-var-na">new</span>';
+            } else {
+              const cal = WorkingCalendar.get(node.raw.calendar_id);
+              const slip = WorkingCalendar.diffDays(bFinish, node.finishISO, cal, 'working');
+              if (slip > 0){
+                inner = '<span class="gt-var gt-var-late">+' + slip + 'd</span>';
+              } else if (slip < 0){
+                inner = '<span class="gt-var gt-var-early">' + slip + 'd</span>';
+              } else {
+                inner = '<span class="gt-var gt-var-ok">on time</span>';
+              }
+            }
+          }
+          break;
+        }
         case 'predecessors':
           inner = node.predecessors
             ? '<span class="gt-pred">' + esc(node.predecessors) + '</span>'
@@ -1944,6 +2113,28 @@ const GanttView = {
       }
     });
 
+         // E.2. Baseline shadow bars (garis abu tipis di bawah bar utama)
+    if (state.baselineIdx && Baseline.isSet(state.proj.id, state.baselineIdx)){
+      const fS = Baseline.fieldFor(state.baselineIdx, 'start');
+      const fF = Baseline.fieldFor(state.baselineIdx, 'finish');
+      visibleNodes.forEach((n, i) => {
+        if (n.isSummary || n.isMilestone) return;
+        const bStart  = n.raw[fS];
+        const bFinish = n.raw[fF];
+        if (!bStart || !bFinish) return;
+        const sOff = Math.round((new Date(bStart)  - startDate) / 86400000);
+        const fOff = Math.round((new Date(bFinish) - startDate) / 86400000);
+        const bx = sOff * px;
+        const bw = Math.max(2, (fOff - sOff) * px);
+        const by = i * rowH + rowH - 4;
+        ctx.fillStyle = '#7a8394';
+        ctx.fillRect(bx, by, bw, 2);
+      });
+    }
+
+    // F. Dependency arrows
+    this.drawDependencies(ctx, state, posMap, rowH);
+
     // F. Dependency arrows
     this.drawDependencies(ctx, state, posMap, rowH);
 
@@ -2086,6 +2277,9 @@ const GanttView = {
     const btnCollapse= container.querySelector('.gantt-btn-collapse-all');
     const btnPNG     = container.querySelector('.gantt-btn-export-png');
     const btnPDF     = container.querySelector('.gantt-btn-export-pdf');
+    const blSel      = container.querySelector('.gantt-baseline-sel');
+    const blSetBtn   = container.querySelector('.gantt-btn-bl-set');
+    const blClrBtn   = container.querySelector('.gantt-btn-bl-clear');
     const selBar     = container.querySelector('.gantt-sel-bar');
 
     if (!leftBody || !rightScr || !axisTrack) return;
@@ -2121,8 +2315,45 @@ const GanttView = {
     };
 
     // Export
+    // Export
     if (btnPNG) btnPNG.onclick = () => this.exportPNG(state, false);
     if (btnPDF) btnPDF.onclick = () => this.exportPNG(state, true);
+
+    // ── Baseline controls ──
+    if (blSel) blSel.onchange = e => {
+      const v = e.target.value;
+      state.baselineIdx = v ? parseInt(v, 10) : null;
+      container._baselineIdx = state.baselineIdx;
+      this.mount(state.container, state.proj.id, { mode: state.mode, zoom: state.zoom });
+    };
+    if (blSetBtn) blSetBtn.onclick = () => {
+      const idx = state.baselineIdx || 1;
+      const existing = Baseline.isSet(state.proj.id, idx);
+      const msg = existing
+        ? 'BL' + idx + ' sudah ada. Timpa dengan jadwal saat ini?'
+        : 'Set Baseline BL' + idx + ' dari jadwal saat ini?';
+      if (!confirm(msg)) return;
+      const r = Baseline.set(state.proj.id, idx);
+      if (r.ok){
+        state.baselineIdx = idx;
+        container._baselineIdx = idx;
+        this.mount(state.container, state.proj.id, { mode: state.mode, zoom: state.zoom });
+        toast('✅ Baseline BL' + idx + ' disimpan (' + r.count + ' item)');
+      } else {
+        toast('Gagal: ' + r.msg, false);
+      }
+    };
+    if (blClrBtn) blClrBtn.onclick = () => {
+      const idx = state.baselineIdx;
+      if (!idx){ toast('Pilih baseline dulu di dropdown', false); return; }
+      if (!Baseline.isSet(state.proj.id, idx)){ toast('BL' + idx + ' belum di-set', false); return; }
+      if (!confirm('Hapus Baseline BL' + idx + '?')) return;
+      Baseline.clear(state.proj.id, idx);
+      state.baselineIdx = null;
+      container._baselineIdx = null;
+      this.mount(state.container, state.proj.id, { mode: state.mode, zoom: state.zoom });
+      toast('🗑 Baseline BL' + idx + ' dihapus');
+    };
 
     // ── Expand/Collapse individual ──
     leftBody.addEventListener('click', e => {
