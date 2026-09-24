@@ -2155,7 +2155,8 @@ const GanttView = {
     });
 
     rightScr.addEventListener('mouseleave', hideTip);
-  },
+  }
+};
 
 /* =====================================================================
    BAGIAN 9D — RESOURCE HISTOGRAM
