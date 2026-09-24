@@ -65,6 +65,7 @@
        BUILD TASK LIST (dengan filter)
        ═══════════════════════════════════════════════════════════ */
     function buildTaskList(proj){
+      if (!proj || !proj.id) return { tasks: [], allGroups: [] };
       var pid = proj.id;
       var allGroups = DB.project_wbs.filter(function(w){
         return w.project_id === pid && w.is_group;
@@ -144,16 +145,15 @@
           _esc(proj.kode) + ' — ' + _esc(proj.nama) + '</b>' +
         '</div>' +
 
-        '<div class="pw-filter-bar">' +
           '<div class="pw-f-item">' +
             '<label>Minggu Dari</label>' +
-            '<input type="number" id="pwMFrom" min="1" max="' + maxM + '" value="' + _state.mFrom + '" />' +
+            '<input type="number" id="pwMFrom" min="1" max="52" value="' + _state.mFrom + '" />' +
           '</div>' +
           '<div class="pw-f-item">' +
             '<label>Minggu Ke</label>' +
-            '<input type="number" id="pwMTo" min="1" max="' + maxM + '" value="' + _state.mTo + '" />' +
+            '<input type="number" id="pwMTo" min="1" max="52" value="' + _state.mTo + '" />' +
           '</div>' +
-          '<div class="pw-f-item">' +
+         
             '<label>Filter Grup</label>' +
             '<select id="pwGrup">' +
               '<option value="">— Semua Grup —</option>' +
@@ -162,7 +162,7 @@
               }).join('') +
             '</select>' +
           '</div>' +
-          '<div class="pw-f-item">' +
+         
             '<label>Kriteria</label>' +
             '<select id="pwCrit">' +
               '<option value="all">Semua Task</option>' +
@@ -513,7 +513,10 @@
       el = document.getElementById('pwMTo');
       if (el) el.onchange = function(){
         var v = parseInt(el.value, 10) || 1;
-        _state.mTo = Math.max(_state.mFrom, Math.min(v, maxMinggu(proj)));
+        /* Sync ke _state dengan validasi longgar */
+        if (v < _state.mFrom) v = _state.mFrom;
+        if (v > 52) v = 52;
+        _state.mTo = v;
         el.value = _state.mTo;
         renderTaskTable(proj);
       };
