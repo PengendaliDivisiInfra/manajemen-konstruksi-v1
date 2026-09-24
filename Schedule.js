@@ -3129,52 +3129,7 @@ const GanttView = {
       ctx.fillText(Math.round(pct) + '%', x + w/2, y + h/2);
     }
   },
-   
-    const bg = this.lighten(fill, 0.55);
 
-    /* Background bar (light) */
-    ctx.fillStyle = bg;
-    this.rrect(ctx, x, y, w, h, 3);
-    ctx.fill();
-
-    if (pct > 0){
-      const pw = Math.max(2, w * (pct/100));
-
-      /* Completed portion (dark) */
-      ctx.fillStyle = fill;
-      this.rrect(ctx, x, y, pw, h, 3);
-      ctx.fill();
-
-      /* Progress Line: garis vertikal hitam di batas completed */
-      if (pct < 100 && pw > 3 && w > 8){
-        ctx.save();
-        ctx.fillStyle = '#0b1220';
-        ctx.fillRect(x + pw - 1, y + 1, 2.5, h - 2);
-        ctx.restore();
-      }
-    } else {
-      /* Belum mulai: seluruh bar light (tidak ada fill gelap) */
-      ctx.fillStyle = bg;
-      this.rrect(ctx, x, y, w, h, 3);
-      ctx.fill();
-    }
-
-    /* Border bar */
-    ctx.strokeStyle = stroke;
-    ctx.lineWidth = 1;
-    this.rrect(ctx, x + .5, y + .5, w - 1, h - 1, 3);
-    ctx.stroke();
-
-    /* Label % di tengah bar */
-    if (w > 60 && pct > 0){
-      ctx.fillStyle = '#fff';
-      ctx.font = 'bold 9px Segoe UI';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText(Math.round(pct) + '%', x + w/2, y + h/2);
-    }
-  },
-   
   summaryBar(ctx, x, y, w, h){
     // Fill terang + border terang → KONTRAS di background gelap
     ctx.fillStyle = '#475569';
