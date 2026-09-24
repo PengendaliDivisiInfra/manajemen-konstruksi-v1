@@ -3724,3 +3724,16 @@ canvas:not(.gantt-axis):not(.gantt-bars){
 .gantt-root.has-cost-cols .gantt-row:hover .gantt-td[data-cost="true"]{
   background: rgba(34, 197, 94, 0.06);
 }
+
+/* Fase 3A-3.1 — Header cost column: cegah text terpotong */
+.gantt-root.has-cost-cols .gantt-th[data-cost="true"]{
+  padding: 0 8px;
+  font-size: 10px;
+  letter-spacing: .3px;
+  white-space: nowrap;
+  overflow: visible;
+}
+.gantt-root.has-cost-cols .gantt-td[data-cost="true"]{
+  font-size: 11px;
+  padding: 0 8px;
+}
