@@ -429,7 +429,7 @@
         ctx.stroke();
 
         /* Label % di tengah */
-        if (barW >= 60){
+        if (barW > 60){
           ctx.fillStyle = '#fff';
           ctx.font = 'bold 11px Segoe UI';
           ctx.textAlign = 'center';
@@ -523,15 +523,15 @@
       init();
     }
 
-    /* Hook ke switchTab Executive — CHAIN (jangan overwrite hook modul lain) */
-    if (typeof switchTab === 'function'){
-      var _prevSwitchTabPT = window.switchTab;
+    /* Hook ke switchTab Executive */
+    if (typeof window._origSwitchTab === 'undefined' && typeof switchTab === 'function'){
+      window._origSwitchTab = switchTab;
       window.switchTab = function(name){
-        if (typeof _prevSwitchTabPT === 'function') _prevSwitchTabPT.apply(this, arguments);
+        window._origSwitchTab(name);
         if (name === 'executive') setTimeout(wireExecButton, 100);
       };
     }
-    
+
     console.log('%c[PortfolioTimeline.js] ✅ Portfolio Timeline installed',
       'color:#a855f7;font-weight:bold;font-size:13px');
   }
