@@ -111,10 +111,12 @@ const SCHEDULE_WRITABLE_FIELDS = Object.freeze([
   'tgl_mulai_rencana','tgl_selesai_rencana',
   'tgl_mulai_aktual','tgl_selesai_aktual',
   'float_total',
-  // ── NEW: Baseline fields (Fase 4A) ──
+  // ── Baseline fields (Fase 4A) ──
   'bl1_start','bl1_finish','bl1_set_at',
   'bl2_start','bl2_finish','bl2_set_at',
-  'bl3_start','bl3_finish','bl3_set_at'
+  'bl3_start','bl3_finish','bl3_set_at',
+  // ── NEW (Fase 1A) — Auto vs Manual Scheduling ──
+  'schedule_mode','manual_start','manual_finish'
 ]);
 
 function writeScheduleField(wbsItem, field, value){
