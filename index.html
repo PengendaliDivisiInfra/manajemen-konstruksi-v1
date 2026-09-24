@@ -956,6 +956,101 @@ const Calc = {
       actual.push(+(aCum*100).toFixed(3));
     }
     return {labels, planned, actual};
+  },
+
+  /* ── FASE 6B: EVM (Earned Value Management) ── */
+  evm(projectId){
+    const proj = DB.projects.find(p => p.id === projectId);
+    if (!proj) return { ok:false };
+    const durasi = Math.max(1, Math.round(num(proj.durasi_minggu) || 1));
+    const tasks = this.wbsRows(projectId).filter(r => !r.isGroup);
+    const BAC = tasks.reduce((s,r) => s + r.total_rab, 0);
+    const totalRAP = tasks.reduce((s,r) => s + r.total_rap, 0);
+
+    // Baseline aktif
+    let baselineIdx = 0;
+    if (typeof Baseline !== 'undefined'){
+      if (Baseline.isSet(projectId, 3)) baselineIdx = 3;
+      else if (Baseline.isSet(projectId, 2)) baselineIdx = 2;
+      else if (Baseline.isSet(projectId, 1)) baselineIdx = 1;
+    }
+
+    // Pre-index progress
+    const progByTask = {};
+    DB.progress.filter(p => p.project_id === projectId).forEach(p => {
+      if (!progByTask[p.wbs_id]) progByTask[p.wbs_id] = [];
+      progByTask[p.wbs_id].push({m: num(p.minggu), v: num(p.volume)});
+    });
+
+    // Siapkan baseline % untuk setiap minggu (untuk kurva baseline)
+    // Gunakan interpolation linear dari baseline start/finish
+    const baselineCurve = [];
+    if (baselineIdx){
+      const cal = WorkingCalendar.get(proj.calendar_id);
+      for (let w = 1; w <= durasi; w++){
+        let blPct = 0;
+        tasks.forEach(r => {
+          const fS = Baseline.fieldFor(baselineIdx, 'start');
+          const fF = Baseline.fieldFor(baselineIdx, 'finish');
+          const bS = r[fS], bF = r[fF];
+          if (!bS || !bF){ blPct += r.total_rab * (w/durasi); return; }
+          const totalDays = Math.max(1, WorkingCalendar.diffDays(bS, bF, cal, 'working'));
+          const daysFromStart = Math.round((w - 1) * 7 * totalDays / Math.max(1, durasi * 7));
+          blPct += r.total_rab * Math.min(1, daysFromStart / totalDays);
+        });
+        baselineCurve.push(blPct);
+      }
+    }
+
+    const weeks = [];
+    for (let w = 1; w <= durasi; w++){
+      let PV = 0, EV = 0, AC = 0, BL = baselineIdx ? baselineCurve[w-1] : 0;
+
+      tasks.forEach(r => {
+        const progList = progByTask[r.id] || [];
+        const volProg = progList.filter(x => x.m <= w).reduce((s,x) => s + x.v, 0);
+        const targetRAB = num(r.volume_rab) || 1;
+        const targetRAP = num(r.volume_rap) || 1;
+        const actualPct = Math.min(1, volProg / targetRAB);
+        const planPct = Math.min(1, w / durasi);
+
+        PV += r.total_rab * planPct;
+        EV += r.total_rab * actualPct;
+        AC += r.total_rap * actualPct;
+      });
+
+      const SV = EV - PV;
+      const CV = EV - AC;
+      const SPI = PV > 0 ? EV / PV : 1;
+      const CPI = AC > 0 ? EV / AC : 1;
+
+      weeks.push({ week: w, PV, EV, AC, SV, CV, SPI, CPI, BL });
+    }
+
+    const last = weeks[weeks.length - 1] || { PV:0, EV:0, AC:0, SPI:1, CPI:1, SV:0, CV:0 };
+    const EAC = last.CPI > 0 ? BAC / last.CPI : BAC;
+    const ETC = Math.max(0, EAC - last.AC);
+    const VAC = BAC - EAC;
+
+    // Forecast finish date (jika SPI < 1 → proyek telat)
+    let forecastFinish = proj.tgl_selesai || '';
+    if (last.SPI > 0 && proj.tgl_mulai){
+      const cal = WorkingCalendar.get(proj.calendar_id);
+      const totalWorkDays = num(proj.durasi_kerja) || 0;
+      const newWorkDays = Math.round(totalWorkDays / last.SPI);
+      const fd = WorkingCalendar.addWorkDays(new Date(proj.tgl_mulai + 'T00:00:00'), newWorkDays, cal);
+      forecastFinish = WorkingCalendar.fmt(fd);
+    }
+
+    return {
+      ok: true,
+      BAC, totalRAP, durasi, weeks, baselineIdx,
+      SPI: last.SPI, CPI: last.CPI, SV: last.SV, CV: last.CV,
+      PV: last.PV, EV: last.EV, AC: last.AC,
+      EAC, ETC, VAC,
+      forecastFinish,
+      plannedFinish: proj.tgl_selesai || ''
+    };
   }
 };
 
