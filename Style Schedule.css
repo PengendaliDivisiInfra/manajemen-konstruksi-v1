@@ -3045,3 +3045,13 @@ canvas:not(.gantt-axis):not(.gantt-bars){
 .rs-table.rs-table-h tbody td.rs-td-id{
   min-width:90px;
 }
+
+/* =====================================================================
+   FASE 2E — WORK CONTOUR HINT
+   ===================================================================== */
+#fw_contour{
+  min-width:180px;
+}
+#schedDistribution{
+  font-size:11.5px;
+}
