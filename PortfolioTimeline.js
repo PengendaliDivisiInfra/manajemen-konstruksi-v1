@@ -103,11 +103,20 @@
             document.querySelectorAll('.pt-zoom-btn').forEach(function(b){
               b.classList.toggle('is-active', b === btn);
             });
-            renderTimeline();
+            if (window.Loading && Loading.wrapSync){
+              Loading.wrapSync(function(){ renderTimeline(); }, 'Memuat timeline…', 100);
+            } else {
+              renderTimeline();
+            }
           };
         });
 
-        renderTimeline();
+        /* Initial render dengan loading */
+        if (window.Loading && Loading.wrapSync){
+          Loading.wrapSync(function(){ renderTimeline(); }, 'Memuat portfolio…', 100);
+        } else {
+          renderTimeline();
+        }
       }, 10);
     }
 
