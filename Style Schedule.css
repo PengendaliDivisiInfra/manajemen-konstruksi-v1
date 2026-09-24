@@ -2765,3 +2765,55 @@ canvas:not(.gantt-axis):not(.gantt-bars){
   line-height:1.2;
 }
 .conflict-card b{color:#fff}
+
+/* =====================================================================
+   FASE 2C — BAR STYLE & GRIDLINES CONTROL
+   ===================================================================== */
+.gantt-bar-style{
+  padding:5px 10px;
+  font-size:12px;
+  width:auto;
+  border-radius:6px;
+  background:#0c1729;
+  border:1px solid var(--line);
+  color:var(--txt);
+  cursor:pointer;
+}
+.gantt-bar-style:focus{
+  border-color:var(--acc);
+  outline:none;
+  box-shadow:0 0 0 3px rgba(47,129,247,.15);
+}
+
+.gantt-grid-toggles{
+  display:inline-flex;
+  gap:3px;
+  margin-left:4px;
+}
+.grid-chip{
+  padding:4px 8px;
+  font-size:11px;
+  line-height:1;
+  font-family:'Consolas','Courier New',monospace;
+  border-radius:5px;
+  background:#16233f;
+  border:1px solid var(--line);
+  color:var(--muted);
+  cursor:pointer;
+  transition:.12s;
+  user-select:none;
+}
+.grid-chip:hover{
+  color:var(--txt);
+  border-color:#33507f;
+  background:#1d2f52;
+}
+.grid-chip.is-on{
+  background:var(--acc);
+  color:#fff;
+  border-color:var(--acc);
+  box-shadow:0 2px 6px rgba(47,129,247,.35);
+}
+.grid-chip.is-on:hover{
+  filter:brightness(1.15);
+}
