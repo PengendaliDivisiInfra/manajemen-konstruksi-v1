@@ -1753,8 +1753,8 @@ const GanttView = {
     /* ── Fase 3A-3: Cost Table Columns ── */
     { key:'cost_total',   label:'Cost Total', width:110, align:'right', cost: true },
     { key:'cost_day',     label:'Cost/Day',   width: 95, align:'right', cost: true },
-    { key:'pct_budget',   label:'% Budget',   width: 72, align:'right', cost: true },
-    { key:'cum_pct',      label:'Cum %',      width: 68, align:'right', cost: true },
+    { key:'pct_budget',   label:'% Budget',   width: 86, align:'right', cost: true },
+    { key:'cum_pct',      label:'Cum %',      width: 78, align:'right', cost: true },
     /* ── Existing ── */
     { key:'predecessors', label:'Pred',      width: 62, align:'left'  },
     { key:'resources',    label:'Resources', width:108, align:'left'  }
