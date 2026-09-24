@@ -115,6 +115,29 @@
       <div class="panel-head"><div><h2>🚨 Pusat Peringatan Dini</h2><p>Deteksi otomatis item yang melebihi pagu kontrak</p></div></div>
       <div id="alertWrap"></div>
     </div>
+
+    <!-- ============ FASE 6B — EARNED VALUE MANAGEMENT ============ -->
+    <div class="panel" style="margin-top:18px">
+      <div class="panel-head">
+        <div>
+          <h2>💰 Earned Value Management (EVM)</h2>
+          <p>Analisis performa biaya & jadwal · SPI · CPI · EAC · Forecast</p>
+        </div>
+        <button class="btn btn-sm" id="btnEvmInfo">ℹ Penjelasan</button>
+      </div>
+      <div class="grid g4" id="evmKPI"></div>
+      <div class="grid g2" style="margin-top:14px">
+        <div>
+          <div class="panel-head" style="margin-bottom:8px"><h3>Trend SPI &amp; CPI</h3></div>
+          <canvas id="chartEvmTrend" style="max-height:260px"></canvas>
+        </div>
+        <div>
+          <div class="panel-head" style="margin-bottom:8px"><h3>Schedule &amp; Cost Variance</h3></div>
+          <canvas id="chartEvmVariance" style="max-height:260px"></canvas>
+        </div>
+      </div>
+      <div class="tw" style="margin-top:14px;max-height:40vh"><table id="tblEvm"></table></div>
+    </div>
   </section>
 
   <!-- ===================== RESOURCES ===================== -->
@@ -168,6 +191,7 @@
         <div class="row">
           <button class="btn btn-primary" id="btnAddWbs">+ Item WBS</button>
           <button class="btn" id="btnAddWbsGroup">+ Grup</button>
+          <button class="btn" id="btnImportBQ" style="background:linear-gradient(135deg,#a855f7,#7c3aed);border-color:transparent;color:#fff">📥 Import BQ (XLSX)</button>
           <button class="btn btn-ok" id="btnRunCPMWBS">⚡ Recalculate CPM</button>
         </div>
       </div>
