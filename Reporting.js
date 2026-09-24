@@ -45,10 +45,11 @@
     var _rpShort = function(n){
       var v = Number(n) || 0;
       var abs = Math.abs(v);
-      if (abs >= 1e12) return 'Rp ' + (v/1e12).toFixed(2).replace('.', ',') + ' T';
-      if (abs >= 1e9)  return 'Rp ' + (v/1e9).toFixed(2).replace('.', ',')  + ' M';
-      if (abs >= 1e6)  return 'Rp ' + (v/1e6).toFixed(2).replace('.', ',')  + ' jt';
-      if (abs >= 1e3)  return 'Rp ' + (v/1e3).toFixed(1).replace('.', ',')  + ' rb';
+      var sign = v < 0 ? '-' : '';
+      if (abs >= 1e12) return 'Rp ' + sign + (abs/1e12).toFixed(2).replace('.', ',') + ' T';
+      if (abs >= 1e9)  return 'Rp ' + sign + (abs/1e9).toFixed(2).replace('.', ',')  + ' M';
+      if (abs >= 1e6)  return 'Rp ' + sign + (abs/1e6).toFixed(2).replace('.', ',')  + ' jt';
+      if (abs >= 1e3)  return 'Rp ' + sign + (abs/1e3).toFixed(1).replace('.', ',')  + ' rb';
       return 'Rp ' + Math.round(v).toLocaleString('id-ID');
     };
     var _fmt = function(n, d){
@@ -720,8 +721,7 @@
         'transform: rotate(-30deg);' +
         'transform-origin: center;' +
       '}' +
-      '.rpt-watermark > * { transform: translate(-50%, -50%); }' +
-
+      
       '.rpt-header {' +
         'display: flex;' +
         'justify-content: space-between;' +
