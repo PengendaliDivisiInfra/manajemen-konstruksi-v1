@@ -169,6 +169,14 @@
 
       openModal('📄 Generate Report', body, function(){ return false; });
 
+      /* Fase E-1: di mobile, force modal jadi full-width (via class) */
+      setTimeout(function(){
+        var modal = document.querySelector('#overlay .modal');
+        if (modal && window.innerWidth < 768){
+          modal.classList.add('modal-wide');
+        }
+      }, 20);
+
       /* Hide default submit, ganti dengan tombol Generate */
       setTimeout(function(){
         var submitBtn = document.getElementById('mSubmit');
