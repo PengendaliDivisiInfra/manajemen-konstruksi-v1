@@ -692,7 +692,7 @@ tfoot td{
 }
 
 /* Chart container */
-canvas{
+canvas:not(.gantt-axis):not(.gantt-bars){
   max-height:320px;
   width:100% !important;
 }
@@ -1205,7 +1205,7 @@ canvas{
 }
 .gantt-th:last-child{border-right:none}
 
-/* ── R1 C2: Axis — FORCE 60px ── */
+/* ── R1 C2: Axis kanan (skala waktu) ── */
 .gantt-axis-wrap{
   grid-column:2;
   grid-row:1;
@@ -1222,11 +1222,10 @@ canvas{
   top:0;
   left:0;
   height:var(--gantt-head-h);
-  width:max-content;
   will-change:transform;
 }
 
-/* ── R2 C1: Tabel body ── */
+/* ── R2 C1: Tabel body (scroll Y) ── */
 .gantt-tbody{
   grid-column:1;
   grid-row:2;
@@ -1236,8 +1235,9 @@ canvas{
   border-right:1px solid var(--line);
   box-sizing:border-box;
   align-content:flex-start;
+  scrollbar-width:none;
 }
-.gantt-tbody::-webkit-scrollbar{width:0}
+.gantt-tbody::-webkit-scrollbar{width:0;height:0}
 
 .gantt-row{
   display:flex;
@@ -1246,38 +1246,12 @@ canvas{
   max-height:var(--gantt-row-h);
   box-sizing:border-box;
   line-height:var(--gantt-row-h);
-  border-bottom:1px solid rgba(36,54,92,.4);
+  border-bottom:1px solid rgba(36,54,92,.6);
   transition:background .1s;
   cursor:default;
 }
-.gantt-row:hover{background:rgba(47,129,247,.08)}
-.gantt-row.is-summary{background:rgba(47,129,247,.06);font-weight:700}
-.gantt-row.is-critical{background:rgba(220,38,38,.05)}
-.gantt-row.is-critical:hover{background:rgba(220,38,38,.11)}
-.gantt-row.is-critical .gantt-td:first-child{
-  border-left:3px solid #dc2626;
-  padding-left:5px;
-}
 
-.gantt-td{
-  padding:0 8px;
-  white-space:nowrap;
-  overflow:hidden;
-  text-overflow:ellipsis;
-  border-right:1px solid rgba(36,54,92,.4);
-  font-variant-numeric:tabular-nums;
-  font-size:11.5px;
-  color:var(--txt);
-  box-sizing:border-box;
-  flex-shrink:0;
-}
-.gantt-td:last-child{border-right:none}
-
-.gantt-indent{display:inline-block;height:1px}
-.gantt-expand{display:inline-block;width:12px;color:var(--muted);font-size:9px;cursor:pointer}
-.gantt-diamond-inline{color:#e6edf7;font-size:9px;margin-right:4px;vertical-align:middle}
-
-/* ── R2 C2: Bars area ── */
+/* ── R2 C2: Bars area (scroll X & Y) ── */
 .gantt-bars-wrap{
   grid-column:2;
   grid-row:2;
@@ -1287,11 +1261,14 @@ canvas{
   box-sizing:border-box;
 }
 
+/* Canvas block-level, no stretch, no inline-gap */
 .gantt-axis,
 .gantt-bars{
   display:block;
   vertical-align:top;
+  width:auto !important;
   max-height:none !important;
+  max-width:none !important;
 }
 
 #ganttContainer canvas{max-height:none !important}
