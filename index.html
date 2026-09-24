@@ -2029,7 +2029,7 @@ function formWbs(id, forceGroup){
         </div>
       </div>
 
-      <div class="wbs-form-2col">
+      <div class="wbs-form-2col${!w?.constraint_type ? ' is-date-hidden' : ''}" id="fw_ct_row">
         <div class="field"><label class="f">Constraint</label>
           <select id="fw_ct">
             <option value="">— Tidak ada —</option>
@@ -2038,7 +2038,7 @@ function formWbs(id, forceGroup){
             ).join('')}
           </select>
         </div>
-        <div class="field">
+        <div class="field" id="fw_cd_field">
           <label class="f">Constraint Date</label>
           ${_dateWidgetHTML('fw_cd', w?.constraint_date || '', { placeholder: 'Pilih tanggal' })}
         </div>
@@ -2167,6 +2167,26 @@ function formWbs(id, forceGroup){
     };
     $('#fw_sched_mode').onchange = syncMode;
     syncMode();
+
+    // ── Opsi B: Auto-hide Constraint Date saat kosong ──
+    const syncConstraint = () => {
+      const ct = $('#fw_ct').value;
+      const row = $('#fw_ct_row');
+      if (!row) return;
+      if (ct){
+        row.classList.remove('is-date-hidden');
+      } else {
+        row.classList.add('is-date-hidden');
+        // Reset date kalau constraint dihapus
+        const native = $('#fw_cd');
+        if (native){
+          native.value = '';
+          _syncDateWidgetFace(native);
+        }
+      }
+    };
+    $('#fw_ct').onchange = syncConstraint;
+    syncConstraint();
 
     $('#fw_group').onchange = e => {
       $('#itemBox').style.display = num(e.target.value) === 1 ? 'none' : 'block';
