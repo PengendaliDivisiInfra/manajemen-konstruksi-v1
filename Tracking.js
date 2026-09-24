@@ -171,7 +171,10 @@
       _origDrawBars.call(this, ctx, state, canvas);
       try {
         var st = loadState();
-        if (st.enabled) drawProgressLine(ctx, state, canvas, st.statusDate);
+        /* Guard: state harus fully initialized */
+        if (st.enabled && state && state.zoomCfg && state.startDate && state.posMap){
+          drawProgressLine(ctx, state, canvas, st.statusDate);
+        }
       } catch (e){
         console.warn('[Tracking] drawProgressLine error:', e.message);
       }
