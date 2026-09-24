@@ -4029,3 +4029,20 @@ canvas:not(.gantt-axis):not(.gantt-bars){
 .gt-track-badge.complete    { background: rgba(34,197,94,.22); color: #4ade80; }
 .gt-track-badge.in-progress { background: rgba(245,158,11,.22); color: #fbbf24; }
 .gt-track-badge.not-started { background: rgba(143,163,196,.15); color: #8fa3c4; }
+
+/* Fase 3B-3.1 — Tracking columns polish */
+.gt-track-badge{
+  white-space: nowrap;
+  padding: 2px 9px;
+  min-width: 78px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+.gantt-td[data-col-key="status"]{
+  padding: 0 6px;
+}
+.gantt-td[data-col-key="slip"]{
+  padding: 0 6px;
+}
