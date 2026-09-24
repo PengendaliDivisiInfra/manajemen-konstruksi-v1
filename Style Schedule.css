@@ -3342,3 +3342,77 @@ canvas:not(.gantt-axis):not(.gantt-bars){
     max-width:100vw;
   }
 }
+
+/* =====================================================================
+   FASE 2G — DATE WIDGET (dd Mmm yyyy)
+   ===================================================================== */
+.dw-wrap{
+  position: relative;
+  display: block;
+  width: 100%;
+}
+.dw-native{
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+  z-index: 2;
+  border: none;
+  padding: 0;
+  background: transparent;
+  font: inherit;
+}
+.dw-native:disabled{
+  cursor: not-allowed;
+  z-index: 0;
+}
+.dw-face{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 9px 11px;
+  background: #0c1729;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--txt);
+  font-size: 13px;
+  font-family: inherit;
+  transition: var(--transition);
+  pointer-events: none;
+  min-height: 38px;
+  box-sizing: border-box;
+}
+.dw-wrap:hover .dw-face{
+  border-color: var(--acc);
+  box-shadow: 0 0 0 3px rgba(47,129,247,.15);
+}
+.dw-wrap.is-readonly .dw-face{
+  background: #0a1424;
+  color: var(--muted);
+}
+.dw-wrap.is-readonly:hover .dw-face{
+  border-color: var(--line);
+  box-shadow: none;
+}
+.dw-face .dw-text{
+  font-variant-numeric: tabular-nums;
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.dw-face .dw-text.empty{
+  color: #475569;
+  font-style: italic;
+}
+.dw-face .dw-icon{
+  opacity: .5;
+  font-size: 12px;
+  margin-left: 8px;
+  flex-shrink: 0;
+}
+.dw-wrap.is-readonly .dw-face .dw-icon{
+  opacity: .15;
+}
