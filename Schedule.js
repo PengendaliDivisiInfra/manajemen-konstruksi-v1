@@ -1380,6 +1380,15 @@ const GanttView = {
     const nodes = tree.nodes;
     const proj  = tree.proj;
 
+    // Preserve collapsed state across remount (zoom change)
+    const collapsed = container._collapsed || new Set();
+
+    // Pre-compute: build parent → children map (untuk collapse)
+    const childrenOf = {};
+    nodes.forEach(n => {
+      if (n.parentId) (childrenOf[n.parentId] = childrenOf[n.parentId] || []).push(n.id);
+    });
+
     const allDates = [];
     nodes.forEach(n => {
       if (n.startISO)  allDates.push(n.startISO);
@@ -1402,25 +1411,57 @@ const GanttView = {
 
     const totalDays   = Math.round((endDate - startDate) / 86400000) + 1;
     const chartWidth  = Math.max(400, totalDays * zoomCfg.pxPerDay);
-    const totalHeight = nodes.length * this.ROW_H;
 
     const state = {
       container, nodes, proj, startDate, endDate, totalDays,
-      chartWidth, totalHeight, zoom, zoomCfg,
-      mode: opts.mode || 'rab', cal
+      chartWidth, zoom, zoomCfg,
+      mode: opts.mode || 'rab', cal,
+      collapsed, childrenOf,
+      visibleNodes: [],       // computed
+      totalHeight: 0          // computed
     };
+
     this._state = state;
     container._lastZoom = zoom;
+    container._collapsed = collapsed;
 
+    this.computeVisible(state);
     this.renderLayout(state);
     this.wireEvents(state);
     return state;
   },
 
+     /* Hitung node yang terlihat (skip descendants of collapsed) */
+  computeVisible(state){
+    const {nodes, collapsed} = state;
+
+    // Build set: hidden node ids
+    const hidden = new Set();
+    const markHidden = (id) => {
+      const kids = state.childrenOf[id] || [];
+      kids.forEach(kid => {
+        hidden.add(kid);
+        markHidden(kid);
+      });
+    };
+    collapsed.forEach(id => markHidden(id));
+
+    state.visibleNodes = nodes.filter(n => !hidden.has(n.id));
+    state.totalHeight  = state.visibleNodes.length * this.ROW_H;
+  },
+
+  /* Cari index node di visibleNodes */
+  indexOfVisible(state, id){
+    return state.visibleNodes.findIndex(n => n.id === id);
+  },
+
   /* ─────── LAYOUT (Fase 1.2 — grid 2×2) ─────── */
   renderLayout(state){
-    const {container, nodes, chartWidth, totalHeight, proj, zoom} = state;
+    const {container, nodes, proj, zoom, chartWidth, totalHeight, visibleNodes} = state;
     const tableW = this.COLUMNS.reduce((s,c) => s + c.width, 0);
+
+    // Summary count untuk badge toolbar
+    const summaryCount = nodes.filter(n => n.isSummary).length;
 
     container.innerHTML =
       '<div class="gantt-root" style="--gantt-table-w:' + tableW + 'px">' +
@@ -1430,7 +1471,9 @@ const GanttView = {
             '<div class="gantt-subtitle">' + esc(proj.nama) + ' · ' + esc(proj.tgl_mulai) + ' → ' + esc(proj.tgl_selesai) + '</div>' +
           '</div>' +
           '<div class="gantt-toolbar-right">' +
-            '<span class="gantt-lbl">Zoom</span>' +
+            '<button class="gantt-btn-tool gantt-btn-expand-all">⊞ Expand All</button>' +
+            '<button class="gantt-btn-tool gantt-btn-collapse-all">⊟ Collapse All</button>' +
+            '<span class="gantt-lbl" style="margin-left:8px">Zoom</span>' +
             '<select class="gantt-zoom">' +
               '<option value="daily"   ' + (zoom==='daily'   ?'selected':'') + '>Harian</option>' +
               '<option value="weekly"  ' + (zoom==='weekly'  ?'selected':'') + '>Mingguan</option>' +
@@ -1441,14 +1484,15 @@ const GanttView = {
         '</div>' +
 
         '<div class="gantt-body">' +
-          /* R1 C1 */
+          /* R1 C1 — Header */
           '<div class="gantt-thead">' +
-            this.COLUMNS.map(c =>
-              '<div class="gantt-th" style="width:' + c.width + 'px;text-align:' + c.align + '">' + esc(c.label) + '</div>'
-            ).join('') +
+            this.COLUMNS.map(c => {
+              const cls = c.align === 'right' ? ' right' : c.align === 'center' ? ' center' : '';
+              return '<div class="gantt-th' + cls + '" style="width:' + c.width + 'px">' + esc(c.label) + '</div>';
+            }).join('') +
           '</div>' +
 
-          /* R1 C2 — axis canvas pakai chartWidth eksplisit (tanpa stretch) */
+          /* R1 C2 — Axis */
           '<div class="gantt-axis-wrap">' +
             '<div class="gantt-axis-track" style="width:' + chartWidth + 'px;height:' + this.AXIS_H + 'px">' +
               '<canvas class="gantt-axis" width="' + chartWidth + '" height="' + this.AXIS_H + '" ' +
@@ -1456,12 +1500,12 @@ const GanttView = {
             '</div>' +
           '</div>' +
 
-          /* R2 C1 */
+          /* R2 C1 — Tabel body */
           '<div class="gantt-tbody">' +
-            nodes.map((n,i) => this.rowHtml(n,i)).join('') +
+            visibleNodes.map((n,i) => this.rowHtml(n,i)).join('') +
           '</div>' +
 
-          /* R2 C2 — bars canvas pakai chartWidth eksplisit (tanpa stretch) */
+          /* R2 C2 — Bars */
           '<div class="gantt-bars-wrap">' +
             '<canvas class="gantt-bars" width="' + chartWidth + '" height="' + totalHeight + '" ' +
                     'style="width:' + chartWidth + 'px;height:' + totalHeight + 'px;display:block"></canvas>' +
@@ -1473,8 +1517,124 @@ const GanttView = {
     this.drawBars(state, container.querySelector('.gantt-bars'));
   },
 
+     /* Gambar garis dependency antar task */
+  drawDependencies(ctx, state, posMap, rowH){
+    const {visibleNodes, nodes} = state;
+    const nodeById = {};
+    nodes.forEach(n => { nodeById[n.id] = n; });
+
+    const ARROW = 6;   // ukuran arrowhead
+    const GAP   = 6;   // gap dari bar
+
+    ctx.save();
+    visibleNodes.forEach(n => {
+      const raw = n.raw || {};
+      if (!raw.predecessor) return;
+
+      const pred = nodeById[raw.predecessor];
+      if (!pred) return;
+
+      const p = posMap[pred.id];
+      const s = posMap[n.id];
+      if (!p || !s) return;
+
+      const type = (raw.pred_type || 'FS').toUpperCase();
+      const isCrit = n.isCritical || pred.isCritical;
+
+      // Tentukan titik start & end berdasarkan jenis relasi
+      let x1, y1, x2, y2;
+      const pMidY = p.y + rowH / 2;
+      const sMidY = s.y + rowH / 2;
+
+      switch (type){
+        case 'SS':   // Start-to-Start
+          x1 = p.x1; y1 = pMidY;
+          x2 = s.x1 - GAP; y2 = sMidY;
+          break;
+        case 'FF':   // Finish-to-Finish
+          x1 = p.x2 + GAP; y1 = pMidY;
+          x2 = s.x2; y2 = sMidY;
+          break;
+        case 'SF':   // Start-to-Finish
+          x1 = p.x1; y1 = pMidY;
+          x2 = s.x2; y2 = sMidY;
+          break;
+        case 'FS':   // Finish-to-Start (paling umum)
+        default:
+          x1 = p.x2 + GAP; y1 = pMidY;
+          x2 = s.x1 - GAP; y2 = sMidY;
+          break;
+      }
+
+      // Gambar garis elbow
+      ctx.strokeStyle = isCrit ? '#dc2626' : '#94a3b8';
+      ctx.fillStyle   = isCrit ? '#dc2626' : '#94a3b8';
+      ctx.lineWidth = 1.5;
+
+      const sameRow = Math.abs(y1 - y2) < 2;
+
+      if (sameRow){
+        // Straight horizontal arrow
+        ctx.beginPath();
+        ctx.moveTo(x1, y1);
+        ctx.lineTo(x2 - ARROW, y2);
+        ctx.stroke();
+        this.arrowHead(ctx, x2 - ARROW, y2, 'right', ARROW);
+      } else if (x1 + 12 < x2 - ARROW){
+        // Standard elbow: exit right → vertical → enter left
+        ctx.beginPath();
+        ctx.moveTo(x1, y1);
+        ctx.lineTo(x1 + 8, y1);
+        ctx.lineTo(x1 + 8, y2);
+        ctx.lineTo(x2 - ARROW, y2);
+        ctx.stroke();
+        this.arrowHead(ctx, x2 - ARROW, y2, 'right', ARROW);
+      } else {
+        // Backward elbow: exit right → midY → left → vertical → enter
+        const midY = (y1 + y2) / 2;
+        ctx.beginPath();
+        ctx.moveTo(x1, y1);
+        ctx.lineTo(x1 + 8, y1);
+        ctx.lineTo(x1 + 8, midY);
+        ctx.lineTo(x2 - ARROW - 4, midY);
+        ctx.lineTo(x2 - ARROW - 4, y2);
+        ctx.lineTo(x2 - ARROW, y2);
+        ctx.stroke();
+        this.arrowHead(ctx, x2 - ARROW, y2, 'right', ARROW);
+      }
+    });
+    ctx.restore();
+  },
+
+  /* Arrowhead triangle pointing in given direction */
+  arrowHead(ctx, x, y, dir, size){
+    ctx.beginPath();
+    if (dir === 'right'){
+      ctx.moveTo(x + size, y);
+      ctx.lineTo(x, y - size * 0.55);
+      ctx.lineTo(x, y + size * 0.55);
+    } else if (dir === 'left'){
+      ctx.moveTo(x - size, y);
+      ctx.lineTo(x, y - size * 0.55);
+      ctx.lineTo(x, y + size * 0.55);
+    } else if (dir === 'down'){
+      ctx.moveTo(x, y + size);
+      ctx.lineTo(x - size * 0.55, y);
+      ctx.lineTo(x + size * 0.55, y);
+    } else {
+      ctx.moveTo(x, y - size);
+      ctx.lineTo(x - size * 0.55, y);
+      ctx.lineTo(x + size * 0.55, y);
+    }
+    ctx.closePath();
+    ctx.fill();
+  },
+
   /* ─────── ROW HTML ─────── */
   rowHtml(node, idx){
+    const state = this._state;
+    const collapsed = state && state.collapsed ? state.collapsed : new Set();
+
     const cls = [
       'gantt-row',
       node.isSummary   ? 'is-summary'  : '',
@@ -1492,10 +1652,17 @@ const GanttView = {
         case 'nama': {
           const indent = node.level * 14;
           const tree   = indent > 0 ? '<span class="gt-tree" style="width:' + indent + 'px"></span>' : '';
-          const exp    = node.isSummary ? '<span class="gt-expand">▾</span>' : '<span class="gt-expand"></span>';
-          const dia    = node.isMilestone ? '<span class="gt-ms">◆</span>' : '';
-          const prog   = (!node.isSummary && node.progressPct > 0)
-                       ? '<span class="gt-prog">' + Math.round(node.progressPct) + '%</span>' : '';
+
+          let exp = '<span class="gt-expand is-leaf"></span>';
+          if (node.isSummary){
+            const isCollapsed = collapsed.has(node.id);
+            exp = '<span class="gt-expand" data-toggle-id="' + esc(node.id) + '">' +
+                  (isCollapsed ? '▸' : '▾') + '</span>';
+          }
+
+          const dia  = node.isMilestone ? '<span class="gt-ms">◆</span>' : '';
+          const prog = (!node.isSummary && node.progressPct > 0)
+                     ? '<span class="gt-prog">' + Math.round(node.progressPct) + '%</span>' : '';
           inner = tree + exp + dia + '<span class="gt-name">' + esc(node.nama) + '</span>' + prog;
           break;
         }
@@ -1531,7 +1698,7 @@ const GanttView = {
              inner + '</div>';
     }).join('');
 
-    return '<div class="' + cls + '" data-idx="' + idx + '">' + cells + '</div>';
+    return '<div class="' + cls + '" data-idx="' + idx + '" data-node-id="' + esc(node.id) + '">' + cells + '</div>';
   },
 
   /* ─────── AXIS ─────── */
@@ -1647,15 +1814,15 @@ const GanttView = {
   drawBars(state, canvas){
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
-    const {nodes, startDate, cal} = state;
+    const {visibleNodes, startDate, cal} = state;
     const px  = state.zoomCfg.pxPerDay;
     const H   = canvas.height, W = canvas.width;
     const rowH = this.ROW_H;
 
     ctx.clearRect(0, 0, W, H);
 
-    // ── A. Row striping ──
-    nodes.forEach((n, i) => {
+    // A. Row striping
+    visibleNodes.forEach((n, i) => {
       if (n.isSummary){
         ctx.fillStyle = 'rgba(47,129,247,.08)';
         ctx.fillRect(0, i*rowH, W, rowH);
@@ -1665,10 +1832,10 @@ const GanttView = {
       }
     });
 
-    // ── B. GARIS HORIZONTAL PER BARIS (sejajar dgn tabel kiri) ──
-    ctx.strokeStyle = 'rgba(60, 90, 130, 0.85)';  // ← lebih terang
+    // B. Garis horizontal per baris
+    ctx.strokeStyle = 'rgba(60, 90, 130, 0.85)';
     ctx.lineWidth = 1;
-    for (let i = 1; i <= nodes.length; i++){
+    for (let i = 1; i <= visibleNodes.length; i++){
       const y = i * rowH - 0.5;
       ctx.beginPath();
       ctx.moveTo(0, y);
@@ -1676,7 +1843,7 @@ const GanttView = {
       ctx.stroke();
     }
 
-    // ── C. Non-working day shading ──
+    // C. Non-working day shading
     const dShade = new Date(startDate);
     while (dShade <= state.endDate){
       if (!WorkingCalendar.isWorkDay(dShade, cal)){
@@ -1687,7 +1854,7 @@ const GanttView = {
       dShade.setDate(dShade.getDate() + 1);
     }
 
-    // ── D. Today marker ──
+    // D. Today marker
     const today = new Date(); today.setHours(0,0,0,0);
     const tOff = Math.round((today - startDate) / 86400000);
     if (tOff >= 0 && tOff <= state.totalDays){
@@ -1703,32 +1870,39 @@ const GanttView = {
       ctx.lineWidth = 1;
     }
 
-    // ── E. Bars ──
-    nodes.forEach((n, i) => {
+    // E. Bars — simpan posisi untuk dependency
+    const posMap = {};   // node.id → {x1, x2, y, rowIdx}
+    visibleNodes.forEach((n, i) => {
       const y = i * rowH;
       if (!n.startISO || !n.finishISO) return;
 
-      const sOff = Math.round((new Date(n.startISO) - startDate) / 86400000);
+      const sOff = Math.round((new Date(n.startISO)  - startDate) / 86400000);
       const fOff = Math.round((new Date(n.finishISO) - startDate) / 86400000);
 
+      const x1 = sOff * px;
+      const x2 = fOff * px;
+      posMap[n.id] = { x1, x2, y, rowIdx: i };
+
       if (n.isMilestone){
-        const cx = sOff * px;
+        const cx = x1;
         const cy = y + rowH / 2;
         this.diamond(ctx, cx, cy, 7, n.isCritical ? '#dc2626' : '#e6edf7');
         return;
       }
 
-      const x = sOff * px;
-      const w = Math.max(3, (fOff - sOff) * px);
+      const w = Math.max(3, x2 - x1);
 
       if (n.isSummary){
-        this.summaryBar(ctx, x, y + (rowH - 12)/2, w, 12);
+        this.summaryBar(ctx, x1, y + (rowH - 12)/2, w, 12);
       } else {
         const fill   = n.isCritical ? '#dc2626' : '#2f81f7';
         const stroke = n.isCritical ? '#7f1d1d' : '#1f6fe0';
-        this.taskBar(ctx, x, y + (rowH - 14)/2, w, 14, fill, stroke, n.progressPct);
+        this.taskBar(ctx, x1, y + (rowH - 14)/2, w, 14, fill, stroke, n.progressPct);
       }
     });
+
+    // F. DEPENDENCY ARROWS
+    this.drawDependencies(ctx, state, posMap, rowH);
   },
 
   taskBar(ctx, x, y, w, h, fill, stroke, pct){
@@ -1837,66 +2011,151 @@ const GanttView = {
   /* ─────── EVENTS (Fase 1.2) ─────── */
   wireEvents(state){
     const {container} = state;
-    const leftBody  = container.querySelector('.gantt-tbody');
-    const rightScr  = container.querySelector('.gantt-bars-wrap');
-    const axisTrack = container.querySelector('.gantt-axis-track');
-    const zoomSel   = container.querySelector('.gantt-zoom');
-    const btnToday  = container.querySelector('.gantt-btn-today');
+    const leftBody   = container.querySelector('.gantt-tbody');
+    const rightScr   = container.querySelector('.gantt-bars-wrap');
+    const axisTrack  = container.querySelector('.gantt-axis-track');
+    const zoomSel    = container.querySelector('.gantt-zoom');
+    const btnToday   = container.querySelector('.gantt-btn-today');
+    const btnExpand  = container.querySelector('.gantt-btn-expand-all');
+    const btnCollapse= container.querySelector('.gantt-btn-collapse-all');
+
+    if (!leftBody || !rightScr || !axisTrack) return;
 
     let syncing = false;
 
-    // Bars scroll → sinkronkan axis (X) & tabel (Y)
+    // Sinkron scroll vertikal + axis horizontal
     rightScr.addEventListener('scroll', () => {
-      if (axisTrack){
-        axisTrack.style.transform = 'translateX(' + (-rightScr.scrollLeft) + 'px)';
-      }
-      if (!syncing){
-        syncing = true;
-        leftBody.scrollTop = rightScr.scrollTop;
-        syncing = false;
-      }
+      axisTrack.style.transform = 'translateX(' + (-rightScr.scrollLeft) + 'px)';
+      if (!syncing){ syncing = true; leftBody.scrollTop = rightScr.scrollTop; syncing = false; }
     });
-
-    // Tabel kiri scroll → sinkronkan ke bars (Y)
     leftBody.addEventListener('scroll', () => {
       if (syncing) return;
-      syncing = true;
-      rightScr.scrollTop = leftBody.scrollTop;
-      syncing = false;
+      syncing = true; rightScr.scrollTop = leftBody.scrollTop; syncing = false;
     });
 
     // Zoom
-    zoomSel.onchange = e => {
-      this.mount(state.container, state.proj.id, {
-        mode: state.mode, zoom: e.target.value
-      });
+    if (zoomSel) zoomSel.onchange = e => {
+      this.mount(state.container, state.proj.id, { mode: state.mode, zoom: e.target.value });
     };
 
     // Today
-    btnToday.onclick = () => {
+    if (btnToday) btnToday.onclick = () => {
       const today = new Date(); today.setHours(0,0,0,0);
       const off = Math.round((today - state.startDate) / 86400000);
       const x = off * state.zoomCfg.pxPerDay;
       rightScr.scrollLeft = Math.max(0, x - rightScr.clientWidth / 2);
-      if (axisTrack){
-        axisTrack.style.transform = 'translateX(' + (-rightScr.scrollLeft) + 'px)';
-      }
+      axisTrack.style.transform = 'translateX(' + (-rightScr.scrollLeft) + 'px)';
     };
 
-    // Auto-scroll ke today saat mount
+    // Expand/Collapse All
+    if (btnExpand) btnExpand.onclick = () => {
+      state.collapsed.clear();
+      this.mount(state.container, state.proj.id, { mode: state.mode, zoom: state.zoom });
+    };
+    if (btnCollapse) btnCollapse.onclick = () => {
+      state.collapsed.clear();
+      state.nodes.filter(n => n.isSummary).forEach(n => state.collapsed.add(n.id));
+      this.mount(state.container, state.proj.id, { mode: state.mode, zoom: state.zoom });
+    };
+
+    // Toggle individual collapse — event delegation
+    leftBody.addEventListener('click', e => {
+      const target = e.target.closest('[data-toggle-id]');
+      if (!target) return;
+      const id = target.getAttribute('data-toggle-id');
+      if (state.collapsed.has(id)) state.collapsed.delete(id);
+      else                         state.collapsed.add(id);
+      this.mount(state.container, state.proj.id, { mode: state.mode, zoom: state.zoom });
+    });
+
+    // Tooltip — canvas mousemove
+    this.wireTooltip(state, rightScr, axisTrack);
+
+    // Auto-scroll ke today
     setTimeout(() => {
       const today = new Date(); today.setHours(0,0,0,0);
       const off = Math.round((today - state.startDate) / 86400000);
       if (off >= 0){
         const x = off * state.zoomCfg.pxPerDay;
         rightScr.scrollLeft = Math.max(0, x - rightScr.clientWidth / 2);
-        if (axisTrack){
-          axisTrack.style.transform = 'translateX(' + (-rightScr.scrollLeft) + 'px)';
-        }
+        axisTrack.style.transform = 'translateX(' + (-rightScr.scrollLeft) + 'px)';
       }
     }, 30);
-  }
-};
+  },
+
+     /* Hover tooltip pada bar chart */
+  wireTooltip(state, rightScr, axisTrack){
+    const {container, visibleNodes} = state;
+    const canvas = container.querySelector('.gantt-bars');
+    if (!canvas) return;
+
+    // Buat elemen tooltip sekali
+    let tip = container.querySelector('.gt-tip');
+    if (!tip){
+      tip = document.createElement('div');
+      tip.className = 'gt-tip';
+      container.querySelector('.gantt-root').appendChild(tip);
+    }
+
+    const showTip = (node, e) => {
+      const crit = node.isCritical;
+      const kind = node.isSummary ? 'SUMMARY' : node.isMilestone ? 'MILESTONE' : 'TASK';
+      const kindCls = node.isSummary ? 'sum' : node.isMilestone ? 'ms' : (crit ? 'crit' : '');
+      const floatVal = node.raw && (node.raw.float_total ?? node.raw.total_float);
+      const pred = node.predecessors || '—';
+      const res  = node.resources || '—';
+
+      tip.innerHTML =
+        '<div class="gt-tip-title">' +
+          '<span class="gt-tip-badge ' + kindCls + '">' + kind + '</span>' +
+          '<span class="gt-tip-kode">' + esc(node.kode) + '</span>' +
+        '</div>' +
+        '<div style="font-weight:700;margin-bottom:6px;color:#e6edf7">' + esc(node.nama) + '</div>' +
+        '<div class="gt-tip-row"><span class="k">Mulai</span><span class="v">' + esc(node.startISO || '—') + '</span></div>' +
+        '<div class="gt-tip-row"><span class="k">Selesai</span><span class="v">' + esc(node.finishISO || '—') + '</span></div>' +
+        '<div class="gt-tip-row"><span class="k">Durasi</span><span class="v">' + (node.duration || 0) + ' hari</span></div>' +
+        (node.isSummary ? '' : '<div class="gt-tip-row"><span class="k">Progress</span><span class="v">' + Math.round(node.progressPct || 0) + '%</span></div>') +
+        (floatVal != null ? '<div class="gt-tip-row"><span class="k">Total Float</span><span class="v' + (crit?' crit':'') + '">' + floatVal + ' hari' + (crit?' ★':'') + '</span></div>' : '') +
+        '<div class="gt-tip-row"><span class="k">Predecessor</span><span class="v">' + esc(pred) + '</span></div>' +
+        '<div class="gt-tip-row" style="align-items:flex-start;margin-top:6px"><span class="k">Resources</span><span class="v" style="max-width:180px;text-align:right;font-weight:400;color:#a8b8d6">' + esc(res) + '</span></div>';
+
+      const rect = container.getBoundingClientRect();
+      let left = e.clientX - rect.left + 14;
+      let top  = e.clientY - rect.top + 14;
+
+      // Cegah overflow kanan/bawah
+      const tipW = 280, tipH = 220;
+      if (left + tipW > rect.width)  left = e.clientX - rect.left - tipW - 14;
+      if (top  + tipH > rect.height) top  = rect.height - tipH - 8;
+      if (left < 8) left = 8;
+      if (top  < 8) top  = 8;
+
+      tip.style.left = left + 'px';
+      tip.style.top  = top  + 'px';
+      tip.classList.add('show');
+    };
+
+    const hideTip = () => tip.classList.remove('show');
+
+    rightScr.addEventListener('mousemove', e => {
+      const rect = canvas.getBoundingClientRect();
+      // Koordinat relatif ke canvas
+      const cx = e.clientX - rect.left;
+      const cy = e.clientY - rect.top;
+
+      if (cx < 0 || cy < 0 || cx > rect.width || cy > rect.height){ hideTip(); return; }
+
+      const rowIdx = Math.floor(cy / this.ROW_H);
+      if (rowIdx < 0 || rowIdx >= visibleNodes.length){ hideTip(); return; }
+
+      const node = visibleNodes[rowIdx];
+      if (!node){ hideTip(); return; }
+
+      showTip(node, e);
+    });
+
+    rightScr.addEventListener('mouseleave', hideTip);
+  },
 
 /* =====================================================================
    BAGIAN 9D — RESOURCE HISTOGRAM
