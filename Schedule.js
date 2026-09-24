@@ -5262,13 +5262,3 @@ const ImportExcel = {
     };
   }
 })();
-
-  // Hook renderDashboard → tampilkan EVM
-  if (typeof window._origRenderDashboard === 'undefined'){
-    window._origRenderDashboard = renderDashboard;
-    window.renderDashboard = function(){
-      window._origRenderDashboard();
-      if (typeof EVMView !== 'undefined') EVMView.render();
-    };
-  }
-})();
