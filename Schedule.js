@@ -1589,9 +1589,122 @@ const GanttEngine = {
     walk('__root__', 0);
 
     this.rollup(nodes);
-    this.computeCostAggregates(nodes);   // ← Fase 3A-3
+    this.computeCostAggregates(nodes);
+    this.computeActualDates(nodes, projectId);   // ← Fase 3B-1
     return { ok:true, nodes, proj };
   },
+
+  /* ═══════════════════════════════════════════════════════════
+     FASE 3B-1 — ACTUAL DATES dari PROGRESS
+     actual_start = tanggal progress pertama
+     actual_finish = tanggal progress saat cumulative >= target (kalau selesai)
+     ═══════════════════════════════════════════════════════════ */
+  computeActualDates(nodes, projectId){
+    const progByWbs = {};
+    DB.progress.filter(p => p.project_id === projectId).forEach(p => {
+      if (!progByWbs[p.wbs_id]) progByWbs[p.wbs_id] = [];
+      progByWbs[p.wbs_id].push({
+        minggu: num(p.minggu),
+        volume: num(p.volume),
+        tanggal: String(p.tanggal || '').split('T')[0]
+      });
+    });
+
+    const byId = {};
+    nodes.forEach(n => { byId[n.id] = n; });
+
+    /* Leaf task: hitung actual per task */
+    nodes.forEach(n => {
+      if (n.isSummary || n.isGroupHeader) return;
+      const prog = progByWbs[n.id];
+      if (!prog || !prog.length){
+        n.actualStart = null;
+        n.actualFinish = null;
+        n.actualPct = 0;
+        n.slipDays = null;
+        n.status = 'not-started';
+        return;
+      }
+
+      /* Sort by tanggal */
+      prog.sort((a, b) => (a.tanggal || '').localeCompare(b.tanggal || ''));
+
+      /* Filter valid tanggal */
+      const withTanggal = prog.filter(x => x.tanggal);
+      if (!withTanggal.length){
+        n.actualStart = null;
+        n.actualFinish = null;
+        n.actualPct = 0;
+        n.slipDays = null;
+        n.status = 'not-started';
+        return;
+      }
+
+      const target = num(n.raw.volume_rab) || 1;
+      let cum = 0;
+      let finishISO = null;
+      let cumAtFinish = 0;
+
+      for (const p of withTanggal){
+        cum += p.volume;
+        if (cum >= target && !finishISO){
+          finishISO = p.tanggal;
+          cumAtFinish = cum;
+        }
+      }
+
+      n.actualStart = withTanggal[0].tanggal;
+      n.actualFinish = finishISO;   // null kalau belum selesai
+      n.actualPct = Math.min(100, (cum / target) * 100);
+
+      /* Slip = actual_finish - plan_finish (kalau selesai) */
+      if (finishISO && n.finishISO){
+        const cal = WorkingCalendar.get(n.raw.calendar_id || DB.projects.find(p => p.id === projectId)?.calendar_id);
+        const slip = WorkingCalendar.diffDays(n.finishISO, finishISO, cal, 'working');
+        n.slipDays = slip;
+      } else {
+        n.slipDays = null;
+      }
+
+      /* Status */
+      if (finishISO) n.status = 'complete';
+      else if (n.actualPct > 0) n.status = 'in-progress';
+      else n.status = 'not-started';
+    });
+
+    /* Rollup actual untuk summary */
+    const maxLevel = Math.max(...nodes.map(n => n.level), 0);
+    for (let lvl = maxLevel; lvl >= 0; lvl--){
+      nodes.filter(n => n.level === lvl && n.isSummary).forEach(n => {
+        const kids = nodes.filter(c => c.parentId === n.id);
+        if (!kids.length) return;
+
+        const starts = kids.map(c => c.actualStart).filter(Boolean).sort();
+        const finishes = kids.map(c => c.actualFinish).filter(Boolean).sort();
+        n.actualStart = starts.length ? starts[0] : null;
+        n.actualFinish = finishes.length ? finishes[finishes.length - 1] : null;
+
+        /* Actual % berbobot cost */
+        const wSum = kids.reduce((s,c) => s + (c.costTotal || 0), 0);
+        if (wSum > 0){
+          n.actualPct = kids.reduce((s,c) => s + c.actualPct * (c.costTotal || 0), 0) / wSum;
+        } else {
+          n.actualPct = kids.reduce((s,c) => s + c.actualPct, 0) / kids.length;
+        }
+
+        /* Slip summary = max slip dari kids */
+        const slips = kids.map(c => c.slipDays).filter(v => v !== null);
+        n.slipDays = slips.length ? Math.max(...slips) : null;
+
+        /* Status summary */
+        const statuses = kids.map(c => c.status);
+        if (statuses.every(s => s === 'complete')) n.status = 'complete';
+        else if (statuses.some(s => s === 'in-progress' || s === 'complete')) n.status = 'in-progress';
+        else n.status = 'not-started';
+      });
+    }
+  }
+};
 
   makeNode(w, level, proj, mode){
     const isSummary = !!w.is_group;
@@ -1896,7 +2009,10 @@ const GanttView = {
       sCurveOverlay: localStorage.getItem('mk_gantt_scurve') === 'on',
       sCurveData: null,
       /* Fase 3A-3 — Cost Columns */
-      costColumns: localStorage.getItem('mk_gantt_cost_cols') === 'on'
+      costColumns: localStorage.getItem('mk_gantt_cost_cols') === 'on',
+      /* Fase 3B-1 — Tracking */
+      trackingMode: localStorage.getItem('mk_gantt_track') === 'on',
+      actualMap: null
     };
 
     this._state = state;
@@ -2236,6 +2352,7 @@ const GanttView = {
             '<button class="gantt-btn-cost-toggle' + (state.costStrip ? ' is-on' : '') + '" title="Tampilkan/Sembunyikan Cost Loading Strip">💰 Cost</button>' +
             '<button class="gantt-btn-scurve-toggle' + (state.sCurveOverlay ? ' is-on' : '') + '" title="Tampilkan/Sembunyikan S-Curve Overlay di Gantt">📈 S-Curve</button>' +
             '<button class="gantt-btn-costcols-toggle' + (state.costColumns ? ' is-on' : '') + '" title="Tampilkan Kolom Cost di Tabel">💵 Cost Columns</button>' +
+            '<button class="gantt-btn-track-toggle' + (state.trackingMode ? ' is-on' : '') + '" title="Tracking Gantt — Aktual vs Rencana vs Baseline">📊 Tracking</button>' +
             '<span class="gantt-lbl" style="margin-left:8px">Style</span>' +
             '<select class="gantt-bar-style">' +
               Object.keys(this.BAR_STYLES).map(k =>
@@ -3253,6 +3370,11 @@ const GanttView = {
       }
     });
 
+    // E.3. Tracking Overlay (Fase 3B-1)
+    if (state.trackingMode){
+      this.drawTrackingBars(ctx, state, posMap, rowH);
+    }
+
     // F. Dependency arrows (Fase 1C — MS Project style)
     this.drawDependencies(ctx, state, posMap, rowH);
 
@@ -3285,7 +3407,120 @@ const GanttView = {
     }
   },
 
-     /* ═══════════════════════════════════════════════════════════
+  /* ═══════════════════════════════════════════════════════════
+     FASE 3B-1 — TRACKING BARS OVERLAY
+     Actual bar (hijau) di atas plan + slip zone merah
+     ═══════════════════════════════════════════════════════════ */
+  drawTrackingBars(ctx, state, posMap, rowH){
+    const {startDate} = state;
+    const px = state.zoomCfg.pxPerDay;
+
+    state.visibleNodes.forEach((n, i) => {
+      if (n.isGroupHeader) return;
+      if (n.isSummary || n.isMilestone) return;
+      if (!n.actualStart) return;   // belum ada progress
+
+      const pos = posMap[n.id];
+      if (!pos) return;
+
+      /* ── Actual bar (hijau overlay) ── */
+      const actStart = new Date(n.actualStart + 'T00:00:00');
+      const actFinishISO = n.actualFinish || n.actualStart;
+      const actFinish = new Date(actFinishISO + 'T00:00:00');
+
+      const sOff = Math.round((actStart  - startDate) / 86400000);
+      const fOff = Math.round((actFinish - startDate) / 86400000);
+
+      const ax1 = sOff * px;
+      const ax2 = fOff * px;
+      const aw  = Math.max(3, ax2 - ax1);
+
+      /* Posisi: overlay tepat di atas plan bar (turun 1px) */
+      const barY = pos.y + (rowH - 14) / 2;
+      const barH = 14;
+
+      /* Actual bar — hijau cerah, dengan transparansi sedang */
+      ctx.save();
+      ctx.fillStyle = 'rgba(34, 197, 94, 0.85)';
+      this.rrect(ctx, ax1, barY, aw, barH, 3);
+      ctx.fill();
+
+      /* Border hijau tua */
+      ctx.strokeStyle = '#16a34a';
+      ctx.lineWidth = 1.2;
+      this.rrect(ctx, ax1 + 0.5, barY + 0.5, aw - 1, barH - 1, 3);
+      ctx.stroke();
+
+      /* Label % di dalam bar kalau cukup lebar */
+      if (aw > 42){
+        ctx.fillStyle = '#fff';
+        ctx.font = 'bold 9px Segoe UI';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(Math.round(n.actualPct || 0) + '%', ax1 + aw / 2, barY + barH / 2);
+      }
+
+      /* ── Slip zone (merah) — kalau actual finish > plan finish ── */
+      if (n.actualFinish && n.finishISO){
+        const planFinish = new Date(n.finishISO + 'T00:00:00');
+        if (actFinish > planFinish){
+          const planFOff = Math.round((planFinish - startDate) / 86400000);
+          const slipX1 = planFOff * px;
+          const slipX2 = ax2;
+          const slipW = slipX2 - slipX1;
+
+          if (slipW > 1){
+            /* Area merah semi-transparan */
+            ctx.fillStyle = 'rgba(220, 38, 38, 0.35)';
+            ctx.fillRect(slipX1, barY, slipW, barH);
+
+            /* Garis merah tebal di batas slip */
+            ctx.strokeStyle = '#dc2626';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(slipX2 + 0.5, barY - 2);
+            ctx.lineTo(slipX2 + 0.5, barY + barH + 2);
+            ctx.stroke();
+
+            /* Label "slip +Nd" di bawah bar */
+            if (slipW > 30){
+              ctx.fillStyle = '#fca5a5';
+              ctx.font = 'bold 8.5px Segoe UI';
+              ctx.textAlign = 'center';
+              ctx.textBaseline = 'top';
+              ctx.fillText('+' + n.slipDays + 'd', (slipX1 + slipX2) / 2, barY + barH + 1);
+            }
+          }
+        }
+      }
+
+      /* ── Dot marker di actual start (kalau ada) ── */
+      if (aw > 6){
+        ctx.beginPath();
+        ctx.arc(ax1 + 3, barY + barH / 2, 3.5, 0, Math.PI * 2);
+        ctx.fillStyle = '#22c55e';
+        ctx.fill();
+        ctx.strokeStyle = '#fff';
+        ctx.lineWidth = 1.2;
+        ctx.stroke();
+      }
+
+      /* ── Dot marker di actual finish (kalau selesai) ── */
+      if (n.actualFinish && aw > 6){
+        ctx.beginPath();
+        ctx.arc(ax2 - 3, barY + barH / 2, 3.5, 0, Math.PI * 2);
+        ctx.fillStyle = '#15803d';
+        ctx.fill();
+        ctx.strokeStyle = '#fff';
+        ctx.lineWidth = 1.2;
+        ctx.stroke();
+      }
+
+      ctx.restore();
+    });
+  },
+
+  /* ═══════════════════════════════════════════════════════════
      FASE 3A-1 — COST LOADING STRIP
      Histogram biaya per hari + kurva kumulatif
      ═══════════════════════════════════════════════════════════ */
@@ -3917,6 +4152,17 @@ const GanttView = {
         const next = !state.costColumns;
         localStorage.setItem('mk_gantt_cost_cols', next ? 'on' : 'off');
         this.mount(state.container, state.proj.id, { mode: state.mode, zoom: state.zoom });
+      };
+    }
+
+    /* ── Fase 3B-1: Tracking Toggle ── */
+    const btnTrack = container.querySelector('.gantt-btn-track-toggle');
+    if (btnTrack){
+      btnTrack.onclick = () => {
+        const next = !state.trackingMode;
+        localStorage.setItem('mk_gantt_track', next ? 'on' : 'off');
+        this.mount(state.container, state.proj.id, { mode: state.mode, zoom: state.zoom });
+        toast(next ? '📊 Tracking aktif' : '📊 Tracking nonaktif');
       };
     }
      
