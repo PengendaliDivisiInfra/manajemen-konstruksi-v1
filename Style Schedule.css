@@ -3629,3 +3629,98 @@ canvas:not(.gantt-axis):not(.gantt-bars){
   border-color: transparent;
   box-shadow: 0 2px 6px rgba(6, 182, 212, 0.4);
 }
+
+/* =====================================================================
+   FASE 3A-3 — COST TABLE COLUMNS
+   ===================================================================== */
+
+/* ── Toggle button ── */
+.gantt-btn-costcols-toggle{
+  padding: 5px 10px;
+  font-size: 11.5px;
+  border-radius: 6px;
+  background: #16233f;
+  border: 1px solid var(--line);
+  color: var(--muted);
+  cursor: pointer;
+  transition: .12s;
+  font-weight: 700;
+  font-family: inherit;
+  white-space: nowrap;
+}
+.gantt-btn-costcols-toggle:hover{
+  color: var(--txt);
+  background: #1d2f52;
+  border-color: #33507f;
+}
+.gantt-btn-costcols-toggle.is-on{
+  background: linear-gradient(135deg, #22c55e, #16a34a);
+  color: #fff;
+  border-color: transparent;
+  box-shadow: 0 2px 6px rgba(34, 197, 94, 0.4);
+}
+
+/* ── Hide cost columns saat OFF ── */
+.gantt-root:not(.has-cost-cols) .gantt-th[data-cost="true"],
+.gantt-root:not(.has-cost-cols) .gantt-td[data-cost="true"]{
+  display: none !important;
+}
+
+/* ── Cost cell content ── */
+.gt-cost{
+  color: #4ade80;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.gt-cost-sum{
+  color: #86efac;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+.gt-cost-dim{
+  color: #7cb3ff;
+  font-variant-numeric: tabular-nums;
+  font-size: 11px;
+}
+.gt-cost-sum-dim{
+  color: #a8c8ff;
+  font-variant-numeric: tabular-nums;
+  font-size: 11px;
+  font-style: italic;
+}
+
+.gt-pct{
+  color: #a8b8d6;
+  font-variant-numeric: tabular-nums;
+  font-size: 11.5px;
+}
+.gt-pct-hi{
+  color: #fbbf24;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  font-size: 11.5px;
+}
+.gt-pct-sum{
+  color: #a8c8ff;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  font-size: 11.5px;
+}
+
+.gt-cum{
+  color: #06b6d4;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  font-size: 11.5px;
+}
+
+/* ── Cost columns header accent ── */
+.gantt-root.has-cost-cols .gantt-th[data-cost="true"]{
+  background: linear-gradient(180deg, #1a4a3a, #143a2e);
+  color: #86efac;
+}
+
+/* ── Zebra row highlight untuk cost columns ── */
+.gantt-root.has-cost-cols .gantt-row:hover .gantt-td[data-cost="true"]{
+  background: rgba(34, 197, 94, 0.06);
+}
