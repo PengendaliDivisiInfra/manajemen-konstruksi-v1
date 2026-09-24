@@ -3991,7 +3991,20 @@ const SyncManager = {
     return sheetRequest('softRelease', { clientId: this.CLIENT_ID });
   },
   async status(){
-    return sheetRequest('softStatus', {});
+    // Guard: skip kalau URL kosong → mencegah 404 noise di console
+    if (!SET.sheetUrl || !SET.sheetUrl.trim()) {
+      return { ok: false, code: 'NO_URL', message: 'URL belum diatur' };
+    }
+    try {
+      const out = await sheetRequest('softStatus', {});
+      // Kalau request fallback ke blind mode → tandai supaya caller tidak salah interpretasi
+      if (out && out.blind) {
+        return { ok: false, code: 'BLIND', blind: true, message: out.message };
+      }
+      return out;
+    } catch(e){
+      return { ok: false, code: 'NET', message: e.message };
+    }
   }
 };
 
