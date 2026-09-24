@@ -24,6 +24,12 @@
       <label>Proyek Aktif</label>
       <select id="activeProject" style="min-width:230px"></select>
     </div>
+    <div class="history-wrap">
+      <button class="btn btn-sm" id="btnUndo" title="Undo (Ctrl+Z)">↶ Undo</button>
+      <button class="btn btn-sm" id="btnRedo" title="Redo (Ctrl+Shift+Z)">↷ Redo</button>
+      <button class="btn btn-sm" id="btnHistory" title="History">📜</button>
+      <div class="history-menu" id="historyMenu"></div>
+    </div>
     <button class="btn" id="btnExport">⬇ Export</button>
     <button class="btn" id="btnImport">⬆ Import</button>
     <input type="file" id="fileImport" accept=".json" style="display:none" />
@@ -1486,6 +1492,7 @@ function renderWbs(){
   $$('[data-del-wbs]').forEach(b => b.onclick = () => {
     if (!confirm('Hapus item WBS ini?')) return;
     const id = b.dataset.delWbs;
+    if (typeof Undo !== 'undefined') Undo.snapshot('Hapus WBS');
     DB.project_wbs = DB.project_wbs.filter(x => x.id !== id && x.parent_id !== id);
     DB.progress = DB.progress.filter(p => p.wbs_id !== id);
     runCPM(pid);
@@ -1613,6 +1620,7 @@ function formWbs(id, forceGroup){
       writeScheduleField(obj, 'predecessor', '');
       writeScheduleField(obj, 'duration', 0);
     }
+    if (typeof Undo !== 'undefined') Undo.snapshot(id ? 'Edit WBS: ' + kode : 'Tambah WBS: ' + kode);
     if (w) Object.assign(w, obj); else DB.project_wbs.push(obj);
 
     runCPM(pid);
@@ -1758,6 +1766,7 @@ function renderProgress(){
   $$('[data-edit-pg]').forEach(b => b.onclick = () => formProgress(b.dataset.editPg));
   $$('[data-del-pg]').forEach(b => b.onclick = () => {
     if (!confirm('Hapus progress ini?')) return;
+    if (typeof Undo !== 'undefined') Undo.snapshot('Hapus Progress');
     DB.progress = DB.progress.filter(x => x.id !== b.dataset.delPg);
     saveDB(); renderProgress(); toast('Progress dihapus');
   });
@@ -1789,6 +1798,7 @@ function formProgress(id){
       tanggal: $('#fp_t').value
     };
     if (!obj.wbs_id){ toast('Pilih item WBS', false); return false; }
+    if (typeof Undo !== 'undefined') Undo.snapshot(id ? 'Edit Progress M' + obj.minggu : 'Tambah Progress M' + obj.minggu);
     if (p) Object.assign(p, obj); else DB.progress.push(obj);
     AUTOSAVE.clear('form_progress_' + (id || 'new'));
     saveDB(); renderProgress(); toast('Progress disimpan');
