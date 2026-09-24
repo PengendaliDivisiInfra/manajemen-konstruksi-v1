@@ -1841,7 +1841,10 @@ const GanttView = {
       gridlines:     styleState.gridlines,
       /* Fase 3A-1 — Cost Strip */
       costStrip: localStorage.getItem('mk_gantt_cost_strip') !== 'off',
-      costPerDay: null
+      costPerDay: null,
+      /* Fase 3A-2 — S-Curve Overlay */
+      sCurveOverlay: localStorage.getItem('mk_gantt_scurve') === 'on',
+      sCurveData: null
     };
 
     this._state = state;
@@ -2174,6 +2177,7 @@ const GanttView = {
             '<button class="gantt-btn-tool gantt-btn-bl-set" title="Set Baseline">📌 Set</button>' +
             '<button class="gantt-btn-tool gantt-btn-bl-clear" title="Clear Baseline">🗑 Clear</button>' +
             '<button class="gantt-btn-cost-toggle' + (state.costStrip ? ' is-on' : '') + '" title="Tampilkan/Sembunyikan Cost Loading Strip">💰 Cost</button>' +
+            '<button class="gantt-btn-scurve-toggle' + (state.sCurveOverlay ? ' is-on' : '') + '" title="Tampilkan/Sembunyikan S-Curve Overlay di Gantt">📈 S-Curve</button>' +
             '<span class="gantt-lbl" style="margin-left:8px">Style</span>' +
             '<select class="gantt-bar-style">' +
               Object.keys(this.BAR_STYLES).map(k =>
@@ -3165,6 +3169,11 @@ const GanttView = {
     // F. Dependency arrows (Fase 1C — MS Project style)
     this.drawDependencies(ctx, state, posMap, rowH);
 
+    // F.2 S-Curve Overlay (Fase 3A-2) — digambar paling atas
+    if (state.sCurveOverlay){
+      this.drawSCurveOverlay(ctx, state, W, H);
+    }
+
     // G. Bar drag ghost
     const bd = state.barDrag;
     if (bd && bd.preview){
@@ -3369,6 +3378,213 @@ const GanttView = {
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText(msg, W / 2, H / 2);
+  },
+
+     /* ═══════════════════════════════════════════════════════════
+     FASE 3A-2 — S-CURVE OVERLAY
+     Kurva kumulatif biaya ditumpuk di atas bars Gantt
+     ═══════════════════════════════════════════════════════════ */
+  drawSCurveOverlay(ctx, state, W, H){
+    const {proj, startDate, endDate} = state;
+    const px = state.zoomCfg.pxPerDay;
+    const totalDays = state.totalDays;
+
+    /* ── Ambil atau reuse data kurva ── */
+    if (!state.sCurveData){
+      let rl;
+      try {
+        rl = ResourceLoader.load(proj.id, {
+          mode: state.mode || 'rab',
+          distribution: 'uniform',
+          granularity: 'daily'
+        });
+      } catch(e){ rl = { ok: false }; }
+
+      if (!rl || !rl.ok || !rl.resDailyMap){
+        state.sCurveData = { ok: false };
+      } else {
+        /* Bangun cost per hari */
+        const costPerDay = {};
+        Object.keys(rl.resDailyMap).forEach(kode => {
+          const r = rl.byResource.find(x => x.kode === kode);
+          if (!r) return;
+          const hargaUnit = r.total_qty > 0 ? (r.total_cost / r.total_qty) : 0;
+          const map = rl.resDailyMap[kode];
+          Object.keys(map).forEach(iso => {
+            costPerDay[iso] = (costPerDay[iso] || 0) + (map[iso] * hargaUnit);
+          });
+        });
+
+        const days = Object.keys(costPerDay).sort();
+        if (!days.length){
+          state.sCurveData = { ok: false };
+        } else {
+          /* Kumulatif */
+          const cum = [];
+          let running = 0, total = 0;
+          days.forEach(d => { total += costPerDay[d]; });
+          days.forEach(d => {
+            running += costPerDay[d];
+            cum.push({
+              iso: d,
+              daily: costPerDay[d],
+              cumulative: running,
+              pct: total > 0 ? running / total : 0
+            });
+          });
+          state.sCurveData = { ok: true, total, cum, days };
+        }
+      }
+    }
+
+    const sc = state.sCurveData;
+    if (!sc || !sc.ok) return;
+
+    /* ── Siapkan koordinat kurva ── */
+    const yTop = 4;               // % tertinggi di dekat atas area bars
+    const yBottom = H - 8;        // % terendah di dekat bawah area bars
+    const yRange = yBottom - yTop;
+
+    const points = sc.cum.map(item => {
+      const off = Math.round((new Date(item.iso + 'T00:00:00') - startDate) / 86400000);
+      const x = off * px + px / 2;
+      const y = yBottom - (item.pct * yRange);
+      return { x, y, pct: item.pct, iso: item.iso };
+    }).filter(p => p.x >= -50 && p.x <= W + 50);
+
+    if (!points.length) return;
+
+    /* ── Gradient fill di bawah kurva (semi-transparan) ── */
+    ctx.save();
+
+    const gradFill = ctx.createLinearGradient(0, yTop, 0, yBottom);
+    gradFill.addColorStop(0, 'rgba(6, 182, 212, 0.28)');
+    gradFill.addColorStop(1, 'rgba(6, 182, 212, 0.02)');
+
+    ctx.beginPath();
+    ctx.moveTo(points[0].x, yBottom);
+    points.forEach(p => ctx.lineTo(p.x, p.y));
+    ctx.lineTo(points[points.length - 1].x, yBottom);
+    ctx.closePath();
+    ctx.fillStyle = gradFill;
+    ctx.fill();
+
+    /* ── Garis kurva utama (cyan solid) ── */
+    ctx.strokeStyle = '#06b6d4';
+    ctx.lineWidth = 2.2;
+    ctx.lineJoin = 'round';
+    ctx.lineCap = 'round';
+
+    ctx.beginPath();
+    points.forEach((p, i) => {
+      if (i === 0) ctx.moveTo(p.x, p.y);
+      else ctx.lineTo(p.x, p.y);
+    });
+    ctx.stroke();
+
+    /* ── Glow effect di garis ── */
+    ctx.strokeStyle = 'rgba(6, 182, 212, 0.35)';
+    ctx.lineWidth = 6;
+    ctx.stroke();
+    ctx.strokeStyle = '#06b6d4';
+    ctx.lineWidth = 2.2;
+    ctx.stroke();
+
+    /* ── Titik-titik di posisi data (kalau tidak terlalu banyak) ── */
+    if (points.length <= 40){
+      points.forEach(p => {
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 3, 0, Math.PI * 2);
+        ctx.fillStyle = '#0b1220';
+        ctx.fill();
+        ctx.strokeStyle = '#06b6d4';
+        ctx.lineWidth = 1.8;
+        ctx.stroke();
+      });
+    }
+
+    /* ── Grid horizontal di 25% / 50% / 75% ── */
+    [0.25, 0.5, 0.75].forEach(pct => {
+      const y = yBottom - (pct * yRange);
+      ctx.strokeStyle = 'rgba(6, 182, 212, 0.12)';
+      ctx.lineWidth = 1;
+      ctx.setLineDash([3, 4]);
+      ctx.beginPath();
+      ctx.moveTo(0, y);
+      ctx.lineTo(W, y);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    });
+
+    /* ── Label % di sisi kiri ── */
+    ctx.font = 'bold 9px Segoe UI';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    [1.0, 0.75, 0.5, 0.25].forEach(pct => {
+      const y = yBottom - (pct * yRange);
+      ctx.fillStyle = 'rgba(6, 182, 212, 0.75)';
+      ctx.fillText(Math.round(pct * 100) + '%', 4, y);
+    });
+
+    /* ── Highlight titik terakhir (current cumulative) ── */
+    const last = points[points.length - 1];
+    if (last){
+      ctx.beginPath();
+      ctx.arc(last.x, last.y, 6, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(6, 182, 212, 0.3)';
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(last.x, last.y, 4, 0, Math.PI * 2);
+      ctx.fillStyle = '#06b6d4';
+      ctx.fill();
+      ctx.strokeStyle = '#fff';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+
+      /* Label nilai % akhir */
+      const label = Math.round(last.pct * 100) + '%';
+      ctx.font = 'bold 10px Segoe UI';
+      const tw = ctx.measureText(label).width;
+      const lx = Math.min(last.x + 10, W - tw - 12);
+      const ly = Math.max(yTop + 8, last.y - 10);
+
+      ctx.fillStyle = 'rgba(6, 182, 212, 0.92)';
+      this.rrect(ctx, lx - 4, ly - 9, tw + 8, 16, 4);
+      ctx.fill();
+      ctx.fillStyle = '#fff';
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(label, lx, ly);
+    }
+
+    /* ── Legend kanan atas (mini) ── */
+    const legendText = 'S-Curve · Total Rp ' + this._fmtJuta(sc.total);
+    ctx.font = 'bold 10px Segoe UI';
+    const lw = ctx.measureText(legendText).width;
+    const lgW = lw + 22;
+    const lgX = Math.max(8, W - lgW - 8);
+    const lgY = 6;
+
+    ctx.fillStyle = 'rgba(11, 18, 32, 0.88)';
+    this.rrect(ctx, lgX, lgY, lgW, 20, 5);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(6, 182, 212, 0.5)';
+    ctx.lineWidth = 1;
+    this.rrect(ctx, lgX, lgY, lgW, 20, 5);
+    ctx.stroke();
+
+    /* Dot cyan di kiri legend */
+    ctx.beginPath();
+    ctx.arc(lgX + 10, lgY + 10, 4, 0, Math.PI * 2);
+    ctx.fillStyle = '#06b6d4';
+    ctx.fill();
+
+    ctx.fillStyle = '#e6edf7';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(legendText, lgX + 18, lgY + 10);
+
+    ctx.restore();
   },
 
   /* Helper: format Rp singkat (jt/m) */
@@ -3593,6 +3809,16 @@ const GanttView = {
       btnCost.onclick = () => {
         const next = !state.costStrip;
         localStorage.setItem('mk_gantt_cost_strip', next ? 'on' : 'off');
+        this.mount(state.container, state.proj.id, { mode: state.mode, zoom: state.zoom });
+      };
+    }
+
+    /* ── Fase 3A-2: S-Curve Overlay Toggle ── */
+    const btnSCurve = container.querySelector('.gantt-btn-scurve-toggle');
+    if (btnSCurve){
+      btnSCurve.onclick = () => {
+        const next = !state.sCurveOverlay;
+        localStorage.setItem('mk_gantt_scurve', next ? 'on' : 'off');
         this.mount(state.container, state.proj.id, { mode: state.mode, zoom: state.zoom });
       };
     }
