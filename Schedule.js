@@ -4562,6 +4562,101 @@ const GanttView = {
       const pred = node.predecessors || '—';
       const res  = node.resources || '—';
 
+      /* ── Fase 3A-4: Cost section (hanya kalau Cost Columns ON) ── */
+      let costSectionHTML = '';
+      if (state.costColumns){
+        const proj = DB.projects.find(p => p.id === state.proj.id);
+        const task = node.raw;
+
+        /* Cost summary dari node (sudah dihitung GanttEngine) */
+        const costTotal = num(node.costTotal);
+        const costPerDay = num(node.costPerDay);
+        const pctBudget = num(node.pctBudget);
+        const cumPct = num(node.cumPct);
+
+        /* Breakdown per jenis (hanya untuk leaf task, bukan summary) */
+        let breakdownHTML = '';
+        let topResHTML = '';
+
+        if (!node.isSummary && task && task.ahsp_id && proj){
+          const dets = DB.project_ahsp_details.filter(d =>
+            d.project_id === proj.id && d.ahsp_id === task.ahsp_id
+          );
+          const vol = num(task.volume_rab);
+
+          if (dets.length && vol > 0){
+            const jenis = { upah: 0, bahan: 0, alat: 0 };
+            const resList = [];
+
+            dets.forEach(d => {
+              const r = DB.master_resources.find(x => x.id === d.resource_id);
+              if (!r) return;
+              const k = Calc.koefRAB(d, r);
+              const cost = k * vol * num(d.harga_rab);
+              jenis[r.jenis] = (jenis[r.jenis] || 0) + cost;
+              resList.push({ nama: r.nama, kode: r.kode, cost });
+            });
+
+            const totalJenis = jenis.upah + jenis.bahan + jenis.alat || 1;
+
+            /* Breakdown bars */
+            const rows = [
+              { key: 'upah',  label: 'Upah',  val: jenis.upah,  pct: (jenis.upah / totalJenis) * 100 },
+              { key: 'bahan', label: 'Bahan', val: jenis.bahan, pct: (jenis.bahan / totalJenis) * 100 },
+              { key: 'alat',  label: 'Alat',  val: jenis.alat,  pct: (jenis.alat / totalJenis) * 100 }
+            ].filter(r => r.val > 0);
+
+            if (rows.length){
+              breakdownHTML =
+                '<div class="gt-tip-breakdown">' +
+                  rows.map(r =>
+                    '<div class="gt-tip-bd-row">' +
+                      '<span class="gt-tip-bd-label">' + esc(r.label) + '</span>' +
+                      '<div class="gt-tip-bd-bar">' +
+                        '<span class="gt-tip-bd-fill ' + r.key + '" style="width:' + r.pct.toFixed(1) + '%"></span>' +
+                      '</div>' +
+                      '<span class="gt-tip-bd-val">' + rp(r.val) + '</span>' +
+                    '</div>'
+                  ).join('') +
+                '</div>';
+            }
+
+            /* Top-3 resource */
+            resList.sort((a, b) => b.cost - a.cost);
+            const top3 = resList.slice(0, 3);
+            if (top3.length){
+              topResHTML =
+                '<div class="gt-tip-topres">' +
+                  top3.map(r =>
+                    '<div class="gt-tip-topres-row">' +
+                      '<span class="k">' + esc(r.kode) + ' — ' + esc(r.nama) + '</span>' +
+                      '<span class="v">' + rp(r.cost) + '</span>' +
+                    '</div>'
+                  ).join('') +
+                '</div>';
+            }
+          }
+        }
+
+        /* Build cost section */
+        costSectionHTML =
+          '<div class="gt-tip-cost">' +
+            '<div class="gt-tip-cost-title">💰 Cost Info</div>' +
+            '<div class="gt-tip-cost-kv">' +
+              '<span class="k">Cost Total</span>' +
+              '<span class="v hi">' + rp(costTotal) + '</span>' +
+              '<span class="k">Cost/Day</span>' +
+              '<span class="v">' + rp(costPerDay) + '</span>' +
+              '<span class="k">% Budget</span>' +
+              '<span class="v">' + fmt(pctBudget, 2) + '%</span>' +
+              '<span class="k">Cum %</span>' +
+              '<span class="v" style="color:#06b6d4">' + fmt(cumPct, 2) + '%</span>' +
+            '</div>' +
+            (breakdownHTML ? '<div class="gt-tip-cost-title" style="color:#7cb3ff;margin-top:6px">📊 Breakdown</div>' + breakdownHTML : '') +
+            (topResHTML ? '<div class="gt-tip-cost-title" style="color:#4ade80;margin-top:6px">🧱 Top Resources</div>' + topResHTML : '') +
+          '</div>';
+      }
+
       tip.innerHTML =
         '<div class="gt-tip-title">' +
           '<span class="gt-tip-badge ' + kindCls + '">' + kind + '</span>' +
@@ -4574,14 +4669,16 @@ const GanttView = {
         (node.isSummary ? '' : '<div class="gt-tip-row"><span class="k">Progress</span><span class="v">' + Math.round(node.progressPct || 0) + '%</span></div>') +
         (floatVal != null ? '<div class="gt-tip-row"><span class="k">Total Float</span><span class="v' + (crit?' crit':'') + '">' + floatVal + ' hari' + (crit?' ★':'') + '</span></div>' : '') +
         '<div class="gt-tip-row"><span class="k">Predecessor</span><span class="v">' + esc(pred) + '</span></div>' +
-        '<div class="gt-tip-row" style="align-items:flex-start;margin-top:6px"><span class="k">Resources</span><span class="v" style="max-width:180px;text-align:right;font-weight:400;color:#a8b8d6">' + esc(res) + '</span></div>';
+        '<div class="gt-tip-row" style="align-items:flex-start;margin-top:6px"><span class="k">Resources</span><span class="v" style="max-width:180px;text-align:right;font-weight:400;color:#a8b8d6">' + esc(res) + '</span></div>' +
+        costSectionHTML;
 
       const rect = container.getBoundingClientRect();
       let left = e.clientX - rect.left + 14;
       let top  = e.clientY - rect.top + 14;
 
-      // Cegah overflow kanan/bawah
-      const tipW = 280, tipH = 220;
+      // Cegah overflow kanan/bawah (dynamic height kalau ada cost section)
+      const tipW = 320;
+      const tipH = state.costColumns ? 480 : 220;
       if (left + tipW > rect.width)  left = e.clientX - rect.left - tipW - 14;
       if (top  + tipH > rect.height) top  = rect.height - tipH - 8;
       if (left < 8) left = 8;
