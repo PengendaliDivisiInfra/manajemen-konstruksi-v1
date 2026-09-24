@@ -4772,3 +4772,499 @@ const ExecDashboard = {
     }
   });
 })();
+
+/* =====================================================================
+   FASE 6B — EVM VIEW (render dashboard EVM)
+   ===================================================================== */
+const EVMView = {
+  render(){
+    const pid = STATE.activeProject;
+    const wrap = document.getElementById('evmKPI');
+    if (!wrap) return;
+
+    const proj = activeProj();
+    if (!proj){
+      wrap.innerHTML = '<div class="evm-kpi"><div class="lbl">Status</div><div class="val">Belum ada proyek</div></div>';
+      return;
+    }
+
+    const e = Calc.evm(pid);
+    if (!e.ok) return;
+
+    /* ── KPI cards ── */
+    const spiCls = e.SPI >= 0.95 ? 'good' : e.SPI >= 0.85 ? 'warn' : 'bad';
+    const cpiCls = e.CPI >= 0.95 ? 'good' : e.CPI >= 0.85 ? 'warn' : 'bad';
+    const svCls  = e.SV  >= 0 ? 'good' : 'bad';
+    const cvCls  = e.CV  >= 0 ? 'good' : 'bad';
+    const vacCls = e.VAC >= 0 ? 'good' : 'bad';
+
+    const fmtIdx = v => v.toFixed(3);
+    const fmtRp  = v => rp(v);
+
+    wrap.innerHTML =
+      '<div class="evm-kpi ' + spiCls + '">' +
+        '<div class="icon">⏱</div>' +
+        '<div class="lbl">SPI · Schedule Performance</div>' +
+        '<div class="val ' + spiCls + '">' + fmtIdx(e.SPI) + '</div>' +
+        '<div class="sub">' + (e.SPI >= 0.95 ? '✅ On Schedule' : e.SPI >= 0.85 ? '⚠ Sedikit telat' : '🔴 Terlambat signifikan') + '</div>' +
+      '</div>' +
+      '<div class="evm-kpi ' + cpiCls + '">' +
+        '<div class="icon">💰</div>' +
+        '<div class="lbl">CPI · Cost Performance</div>' +
+        '<div class="val ' + cpiCls + '">' + fmtIdx(e.CPI) + '</div>' +
+        '<div class="sub">' + (e.CPI >= 0.95 ? '✅ On Budget' : e.CPI >= 0.85 ? '⚠ Over budget tipis' : '🔴 Over budget besar') + '</div>' +
+      '</div>' +
+      '<div class="evm-kpi ' + svCls + '">' +
+        '<div class="icon">📅</div>' +
+        '<div class="lbl">Schedule Variance (Rp)</div>' +
+        '<div class="val ' + svCls + '">' + (e.SV >= 0 ? '+' : '') + fmtRp(e.SV) + '</div>' +
+        '<div class="sub">EV − PV · Forecast selesai: <b>' + esc(e.forecastFinish) + '</b></div>' +
+      '</div>' +
+      '<div class="evm-kpi ' + cvCls + '">' +
+        '<div class="icon">📊</div>' +
+        '<div class="lbl">Cost Variance (Rp)</div>' +
+        '<div class="val ' + cvCls + '">' + (e.CV >= 0 ? '+' : '') + fmtRp(e.CV) + '</div>' +
+        '<div class="sub">EV − AC · Rencana selesai: ' + esc(e.plannedFinish) + '</div>' +
+      '</div>' +
+      '<div class="evm-kpi">' +
+        '<div class="icon">🎯</div>' +
+        '<div class="lbl">BAC · Budget at Completion</div>' +
+        '<div class="val">' + fmtRp(e.BAC) + '</div>' +
+        '<div class="sub">Budget awal (Total RAB)</div>' +
+      '</div>' +
+      '<div class="evm-kpi ' + cpiCls + '">' +
+        '<div class="icon">🔮</div>' +
+        '<div class="lbl">EAC · Estimate at Completion</div>' +
+        '<div class="val ' + cpiCls + '">' + fmtRp(e.EAC) + '</div>' +
+        '<div class="sub">Prediksi biaya akhir · ETC: ' + fmtRp(e.ETC) + '</div>' +
+      '</div>' +
+      '<div class="evm-kpi ' + vacCls + '">' +
+        '<div class="icon">⚖</div>' +
+        '<div class="lbl">VAC · Variance at Completion</div>' +
+        '<div class="val ' + vacCls + '">' + (e.VAC >= 0 ? '+' : '') + fmtRp(e.VAC) + '</div>' +
+        '<div class="sub">' + (e.VAC >= 0 ? '✅ Di bawah anggaran' : '🔴 Over anggaran') + '</div>' +
+      '</div>' +
+      '<div class="evm-kpi">' +
+        '<div class="icon">📈</div>' +
+        '<div class="lbl">Baseline Aktif</div>' +
+        '<div class="val">' + (e.baselineIdx ? 'BL' + e.baselineIdx : '—') + '</div>' +
+        '<div class="sub">' + (e.baselineIdx ? 'Kurva baseline aktif' : 'Set baseline untuk variance') + '</div>' +
+      '</div>';
+
+    /* ── Trend chart: SPI & CPI ── */
+    const cv1 = document.getElementById('chartEvmTrend');
+    if (cv1){
+      if (STATE.chartEvmTrend) STATE.chartEvmTrend.destroy();
+      STATE.chartEvmTrend = new Chart(cv1.getContext('2d'), {
+        type: 'line',
+        data: {
+          labels: e.weeks.map(w => 'M' + w.week),
+          datasets: [
+            { label:'SPI', data: e.weeks.map(w => +w.SPI.toFixed(3)),
+              borderColor:'#2f81f7', backgroundColor:'rgba(47,129,247,.14)',
+              tension:.35, borderWidth:2.5, pointRadius:3, fill:false },
+            { label:'CPI', data: e.weeks.map(w => +w.CPI.toFixed(3)),
+              borderColor:'#1abc9c', backgroundColor:'rgba(26,188,156,.14)',
+              tension:.35, borderWidth:2.5, pointRadius:3, fill:false },
+            { label:'Target (1.0)', data: e.weeks.map(() => 1),
+              borderColor:'#f59e0b', borderDash:[6,4], borderWidth:1.5,
+              pointRadius:0, fill:false }
+          ]
+        },
+        options: {
+          responsive:true, maintainAspectRatio:false,
+          plugins:{
+            legend:{labels:{color:'#e6edf7', font:{size:11}}},
+            tooltip:{callbacks:{label:c => c.dataset.label + ': ' + c.parsed.y.toFixed(3)}}
+          },
+          scales:{
+            x:{ticks:{color:'#8fa3c4'}, grid:{color:'rgba(36,54,92,.5)'}},
+            y:{ticks:{color:'#8fa3c4', callback:v => v.toFixed(2)},
+               grid:{color:'rgba(36,54,92,.5)'}, beginAtZero:false, suggestedMin:0.5}
+          }
+        }
+      });
+    }
+
+    /* ── Variance chart: SV & CV per minggu ── */
+    const cv2 = document.getElementById('chartEvmVariance');
+    if (cv2){
+      if (STATE.chartEvmVariance) STATE.chartEvmVariance.destroy();
+      STATE.chartEvmVariance = new Chart(cv2.getContext('2d'), {
+        type: 'bar',
+        data: {
+          labels: e.weeks.map(w => 'M' + w.week),
+          datasets: [
+            { label:'SV (Jadwal)', data: e.weeks.map(w => Math.round(w.SV)),
+              backgroundColor: e.weeks.map(w => w.SV >= 0 ? 'rgba(34,197,94,.65)' : 'rgba(220,38,38,.65)'),
+              borderRadius:4 },
+            { label:'CV (Biaya)', data: e.weeks.map(w => Math.round(w.CV)),
+              backgroundColor: e.weeks.map(w => w.CV >= 0 ? 'rgba(47,129,247,.65)' : 'rgba(245,158,11,.65)'),
+              borderRadius:4 }
+          ]
+        },
+        options: {
+          responsive:true, maintainAspectRatio:false,
+          plugins:{
+            legend:{labels:{color:'#e6edf7', font:{size:11}}},
+            tooltip:{callbacks:{label:c => c.dataset.label + ': ' + rp(c.parsed.y)}}
+          },
+          scales:{
+            x:{ticks:{color:'#8fa3c4'}, grid:{display:false}},
+            y:{ticks:{color:'#8fa3c4', callback:v => 'Rp ' + (v/1e6).toFixed(0) + 'jt'},
+               grid:{color:'rgba(36,54,92,.5)'}}
+          }
+        }
+      });
+    }
+
+    /* ── EVM table ── */
+    const head = '<thead><tr>' +
+      '<th>Minggu</th>' +
+      '<th class="num">PV</th>' +
+      '<th class="num">EV</th>' +
+      '<th class="num">AC</th>' +
+      (e.baselineIdx ? '<th class="num">Baseline</th>' : '') +
+      '<th class="num">SV</th>' +
+      '<th class="num">CV</th>' +
+      '<th class="num">SPI</th>' +
+      '<th class="num">CPI</th>' +
+    '</tr></thead>';
+
+    const body = e.weeks.map(w => {
+      const spiC = w.SPI >= 0.95 ? 'spi-ok' : w.SPI >= 0.85 ? 'spi-warn' : 'spi-bad';
+      const cpiC = w.CPI >= 0.95 ? 'cpi-ok' : w.CPI >= 0.85 ? 'cpi-warn' : 'cpi-bad';
+      return '<tr class="evm-row">' +
+        '<td><b>M' + w.week + '</b></td>' +
+        '<td class="num">' + rp(w.PV) + '</td>' +
+        '<td class="num">' + rp(w.EV) + '</td>' +
+        '<td class="num">' + rp(w.AC) + '</td>' +
+        (e.baselineIdx ? '<td class="num">' + rp(w.BL) + '</td>' : '') +
+        '<td class="num ' + (w.SV >= 0 ? 'pos' : 'neg') + '">' + rp(w.SV) + '</td>' +
+        '<td class="num ' + (w.CV >= 0 ? 'pos' : 'neg') + '">' + rp(w.CV) + '</td>' +
+        '<td class="num ' + spiC + '">' + w.SPI.toFixed(3) + '</td>' +
+        '<td class="num ' + cpiC + '">' + w.CPI.toFixed(3) + '</td>' +
+      '</tr>';
+    }).join('');
+
+    const totalCols = 8 + (e.baselineIdx ? 1 : 0);
+    const foot = '<tfoot><tr class="evm-forecast">' +
+      '<td colspan="' + (totalCols) + '" style="text-align:right;padding:12px">' +
+        '<b style="color:#a855f7">📌 FORECAST:</b> ' +
+        'EAC = <b>' + rp(e.EAC) + '</b> · ' +
+        'ETC = <b>' + rp(e.ETC) + '</b> · ' +
+        'VAC = <b class="' + (e.VAC >= 0 ? 'pos' : 'neg') + '">' + rp(e.VAC) + '</b> · ' +
+        'Selesai = <b>' + esc(e.forecastFinish) + '</b>' +
+      '</td>' +
+    '</tr></tfoot>';
+
+    document.getElementById('tblEvm').innerHTML = head + '<tbody>' + body + '</tbody>' + foot;
+  }
+};
+
+/* =====================================================================
+   FASE 6C — IMPORT EXCEL BQ
+   ===================================================================== */
+const ImportExcel = {
+  _workbook: null,
+  _sheetName: null,
+  _headers: [],
+  _rows: [],
+  _map: null,
+
+  open(projectId){
+    if (!projectId){ toast('Pilih proyek dulu', false); return; }
+    if (typeof XLSX === 'undefined'){ toast('SheetJS belum dimuat', false); return; }
+
+    const body =
+      '<div class="imp-dropzone" id="impDrop">' +
+        '<div class="imp-icon">📥</div>' +
+        '<div class="imp-title">Drop file XLSX atau klik untuk pilih</div>' +
+        '<div class="imp-hint">Format: .xlsx, .xls · Kolom minimal: <b>Kode</b>, <b>Uraian</b>, <b>Volume</b></div>' +
+      '</div>' +
+      '<input type="file" id="impFile" accept=".xlsx,.xls" style="display:none">' +
+      '<div style="text-align:center;margin-bottom:14px">' +
+        '<button class="btn btn-sm" id="impTemplate" style="background:linear-gradient(135deg,#16a34a,#0f8a3f);border-color:transparent;color:#fff">📄 Download Template XLSX</button>' +
+      '</div>' +
+      '<div id="impStep2" style="display:none"></div>';
+
+    openModal('📥 Import BQ dari Excel', body, () => {});
+
+    // Hide default submit
+    const submitBtn = document.getElementById('mSubmit');
+    if (submitBtn) submitBtn.style.display = 'none';
+    const cancelBtn = document.getElementById('mCancel');
+    if (cancelBtn) cancelBtn.textContent = 'Batal';
+
+    // Wire drop zone
+    const drop = document.getElementById('impDrop');
+    const input = document.getElementById('impFile');
+    drop.onclick = () => input.click();
+    drop.addEventListener('dragover', e => { e.preventDefault(); drop.classList.add('dragover'); });
+    drop.addEventListener('dragleave', () => drop.classList.remove('dragover'));
+    drop.addEventListener('drop', e => {
+      e.preventDefault();
+      drop.classList.remove('dragover');
+      const f = e.dataTransfer.files[0];
+      if (f) this._parseFile(f, projectId);
+    });
+    input.onchange = e => {
+      const f = e.target.files[0];
+      if (f) this._parseFile(f, projectId);
+    };
+
+    // Template
+    document.getElementById('impTemplate').onclick = () => this._downloadTemplate();
+  },
+
+  _downloadTemplate(){
+    const wb = XLSX.utils.book_new();
+    const sample = [
+      ['Kode', 'Uraian', 'STA', 'Satuan', 'Volume RAB', 'Volume RAP', 'AHSP Kode'],
+      ['I.1', 'Galian tanah biasa', 'STA 0+000 - 0+100', 'm3', 1200, 1250, '1.1.1'],
+      ['I.2', 'Timbunan & pemadatan', 'STA 0+000 - 0+100', 'm3', 800, 820, '1.1.2'],
+      ['II.1', 'Beton struktur K-225', 'STA 0+000 - 0+100', 'm3', 150, 155, '1.2.1']
+    ];
+    const ws = XLSX.utils.aoa_to_sheet(sample);
+    ws['!cols'] = [{ wch:10 }, { wch:40 }, { wch:24 }, { wch:8 }, { wch:12 }, { wch:12 }, { wch:12 }];
+    XLSX.utils.book_append_sheet(wb, ws, 'BQ Template');
+    XLSX.writeFile(wb, 'template-bq.xlsx');
+    toast('Template didownload');
+  },
+
+  _parseFile(file, projectId){
+    const reader = new FileReader();
+    reader.onload = ev => {
+      try {
+        const data = new Uint8Array(ev.target.result);
+        const wb = XLSX.read(data, { type: 'array' });
+        const sheetName = wb.SheetNames[0];
+        const sheet = wb.Sheets[sheetName];
+        const rows = XLSX.utils.sheet_to_json(sheet, { header:1, defval:'' });
+        if (rows.length < 2){
+          toast('File kosong atau tidak ada data', false);
+          return;
+        }
+        this._workbook = wb;
+        this._sheetName = sheetName;
+        this._headers = rows[0].map(h => String(h||'').trim());
+        this._rows = rows.slice(1).filter(r => r.some(c => String(c).trim() !== ''));
+        this._map = this._autoMap(this._headers);
+        this._renderStep2(projectId, file.name);
+      } catch(err){
+        toast('Gagal parse: ' + err.message, false);
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  },
+
+  _autoMap(headers){
+    const norm = s => String(s||'').toLowerCase().replace(/[^a-z0-9]/g,'');
+    const find = (keywords) => {
+      for (let i = 0; i < headers.length; i++){
+        const h = norm(headers[i]);
+        if (keywords.some(k => h.includes(k))) return i;
+      }
+      return -1;
+    };
+    return {
+      kode:    find(['kode', 'id', 'code', 'no']),
+      uraian:  find(['uraian', 'nama', 'name', 'item', 'pekerjaan', 'description']),
+      sta:     find(['sta', 'lokasi', 'location']),
+      satuan:  find(['satuan', 'unit', 'uom']),
+      volRAB:  find(['vrab', 'volume', 'qty', 'kuantitas', 'quantity']),
+      volRAP:  find(['vrap', 'volume2', 'rap']),
+      ahsp:    find(['ahsp'])
+    };
+  },
+
+  _renderStep2(projectId, fileName){
+    const wrap = document.getElementById('impStep2');
+    wrap.style.display = 'block';
+
+    const headerOpts = (selIdx) =>
+      '<option value="-1">— Tidak di-map —</option>' +
+      this._headers.map((h, i) =>
+        '<option value="' + i + '"' + (selIdx === i ? ' selected' : '') + '>' + esc(h || 'Kolom ' + (i+1)) + '</option>'
+      ).join('');
+
+    // Preview 5 baris pertama
+    const preview = this._rows.slice(0, 8).map((r, i) =>
+      '<tr>' +
+      '<td><b>' + (i + 1) + '</b></td>' +
+      this._headers.map((_, ci) => '<td>' + esc(String(r[ci]||'').substring(0, 40)) + '</td>').join('') +
+      '</tr>'
+    ).join('');
+
+    wrap.innerHTML =
+      '<div class="imp-summary">' +
+        '<div class="imp-stat"><div class="lbl">File</div><div class="val" style="font-size:12px">' + esc(fileName) + '</div></div>' +
+        '<div class="imp-stat"><div class="lbl">Sheet</div><div class="val" style="font-size:12px">' + esc(this._sheetName) + '</div></div>' +
+        '<div class="imp-stat"><div class="lbl">Total Baris</div><div class="val">' + this._rows.length + '</div></div>' +
+        '<div class="imp-stat"><div class="lbl">Total Kolom</div><div class="val">' + this._headers.length + '</div></div>' +
+      '</div>' +
+
+      '<div class="imp-mapper">' +
+        '<h4>🔗 Mapping Kolom</h4>' +
+        '<div class="imp-map-grid">' +
+          '<div class="imp-map-item"><label>Kode WBS *</label><select class="imp-map" data-field="kode">' + headerOpts(this._map.kode) + '</select></div>' +
+          '<div class="imp-map-item"><label>Uraian *</label><select class="imp-map" data-field="uraian">' + headerOpts(this._map.uraian) + '</select></div>' +
+          '<div class="imp-map-item"><label>STA</label><select class="imp-map" data-field="sta">' + headerOpts(this._map.sta) + '</select></div>' +
+          '<div class="imp-map-item"><label>Satuan</label><select class="imp-map" data-field="satuan">' + headerOpts(this._map.satuan) + '</select></div>' +
+          '<div class="imp-map-item"><label>Volume RAB</label><select class="imp-map" data-field="volRAB">' + headerOpts(this._map.volRAB) + '</select></div>' +
+          '<div class="imp-map-item"><label>Volume RAP</label><select class="imp-map" data-field="volRAP">' + headerOpts(this._map.volRAP) + '</select></div>' +
+          '<div class="imp-map-item"><label>Kode AHSP</label><select class="imp-map" data-field="ahsp">' + headerOpts(this._map.ahsp) + '</select></div>' +
+        '</div>' +
+      '</div>' +
+
+      '<div class="panel-head" style="margin-bottom:6px"><h3 style="font-size:12px">👁 Preview (8 baris pertama)</h3></div>' +
+      '<div class="imp-preview">' +
+        '<table>' +
+          '<thead><tr><th style="width:40px">#</th>' +
+            this._headers.map(h => '<th>' + esc(h || '—') + '</th>').join('') +
+          '</tr></thead>' +
+          '<tbody>' + preview + '</tbody>' +
+        '</table>' +
+      '</div>' +
+
+      '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px">' +
+        '<button class="btn" id="impBack">← Ganti File</button>' +
+        '<button class="btn btn-ok" id="impCommit">✅ Import ke WBS</button>' +
+      '</div>';
+
+    // Wire mapper change
+    wrap.querySelectorAll('.imp-map').forEach(sel => {
+      sel.onchange = () => {
+        this._map[sel.getAttribute('data-field')] = parseInt(sel.value, 10);
+      };
+    });
+
+    document.getElementById('impBack').onclick = () => {
+      wrap.style.display = 'none';
+      document.getElementById('impFile').value = '';
+    };
+
+    document.getElementById('impCommit').onclick = () => this._commit(projectId);
+  },
+
+  _commit(projectId){
+    if (this._map.kode < 0){ toast('Kolom "Kode WBS" wajib di-map', false); return; }
+    if (this._map.uraian < 0){ toast('Kolom "Uraian" wajib di-map', false); return; }
+
+    if (typeof Undo !== 'undefined') Undo.snapshot('Import BQ ' + this._rows.length + ' baris');
+
+    // Build AHSP map kode → id
+    const ahspByKode = {};
+    DB.ahsp_headers.forEach(a => { ahspByKode[String(a.kode).trim().toLowerCase()] = a.id; });
+
+    // Ambil urutan terakhir
+    let maxUrut = DB.project_wbs
+      .filter(w => w.project_id === projectId)
+      .reduce((m, w) => Math.max(m, num(w.urut)||0), 0);
+
+    let added = 0;
+    let skipped = 0;
+    this._rows.forEach(r => {
+      const kode = String(r[this._map.kode] || '').trim();
+      const uraian = String(r[this._map.uraian] || '').trim();
+      if (!kode || !uraian){ skipped++; return; }
+
+      const sta = this._map.sta >= 0 ? String(r[this._map.sta] || '').trim() : '';
+      const satuan = this._map.satuan >= 0 ? String(r[this._map.satuan] || '').trim() : '';
+      const volRAB = this._map.volRAB >= 0 ? num(r[this._map.volRAB]) : 0;
+      const volRAP = this._map.volRAP >= 0 ? num(r[this._map.volRAP]) : volRAB;
+      const ahspKode = this._map.ahsp >= 0 ? String(r[this._map.ahsp] || '').trim().toLowerCase() : '';
+
+      // Detect group by kode (romawi saja, atau ada titik)
+      const isGroup = /^[IVX]+$/i.test(kode) || (!satuan && volRAB === 0);
+      const ahspId = ahspKode ? (ahspByKode[ahspKode] || '') : '';
+
+      maxUrut++;
+      DB.project_wbs.push({
+        id: uid('wbs'),
+        project_id: projectId,
+        kode_wbs: kode,
+        uraian,
+        sta,
+        satuan,
+        volume_rab: volRAB,
+        volume_rap: volRAP,
+        ahsp_id: ahspId,
+        parent_id: '',
+        is_group: isGroup ? 1 : 0,
+        urut: maxUrut,
+        predecessor: '',
+        pred_type: 'FS',
+        lag_days: 0,
+        duration: 1
+      });
+      added++;
+    });
+
+    runCPM(projectId);
+    saveDB();
+
+    const ganttEl = document.getElementById('ganttContainer');
+    if (ganttEl) GanttView.mount(ganttEl, projectId, { mode:'rab', zoom: ganttEl._lastZoom || 'weekly' });
+
+    closeModal();
+    renderWbs();
+    toast('✅ ' + added + ' baris di-import' + (skipped ? ' · ' + skipped + ' dilewati' : ''));
+
+    // Reset state
+    this._workbook = null;
+    this._rows = [];
+    this._headers = [];
+    this._map = null;
+  }
+};
+
+/* =====================================================================
+   FASE 6 — HOOK: render dashboard EVM + tombol import
+   ===================================================================== */
+(function wireFase6(){
+  function ready(fn){
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', fn);
+    else fn();
+  }
+
+  ready(() => {
+    // Tombol Import BQ
+    const btn = document.getElementById('btnImportBQ');
+    if (btn) btn.onclick = () => {
+      if (!STATE.activeProject){ toast('Pilih proyek dulu', false); return; }
+      ImportExcel.open(STATE.activeProject);
+    };
+
+    // Tombol EVM info
+    const btnInfo = document.getElementById('btnEvmInfo');
+    if (btnInfo) btnInfo.onclick = () => {
+      openModal('ℹ Tentang EVM',
+        '<p style="font-size:13px;line-height:1.7;color:var(--txt)">' +
+          '<b>Earned Value Management (EVM)</b> adalah metode mengukur performa proyek dengan membandingkan 3 nilai:<br><br>' +
+          '• <b>PV (Planned Value)</b> — Nilai pekerjaan yang <i>seharusnya</i> selesai per rencana<br>' +
+          '• <b>EV (Earned Value)</b> — Nilai pekerjaan yang <i>sudah</i> dikerjakan (bobot RAB × progress)<br>' +
+          '• <b>AC (Actual Cost)</b> — Biaya aktual yang sudah dikeluarkan<br><br>' +
+          '<b>Indeks:</b><br>' +
+          '• <b>SPI = EV / PV</b> → &lt;1 = telat, ≥1 = on/ahead schedule<br>' +
+          '• <b>CPI = EV / AC</b> → &lt;1 = over budget, ≥1 = hemat<br><br>' +
+          '<b>Forecast:</b><br>' +
+          '• <b>EAC = BAC / CPI</b> → prediksi biaya akhir<br>' +
+          '• <b>VAC = BAC − EAC</b> → selisih terhadap anggaran<br><br>' +
+          '<i style="color:var(--muted)">Catatan: AC dihitung dari RAP × progress (approximation karena sistem tidak mencatat biaya aktual per transaksi).</i>' +
+        '</p>',
+        () => {}
+      );
+      setTimeout(() => { document.getElementById('mSubmit').style.display = 'none'; }, 10);
+    });
+  });
+
+  // Hook renderDashboard → tampilkan EVM
+  if (typeof window._origRenderDashboard === 'undefined'){
+    window._origRenderDashboard = renderDashboard;
+    window.renderDashboard = function(){
+      window._origRenderDashboard();
+      if (typeof EVMView !== 'undefined') EVMView.render();
+    };
+  }
+})();
