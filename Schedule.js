@@ -2521,7 +2521,7 @@ const GanttView = {
     }
 
     /* ── Helper: gambar label tier ── */
-    const drawTierLabel = (cx, cy, text, isBold, size){
+    const drawTierLabel = (cx, cy, text, isBold, size) => {
       if (cx < -50 || cx > W + 50) return;   // skip offscreen
       ctx.fillStyle = isBold ? '#e6edf7' : '#a8b8d6';
       ctx.font = (isBold ? 'bold ' : '') + (size || 10) + 'px Segoe UI';
