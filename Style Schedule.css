@@ -3416,3 +3416,25 @@ canvas:not(.gantt-axis):not(.gantt-bars){
 .dw-wrap.is-readonly .dw-face .dw-icon{
   opacity: .15;
 }
+
+/* =====================================================================
+   FASE 2G.1 — WBS Form: Constraint Row Layout
+   Field date fixed-width, dropdown fill sisa → proporsional
+   ===================================================================== */
+.wbs-form-2col{
+  display: grid !important;
+  grid-template-columns: 1fr minmax(180px, 200px);
+  gap: 12px;
+  align-items: end;
+  margin-top: 12px;
+}
+.wbs-form-2col > .field{
+  min-width: 0;
+  flex: none;
+}
+.wbs-form-2col > .field > label.f{
+  margin-bottom: 5px;
+}
+.wbs-form-2col .dw-wrap{
+  max-width: 100%;
+}
