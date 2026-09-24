@@ -1571,3 +1571,137 @@ canvas:not(.gantt-axis):not(.gantt-bars){
   position:relative;
 }
 .gantt-legend-deps .swatch.crit{background:#dc2626}
+
+/* =====================================================================
+   FASE 3 — INTERACTIVE EDITOR (resize, reorder, select, drag, export)
+   ===================================================================== */
+
+/* ── Column Resize Handle ── */
+.gantt-th{position:relative}
+.gantt-th-resizer{
+  position:absolute;
+  right:-3px;
+  top:0;
+  width:6px;
+  height:100%;
+  cursor:col-resize;
+  z-index:10;
+  background:transparent;
+  transition:background .12s;
+}
+.gantt-th-resizer:hover,
+.gantt-th-resizer.is-active{background:var(--acc)}
+
+/* ── Row Checkbox (Selection) ── */
+.gt-check{
+  display:inline-block;
+  width:13px;
+  height:13px;
+  border:1.5px solid #4a5f85;
+  border-radius:3px;
+  cursor:pointer;
+  flex-shrink:0;
+  transition:.12s;
+  position:relative;
+  background:#0c1729;
+}
+.gt-check:hover{border-color:var(--acc);background:rgba(47,129,247,.10)}
+.gt-check.is-checked{
+  background:var(--acc);
+  border-color:var(--acc);
+}
+.gt-check.is-checked::after{
+  content:'✓';
+  position:absolute;
+  top:-3px; left:1px;
+  font-size:12px;
+  color:#fff;
+  font-weight:800;
+  line-height:1;
+}
+.gt-check.is-partial{
+  background:rgba(47,129,247,.35);
+  border-color:var(--acc);
+}
+.gt-check.is-partial::after{
+  content:'–';
+  position:absolute;
+  top:-3px; left:2px;
+  font-size:13px;
+  color:#fff;
+  font-weight:800;
+  line-height:1;
+}
+
+/* ── Selected Row ── */
+.gantt-row.is-selected{
+  background:rgba(47,129,247,.16) !important;
+}
+.gantt-row.is-selected::before{width:3px}
+.gantt-row.is-selected.is-critical{background:rgba(220,38,38,.18) !important}
+
+/* ── Drag & Drop (Reorder) ── */
+.gt-id-badge[draggable="true"]{cursor:grab}
+.gt-id-badge[draggable="true"]:active{cursor:grabbing}
+
+.gantt-row.is-dragging{opacity:.4}
+.gantt-row.is-drop-above{
+  box-shadow:inset 0 3px 0 0 var(--acc);
+}
+.gantt-row.is-drop-below{
+  box-shadow:inset 0 -3px 0 0 var(--acc);
+}
+
+/* ── Bar Drag (Move) ── */
+.gantt-bars-wrap{cursor:default}
+.gantt-bars-wrap.is-dragging-bar{cursor:move}
+.gantt-bars-wrap.is-over-bar{cursor:pointer}
+
+/* ── Selection Toolbar (floating) ── */
+.gantt-sel-bar{
+  position:absolute;
+  bottom:14px;
+  left:50%;
+  transform:translateX(-50%);
+  background:linear-gradient(180deg,#1a2b4a,#101d33);
+  border:1px solid var(--acc);
+  border-radius:10px;
+  padding:8px 14px;
+  box-shadow:0 12px 30px rgba(0,0,0,.6);
+  display:none;
+  align-items:center;
+  gap:12px;
+  z-index:50;
+  font-size:12px;
+}
+.gantt-sel-bar.show{display:flex}
+.gantt-sel-bar .count{
+  font-weight:700;
+  color:#7cb3ff;
+  letter-spacing:.3px;
+}
+.gantt-sel-bar .sel-btn{
+  padding:5px 11px;
+  font-size:11.5px;
+  border-radius:6px;
+  background:#1d2f52;
+  border:1px solid #33507f;
+  color:var(--txt);
+  cursor:pointer;
+  transition:.12s;
+}
+.gantt-sel-bar .sel-btn:hover{background:var(--acc);border-color:var(--acc)}
+.gantt-sel-bar .sel-btn.danger:hover{background:var(--danger);border-color:var(--danger)}
+
+/* ── Export menu ── */
+.gantt-btn-export{
+  padding:5px 10px;
+  font-size:11.5px;
+  border-radius:6px;
+  background:linear-gradient(135deg,#16a34a,#0f8a3f);
+  border:1px solid transparent;
+  color:#fff;
+  cursor:pointer;
+  transition:.12s;
+}
+.gantt-btn-export:hover{filter:brightness(1.12)}
