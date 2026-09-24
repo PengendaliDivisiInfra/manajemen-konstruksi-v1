@@ -365,7 +365,10 @@
     <div class="panel">
       <div class="panel-head">
         <div><h2>Input Progress Mingguan</h2><p>Volume aktual terpasang per item WBS</p></div>
-        <button class="btn btn-primary" id="btnAddProg">+ Progress</button>
+        <div class="row">
+          <button class="btn btn-primary" id="btnAddProg">+ Progress</button>
+          <button class="btn btn-ok" id="btnProgressWizard" style="background:linear-gradient(135deg,#a855f7,#7c3aed);border-color:transparent;color:#fff">📊 Progress Wizard</button>
+        </div>
       </div>
       <div class="tw"><table id="tblProg"></table></div>
     </div>
@@ -517,6 +520,7 @@
 <script src="Schedule.js"></script>
 <script src="Tracking.js"></script>
 <script src="Reporting.js"></script>
+<script src="ProgressWizard.js"></script>
 
 <!-- ═══════════════════════════════════════════════════════════
      FASE 1C OVERRIDE — MS Project Style Dependency Arrows
