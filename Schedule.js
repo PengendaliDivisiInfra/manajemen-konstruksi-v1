@@ -4226,22 +4226,38 @@ const SyncManager = {
     return sheetRequest('softRelease', { clientId: this.CLIENT_ID });
   },
   async status(){
-    // Guard: skip kalau URL kosong → mencegah 404 noise di console
     if (!SET.sheetUrl || !SET.sheetUrl.trim()) {
       return { ok: false, code: 'NO_URL', message: 'URL belum diatur' };
     }
     try {
       const out = await sheetRequest('softStatus', {});
-      // Kalau request fallback ke blind mode → tandai supaya caller tidak salah interpretasi
       if (out && out.blind) {
         return { ok: false, code: 'BLIND', blind: true, message: out.message };
       }
       return out;
     } catch(e){
+      if (e.code === 'HTTP_404'){
+        return {
+          ok: false,
+          code: 'DEAD_ENDPOINT',
+          message: 'Deployment tidak ditemukan (404)',
+          hint: e.hint
+        };
+      }
+      if (e.code === 'CIRCUIT_OPEN'){
+        return {
+          ok: false,
+          code: 'CIRCUIT_OPEN',
+          message: 'Endpoint offline (circuit breaker)',
+          hint: ENDPOINT_HEALTH.lastError?.hint || 'Cek URL & deployment Web App.'
+        };
+      }
+      if (e.code === 'NO_URL'){
+        return { ok: false, code: 'NO_URL', message: 'URL belum diatur' };
+      }
       return { ok: false, code: 'NET', message: e.message };
     }
   }
-};
 
 /* =====================================================================
    BAGIAN 11 — UNDO/REDO KEYBOARD SHORTCUTS + TOPBAR WIRING (Fase 4C)
@@ -4621,11 +4637,13 @@ const CalendarExport = {
 };
 
 /* =====================================================================
-   FASE 5C — LIVE COLLABORATION (polling awareness)
-   Poll /softStatus tiap 30 detik; deteksi perubahan versi di server
+   FASE 5C — LIVE COLLABORATION (polling dengan adaptive backoff)
+   Koreksi 1C: berhenti spam endpoint mati
    ===================================================================== */
 const LiveSync = {
   INTERVAL_MS: 30000,
+  MAX_INTERVAL_MS: 5 * 60 * 1000,
+  _currentInterval: 30000,
   _timer: null,
   _remoteVersion: null,
   _paused: false,
@@ -4633,22 +4651,43 @@ const LiveSync = {
   start(){
     this.stop();
     if (!SET.sheetUrl || !SET.sheetUrl.trim()) return;
-    this._timer = setInterval(() => this.tick(), this.INTERVAL_MS);
-    this.tick();  // cek pertama kali
+    this._currentInterval = this.INTERVAL_MS;
+    this._schedule();
+  },
+
+  _schedule(){
+    clearTimeout(this._timer);
+    this._timer = setTimeout(() => {
+      Promise.resolve(this.tick()).finally(() => {
+        if (!this._paused) this._schedule();
+      });
+    }, this._currentInterval);
   },
 
   stop(){
-    if (this._timer) clearInterval(this._timer);
+    clearTimeout(this._timer);
     this._timer = null;
   },
 
   pause(){ this._paused = true; },
-  resume(){ this._paused = false; },
+
+  resume(){
+    this._paused = false;
+    this._currentInterval = this.INTERVAL_MS;
+    this._schedule();
+  },
+
+  _backoff(){
+    this._currentInterval = Math.min(this._currentInterval * 3, this.MAX_INTERVAL_MS);
+  },
+
+  _resetBackoff(){
+    this._currentInterval = this.INTERVAL_MS;
+  },
 
   async tick(){
     if (this._paused) return;
     if (!SET.sheetUrl) return;
-    // Skip kalau modal terbuka atau drag aktif
     if (document.getElementById('overlay')?.classList.contains('show')) return;
     if (typeof GanttView !== 'undefined' && GanttView._state?.barDrag) return;
 
@@ -4658,19 +4697,33 @@ const LiveSync = {
     try {
       const out = await SyncManager.status();
       if (!out || !out.ok){
-        this._setIndicator('err', 'Offline');
+        let txt = 'Offline';
+        if (out && out.code === 'DEAD_ENDPOINT'){
+          txt = 'URL mati';
+          this._backoff();
+        } else if (out && out.code === 'CIRCUIT_OPEN'){
+          txt = 'Endpoint offline';
+          this._backoff();
+        } else if (out && out.code === 'NO_URL'){
+          txt = 'URL kosong';
+        } else {
+          this._backoff();
+        }
+        this._setIndicator('err', txt);
         return;
       }
+
+      // Endpoint sehat → reset backoff
+      this._resetBackoff();
+
       const remoteVer = out.dbVersion;
 
-      // Pertama kali → simpan baseline
       if (this._remoteVersion === null){
         this._remoteVersion = remoteVer;
         this._setIndicator('ok', 'Live');
         return;
       }
 
-      // Bandingkan dengan versi lokal
       const localVer = STATE.dbVersion;
       if (remoteVer !== this._remoteVersion){
         this._remoteVersion = remoteVer;
@@ -4682,6 +4735,7 @@ const LiveSync = {
         this._setIndicator('ok', 'Live');
       }
     } catch(e){
+      this._backoff();
       this._setIndicator('err', 'Offline');
     } finally {
       if (ind) ind.classList.remove('is-syncing');
