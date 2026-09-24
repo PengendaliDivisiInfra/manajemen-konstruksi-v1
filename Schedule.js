@@ -1612,7 +1612,48 @@ const GanttView = {
   COL_STORE_KEY: 'mk_gantt_col_widths_v1',
   ROW_H: 26,
   AXIS_H: 60,
-   
+
+  /* ═══════════════════════════════════════════════════════════
+     Fase 2C — Bar Style Presets + Gridlines Config
+     ═══════════════════════════════════════════════════════════ */
+  STYLE_STORE_KEY: 'mk_gantt_style_v1',
+
+  BAR_STYLES: {
+    classic: { label: 'Classic',  radius: 3, barH: 14, border: true,  borderW: 1,   gradient: false, shadow: false },
+    modern:  { label: 'Modern',   radius: 6, barH: 16, border: false, borderW: 0,   gradient: true,  shadow: true  },
+    minimal: { label: 'Minimal',  radius: 2, barH: 10, border: false, borderW: 0,   gradient: false, shadow: false },
+    bold:    { label: 'Bold',     radius: 4, barH: 18, border: true,  borderW: 1.5, gradient: false, shadow: true  }
+  },
+
+  GRIDLINES_DEFAULTS: {
+    vertical: true,
+    horizontal: true,
+    workingDaysShading: true,
+    weekSeparator: true
+  },
+
+  loadStyle(){
+    try {
+      const raw = localStorage.getItem(this.STYLE_STORE_KEY);
+      if (!raw){
+        return { barStyle: 'classic', gridlines: Object.assign({}, this.GRIDLINES_DEFAULTS) };
+      }
+      const p = JSON.parse(raw);
+      return {
+        barStyle: this.BAR_STYLES[p.barStyle] ? p.barStyle : 'classic',
+        gridlines: Object.assign({}, this.GRIDLINES_DEFAULTS, p.gridlines || {})
+      };
+    } catch(e){
+      return { barStyle: 'classic', gridlines: Object.assign({}, this.GRIDLINES_DEFAULTS) };
+    }
+  },
+
+  saveStyle(barStyle, gridlines){
+    try {
+      localStorage.setItem(this.STYLE_STORE_KEY, JSON.stringify({ barStyle, gridlines }));
+    } catch(e){}
+  },
+
   _state: null,
 
   /* ─────── MOUNT ─────── */
@@ -1680,17 +1721,23 @@ const GanttView = {
       chartWidth = Math.max(400, totalDays * zoomCfg.pxPerDay);
     }
 
+    const styleState = this.loadStyle();
+
     const state = {
       container, nodes, proj, startDate, endDate, totalDays,
       chartWidth, zoom, zoomCfg,
       mode: opts.mode || 'rab', cal,
       collapsed, childrenOf, selected,
       baselineIdx,
-      filter, collapsedGroups,        // ← NEW
+      filter, collapsedGroups,
       visibleNodes: [],
       totalHeight: 0,
       posMap: {},
-      barDrag: null
+      barDrag: null,
+      /* Fase 2C — style */
+      barStyle:      styleState.barStyle,
+      barStyleCfg:   this.BAR_STYLES[styleState.barStyle] || this.BAR_STYLES.classic,
+      gridlines:     styleState.gridlines
     };
 
     this._state = state;
@@ -2022,6 +2069,23 @@ const GanttView = {
             '</select>' +
             '<button class="gantt-btn-tool gantt-btn-bl-set" title="Set Baseline">📌 Set</button>' +
             '<button class="gantt-btn-tool gantt-btn-bl-clear" title="Clear Baseline">🗑 Clear</button>' +
+            '<span class="gantt-lbl" style="margin-left:8px">Style</span>' +
+            '<select class="gantt-bar-style">' +
+              Object.keys(this.BAR_STYLES).map(k =>
+                '<option value="' + k + '"' + (state.barStyle === k ? ' selected' : '') + '>' +
+                this.BAR_STYLES[k].label + '</option>'
+              ).join('') +
+            '</select>' +
+            '<span class="gantt-grid-toggles">' +
+              '<button class="grid-chip' + (state.gridlines.vertical ? ' is-on' : '') +
+                '" data-grid="vertical" title="Garis Vertikal">┃</button>' +
+              '<button class="grid-chip' + (state.gridlines.horizontal ? ' is-on' : '') +
+                '" data-grid="horizontal" title="Garis Horizontal">━</button>' +
+              '<button class="grid-chip' + (state.gridlines.workingDaysShading ? ' is-on' : '') +
+                '" data-grid="workingDaysShading" title="Shading Hari Libur">░</button>' +
+              '<button class="grid-chip' + (state.gridlines.weekSeparator ? ' is-on' : '') +
+                '" data-grid="weekSeparator" title="Garis Minggu">┃┃</button>' +
+            '</span>' +
             '<span class="gantt-lbl" style="margin-left:8px">Zoom</span>' +
             '<select class="gantt-zoom">' +
               '<option value="hourly"    ' + (zoom==='hourly'    ?'selected':'') + '>Per Jam</option>' +
@@ -2505,8 +2569,9 @@ const GanttView = {
       }
     }
 
-    /* ── Gridlines vertikal per hari (kecuali hourly & yearly) ── */
-    if (zoom !== 'hourly' && zoom !== 'yearly'){
+    /* ── Gridlines vertikal per hari (kecuali hourly & yearly, toggle Fase 2C) ── */
+    const glA = state.gridlines || { vertical: true };
+    if (glA.vertical && zoom !== 'hourly' && zoom !== 'yearly'){
       const dg = new Date(startDate);
       ctx.strokeStyle = 'rgba(36,54,92,.5)';
       ctx.lineWidth = 1;
@@ -2752,6 +2817,8 @@ const GanttView = {
 
     ctx.clearRect(0, 0, W, H);
 
+    const gl = state.gridlines || { horizontal: true, workingDaysShading: true, vertical: true, weekSeparator: true };
+
     // A. Row striping
     visibleNodes.forEach((n, i) => {
       if (n.isSummary){
@@ -2763,26 +2830,61 @@ const GanttView = {
       }
     });
 
-    // B. Garis horizontal
-    ctx.strokeStyle = 'rgba(60, 90, 130, 0.85)';
-    ctx.lineWidth = 1;
-    for (let i = 1; i <= visibleNodes.length; i++){
-      const y = i * rowH - 0.5;
-      ctx.beginPath();
-      ctx.moveTo(0, y);
-      ctx.lineTo(W, y);
-      ctx.stroke();
+    // B. Garis horizontal per row (toggle)
+    if (gl.horizontal){
+      ctx.strokeStyle = 'rgba(60, 90, 130, 0.85)';
+      ctx.lineWidth = 1;
+      for (let i = 1; i <= visibleNodes.length; i++){
+        const y = i * rowH - 0.5;
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(W, y);
+        ctx.stroke();
+      }
     }
 
-    // C. Shading libur
-    const dShade = new Date(startDate);
-    while (dShade <= state.endDate){
-      if (!WorkingCalendar.isWorkDay(dShade, cal)){
-        const x = Math.round((dShade - startDate) / 86400000) * px;
-        ctx.fillStyle = 'rgba(255,255,255,.022)';
-        ctx.fillRect(x, 0, px, H);
+    // C. Shading libur (toggle)
+    if (gl.workingDaysShading){
+      const dShade = new Date(startDate);
+      while (dShade <= state.endDate){
+        if (!WorkingCalendar.isWorkDay(dShade, cal)){
+          const x = Math.round((dShade - startDate) / 86400000) * px;
+          ctx.fillStyle = 'rgba(255,255,255,.022)';
+          ctx.fillRect(x, 0, px, H);
+        }
+        dShade.setDate(dShade.getDate() + 1);
       }
-      dShade.setDate(dShade.getDate() + 1);
+    }
+
+    // C.2. Garis vertikal per hari + pemisah minggu (toggle)
+    if (gl.vertical || gl.weekSeparator){
+      const dv = new Date(startDate);
+      while (dv <= state.endDate){
+        const dow = dv.getDay();
+        const isWeekStart = (dow === 1); // Senin
+        const isWorkDay = WorkingCalendar.isWorkDay(dv, cal);
+
+        if (gl.vertical && isWorkDay && !isWeekStart){
+          const x = Math.round((dv - startDate) / 86400000) * px + 0.5;
+          ctx.strokeStyle = 'rgba(36,54,92,.35)';
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.moveTo(x, 0);
+          ctx.lineTo(x, H);
+          ctx.stroke();
+        }
+        if (gl.weekSeparator && isWeekStart){
+          const x = Math.round((dv - startDate) / 86400000) * px + 0.5;
+          ctx.strokeStyle = '#3a5590';
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          ctx.moveTo(x, 0);
+          ctx.lineTo(x, H);
+          ctx.stroke();
+          ctx.lineWidth = 1;
+        }
+        dv.setDate(dv.getDate() + 1);
+      }
     }
 
     // D. Today marker
@@ -2832,7 +2934,10 @@ const GanttView = {
       } else {
         const fill   = n.isCritical ? '#dc2626' : '#2f81f7';
         const stroke = n.isCritical ? '#7f1d1d' : '#1f6fe0';
-        this.taskBar(ctx, x1, y + (rowH - 14)/2, w, 14, fill, stroke, n.progressPct);
+        const cfg    = state.barStyleCfg;
+        const barH   = cfg.barH;
+        const yBar   = y + (rowH - barH) / 2;
+        this.taskBar(ctx, x1, yBar, w, barH, fill, stroke, n.progressPct, cfg);
       }
     });
 
@@ -2949,11 +3054,80 @@ const GanttView = {
     }
   },
 
-  /* ── Task bar (MS Project style) ──
-     - Bar kosong: light fill (total duration)
-     - Bar completed: dark fill sampai % progress
-     - Progress Line: garis hitam vertikal di batas completed portion */
-  taskBar(ctx, x, y, w, h, fill, stroke, pct){
+  /* ── Task bar (MS Project style + Fase 2C presets) ── */
+  taskBar(ctx, x, y, w, h, fill, stroke, pct, cfg){
+    cfg = cfg || this.BAR_STYLES.classic;
+    const radius = Math.min(cfg.radius || 3, h/2);
+
+    /* Shadow (Modern/Bold) */
+    if (cfg.shadow){
+      ctx.save();
+      ctx.shadowColor = 'rgba(0,0,0,.4)';
+      ctx.shadowBlur = 4;
+      ctx.shadowOffsetY = 1;
+      ctx.fillStyle = 'rgba(0,0,0,.2)';
+      this.rrect(ctx, x + 0.5, y + 1.5, w, h, radius);
+      ctx.fill();
+      ctx.restore();
+    }
+
+    /* Background fill */
+    let bgFill;
+    if (cfg.gradient){
+      const grad = ctx.createLinearGradient(x, y, x, y + h);
+      grad.addColorStop(0, this.lighten(fill, 0.15));
+      grad.addColorStop(1, this.lighten(fill, 0.55));
+      bgFill = grad;
+    } else {
+      bgFill = this.lighten(fill, 0.55);
+    }
+
+    ctx.fillStyle = bgFill;
+    this.rrect(ctx, x, y, w, h, radius);
+    ctx.fill();
+
+    /* Completed portion */
+    if (pct > 0){
+      const pw = Math.max(2, w * (pct/100));
+      let doneFill;
+      if (cfg.gradient){
+        const grad2 = ctx.createLinearGradient(x, y, x, y + h);
+        grad2.addColorStop(0, fill);
+        grad2.addColorStop(1, this.lighten(fill, 0.25));
+        doneFill = grad2;
+      } else {
+        doneFill = fill;
+      }
+      ctx.fillStyle = doneFill;
+      this.rrect(ctx, x, y, pw, h, radius);
+      ctx.fill();
+
+      /* Progress Line: garis vertikal hitam di batas completed */
+      if (pct < 100 && pw > 3 && w > 8){
+        ctx.save();
+        ctx.fillStyle = '#0b1220';
+        ctx.fillRect(x + pw - 1, y + 1, 2.5, h - 2);
+        ctx.restore();
+      }
+    }
+
+    /* Border */
+    if (cfg.border){
+      ctx.strokeStyle = stroke;
+      ctx.lineWidth = cfg.borderW || 1;
+      this.rrect(ctx, x + 0.5, y + 0.5, w - 1, h - 1, radius);
+      ctx.stroke();
+    }
+
+    /* Label % di tengah bar */
+    if (w > 60 && pct > 0){
+      ctx.fillStyle = '#fff';
+      ctx.font = 'bold 9px Segoe UI';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(Math.round(pct) + '%', x + w/2, y + h/2);
+    }
+  },
     const bg = this.lighten(fill, 0.55);
 
     /* Background bar (light) */
@@ -3128,6 +3302,28 @@ const GanttView = {
     if (zoomSel) zoomSel.onchange = e => {
       this.mount(state.container, state.proj.id, { mode: state.mode, zoom: e.target.value });
     };
+
+    /* ── Fase 2C: Bar Style dropdown ── */
+    const styleSel = container.querySelector('.gantt-bar-style');
+    if (styleSel){
+      styleSel.onchange = e => {
+        const cur = this.loadStyle();
+        this.saveStyle(e.target.value, cur.gridlines);
+        this.mount(state.container, state.proj.id, { mode: state.mode, zoom: state.zoom });
+      };
+    }
+
+    /* ── Fase 2C: Gridline toggle chips ── */
+    container.querySelectorAll('.grid-chip').forEach(chip => {
+      chip.onclick = () => {
+        const key = chip.getAttribute('data-grid');
+        if (!key) return;
+        const cur = this.loadStyle();
+        cur.gridlines[key] = !cur.gridlines[key];
+        this.saveStyle(cur.barStyle, cur.gridlines);
+        this.mount(state.container, state.proj.id, { mode: state.mode, zoom: state.zoom });
+      };
+    });
     if (btnToday) btnToday.onclick = () => {
       const today = new Date(); today.setHours(0,0,0,0);
       const off = Math.round((today - state.startDate) / 86400000);
