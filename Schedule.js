@@ -1441,31 +1441,31 @@ const GanttView = {
         '</div>' +
 
         '<div class="gantt-body">' +
-
-          /* R1 C1 — Header tabel */
+          /* R1 C1 */
           '<div class="gantt-thead">' +
             this.COLUMNS.map(c =>
               '<div class="gantt-th" style="width:' + c.width + 'px;text-align:' + c.align + '">' + esc(c.label) + '</div>'
             ).join('') +
           '</div>' +
 
-          /* R1 C2 — Axis kanan */
+          /* R1 C2 — axis canvas pakai chartWidth eksplisit (tanpa stretch) */
           '<div class="gantt-axis-wrap">' +
-            '<div class="gantt-axis-track" style="width:' + chartWidth + 'px">' +
-              '<canvas class="gantt-axis" width="' + chartWidth + '" height="' + this.AXIS_H + '"></canvas>' +
+            '<div class="gantt-axis-track" style="width:' + chartWidth + 'px;height:' + this.AXIS_H + 'px">' +
+              '<canvas class="gantt-axis" width="' + chartWidth + '" height="' + this.AXIS_H + '" ' +
+                      'style="width:' + chartWidth + 'px;height:' + this.AXIS_H + 'px;display:block"></canvas>' +
             '</div>' +
           '</div>' +
 
-          /* R2 C1 — Tabel body */
+          /* R2 C1 */
           '<div class="gantt-tbody">' +
             nodes.map((n,i) => this.rowHtml(n,i)).join('') +
           '</div>' +
 
-          /* R2 C2 — Bars */
+          /* R2 C2 — bars canvas pakai chartWidth eksplisit (tanpa stretch) */
           '<div class="gantt-bars-wrap">' +
-            '<canvas class="gantt-bars" width="' + chartWidth + '" height="' + totalHeight + '"></canvas>' +
+            '<canvas class="gantt-bars" width="' + chartWidth + '" height="' + totalHeight + '" ' +
+                    'style="width:' + chartWidth + 'px;height:' + totalHeight + 'px;display:block"></canvas>' +
           '</div>' +
-
         '</div>' +
       '</div>';
 
@@ -1623,19 +1623,19 @@ const GanttView = {
 
     ctx.clearRect(0, 0, W, H);
 
-    // ── A. Row background striping (agar sinkron dgn tabel kiri) ──
+    // ── A. Row striping ──
     nodes.forEach((n, i) => {
       if (n.isSummary){
-        ctx.fillStyle = 'rgba(47,129,247,.06)';
+        ctx.fillStyle = 'rgba(47,129,247,.08)';
         ctx.fillRect(0, i*rowH, W, rowH);
       } else if (i % 2 === 0){
-        ctx.fillStyle = 'rgba(255,255,255,.012)';
+        ctx.fillStyle = 'rgba(255,255,255,.015)';
         ctx.fillRect(0, i*rowH, W, rowH);
       }
     });
 
-    // ── B. Horizontal row separator (KUNCI ALIGNMENT VISUAL) ──
-    ctx.strokeStyle = 'rgba(36,54,92,.4)';
+    // ── B. GARIS HORIZONTAL PER BARIS (sejajar dgn tabel kiri) ──
+    ctx.strokeStyle = 'rgba(60, 90, 130, 0.85)';  // ← lebih terang
     ctx.lineWidth = 1;
     for (let i = 1; i <= nodes.length; i++){
       const y = i * rowH - 0.5;
@@ -1650,7 +1650,7 @@ const GanttView = {
     while (dShade <= state.endDate){
       if (!WorkingCalendar.isWorkDay(dShade, cal)){
         const x = Math.round((dShade - startDate) / 86400000) * px;
-        ctx.fillStyle = 'rgba(255,255,255,.018)';
+        ctx.fillStyle = 'rgba(255,255,255,.022)';
         ctx.fillRect(x, 0, px, H);
       }
       dShade.setDate(dShade.getDate() + 1);
@@ -1672,7 +1672,7 @@ const GanttView = {
       ctx.lineWidth = 1;
     }
 
-    // ── E. Bars (task + summary + milestone) ──
+    // ── E. Bars ──
     nodes.forEach((n, i) => {
       const y = i * rowH;
       if (!n.startISO || !n.finishISO) return;
@@ -1680,7 +1680,6 @@ const GanttView = {
       const sOff = Math.round((new Date(n.startISO) - startDate) / 86400000);
       const fOff = Math.round((new Date(n.finishISO) - startDate) / 86400000);
 
-      // Milestone
       if (n.isMilestone){
         const cx = sOff * px;
         const cy = y + rowH / 2;
@@ -1692,7 +1691,6 @@ const GanttView = {
       const w = Math.max(3, (fOff - sOff) * px);
 
       if (n.isSummary){
-        // Summary bar — JELAS TERLIHAT dengan warna terang
         this.summaryBar(ctx, x, y + (rowH - 12)/2, w, 12);
       } else {
         const fill   = n.isCritical ? '#dc2626' : '#2f81f7';
