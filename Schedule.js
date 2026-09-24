@@ -1347,19 +1347,20 @@ const GanttView = {
     monthly: { pxPerDay: 4,  label: 'Bulanan'  }
   },
 
-  ROW_H:  26,
-  AXIS_H: 60,
-
   COLUMNS: [
-    { key:'kode',         label:'ID',        width: 68, align:'left'  },
+    { key:'kode',         label:'ID',        width: 78, align:'left'  },
     { key:'nama',         label:'Task Name', width:240, align:'left'  },
     { key:'duration',     label:'Dur',       width: 48, align:'right' },
     { key:'startISO',     label:'Start',     width: 78, align:'center'},
     { key:'finishISO',    label:'Finish',    width: 78, align:'center'},
     { key:'predecessors', label:'Pred',      width: 68, align:'left'  },
-    { key:'resources',    label:'Resources', width:128, align:'left'  }
+    { key:'resources',    label:'Resources', width:118, align:'left'  }
   ],
 
+  COL_STORE_KEY: 'mk_gantt_col_widths_v1',
+  ROW_H: 26,
+  AXIS_H: 60,
+   
   _state: null,
 
   /* ─────── MOUNT ─────── */
@@ -1380,10 +1381,9 @@ const GanttView = {
     const nodes = tree.nodes;
     const proj  = tree.proj;
 
-    // Preserve collapsed state across remount (zoom change)
     const collapsed = container._collapsed || new Set();
+    const selected  = container._selected  || new Set();
 
-    // Pre-compute: build parent → children map (untuk collapse)
     const childrenOf = {};
     nodes.forEach(n => {
       if (n.parentId) (childrenOf[n.parentId] = childrenOf[n.parentId] || []).push(n.id);
@@ -1416,15 +1416,19 @@ const GanttView = {
       container, nodes, proj, startDate, endDate, totalDays,
       chartWidth, zoom, zoomCfg,
       mode: opts.mode || 'rab', cal,
-      collapsed, childrenOf,
-      visibleNodes: [],       // computed
-      totalHeight: 0          // computed
+      collapsed, childrenOf, selected,
+      visibleNodes: [],
+      totalHeight: 0,
+      posMap: {},
+      barDrag: null
     };
 
     this._state = state;
     container._lastZoom = zoom;
     container._collapsed = collapsed;
+    container._selected  = selected;
 
+    this.applyColWidths(state);
     this.computeVisible(state);
     this.renderLayout(state);
     this.wireEvents(state);
@@ -1454,14 +1458,34 @@ const GanttView = {
   indexOfVisible(state, id){
     return state.visibleNodes.findIndex(n => n.id === id);
   },
+     /* ── Column widths persistence ── */
+  loadColWidths(){
+    try {
+      const raw = localStorage.getItem(this.COL_STORE_KEY);
+      if (!raw) return null;
+      return JSON.parse(raw);
+    } catch(e){ return null; }
+  },
+  saveColWidths(widths){
+    try { localStorage.setItem(this.COL_STORE_KEY, JSON.stringify(widths)); } catch(e){}
+  },
+  applyColWidths(state){
+    const saved = this.loadColWidths();
+    if (saved){
+      this.COLUMNS.forEach(c => { if (saved[c.key]) c.width = saved[c.key]; });
+    }
+    state.colWidths = {};
+    this.COLUMNS.forEach(c => state.colWidths[c.key] = c.width);
+  },
+  tableWidth(){
+    return this.COLUMNS.reduce((s,c) => s + c.width, 0);
+  },
 
   /* ─────── LAYOUT (Fase 1.2 — grid 2×2) ─────── */
   renderLayout(state){
-    const {container, nodes, proj, zoom, chartWidth, totalHeight, visibleNodes} = state;
-    const tableW = this.COLUMNS.reduce((s,c) => s + c.width, 0);
-
-    // Summary count untuk badge toolbar
-    const summaryCount = nodes.filter(n => n.isSummary).length;
+    const {container, proj, zoom, chartWidth, totalHeight, visibleNodes, selected} = state;
+    const tableW = this.tableWidth();
+    const allSelected = selected.size > 0 && selected.size === visibleNodes.length;
 
     container.innerHTML =
       '<div class="gantt-root" style="--gantt-table-w:' + tableW + 'px">' +
@@ -1471,8 +1495,10 @@ const GanttView = {
             '<div class="gantt-subtitle">' + esc(proj.nama) + ' · ' + esc(proj.tgl_mulai) + ' → ' + esc(proj.tgl_selesai) + '</div>' +
           '</div>' +
           '<div class="gantt-toolbar-right">' +
-            '<button class="gantt-btn-tool gantt-btn-expand-all">⊞ Expand All</button>' +
-            '<button class="gantt-btn-tool gantt-btn-collapse-all">⊟ Collapse All</button>' +
+            '<button class="gantt-btn-tool gantt-btn-expand-all" title="Expand All">⊞</button>' +
+            '<button class="gantt-btn-tool gantt-btn-collapse-all" title="Collapse All">⊟</button>' +
+            '<button class="gantt-btn-export gantt-btn-export-png" title="Export PNG">⬇ PNG</button>' +
+            '<button class="gantt-btn-export gantt-btn-export-pdf" title="Export PDF" style="background:linear-gradient(135deg,#dc2626,#b91c1c)">📄 PDF</button>' +
             '<span class="gantt-lbl" style="margin-left:8px">Zoom</span>' +
             '<select class="gantt-zoom">' +
               '<option value="daily"   ' + (zoom==='daily'   ?'selected':'') + '>Harian</option>' +
@@ -1484,11 +1510,14 @@ const GanttView = {
         '</div>' +
 
         '<div class="gantt-body">' +
-          /* R1 C1 — Header */
+          /* R1 C1 — Header + resize handle */
           '<div class="gantt-thead">' +
-            this.COLUMNS.map(c => {
+            this.COLUMNS.map((c, idx) => {
               const cls = c.align === 'right' ? ' right' : c.align === 'center' ? ' center' : '';
-              return '<div class="gantt-th' + cls + '" style="width:' + c.width + 'px">' + esc(c.label) + '</div>';
+              const isLast = idx === this.COLUMNS.length - 1;
+              const resize = isLast ? '' : '<div class="gantt-th-resizer" data-col-idx="' + idx + '"></div>';
+              return '<div class="gantt-th' + cls + '" data-col-key="' + c.key + '" style="width:' + c.width + 'px">' +
+                     esc(c.label) + resize + '</div>';
             }).join('') +
           '</div>' +
 
@@ -1511,10 +1540,18 @@ const GanttView = {
                     'style="width:' + chartWidth + 'px;height:' + totalHeight + 'px;display:block"></canvas>' +
           '</div>' +
         '</div>' +
+
+        /* Selection toolbar */
+        '<div class="gantt-sel-bar">' +
+          '<span class="count"><span class="sel-count">0</span> dipilih</span>' +
+          '<button class="sel-btn sel-btn-clear">Batal Pilih</button>' +
+          '<button class="sel-btn sel-btn-clear-all">Kosongkan Semua</button>' +
+        '</div>' +
       '</div>';
 
     this.drawAxis(state, container.querySelector('.gantt-axis'));
     this.drawBars(state, container.querySelector('.gantt-bars'));
+    this.updateSelBar(state);
   },
 
      /* Gambar garis dependency antar task */
@@ -1634,21 +1671,28 @@ const GanttView = {
   rowHtml(node, idx){
     const state = this._state;
     const collapsed = state && state.collapsed ? state.collapsed : new Set();
+    const selected  = state && state.selected  ? state.selected  : new Set();
+    const isSelected = selected.has(node.id);
 
     const cls = [
       'gantt-row',
       node.isSummary   ? 'is-summary'  : '',
       node.isCritical  ? 'is-critical' : '',
-      node.isMilestone ? 'is-milestone': ''
+      node.isMilestone ? 'is-milestone': '',
+      isSelected       ? 'is-selected' : ''
     ].filter(Boolean).join(' ');
 
     const cells = this.COLUMNS.map(c => {
       let inner = '';
       switch (c.key){
-        case 'kode':
-          inner = '<span class="gt-id-badge">' + esc(node.kode || '—') + '</span>';
+        case 'kode': {
+          const check = '<span class="gt-check' + (isSelected ? ' is-checked' : '') +
+                        '" data-select-id="' + esc(node.id) + '"></span>';
+          const badge = '<span class="gt-id-badge" draggable="true" data-drag-id="' + esc(node.id) + '">' +
+                        esc(node.kode || '—') + '</span>';
+          inner = check + badge;
           break;
-
+        }
         case 'nama': {
           const indent = node.level * 14;
           const tree   = indent > 0 ? '<span class="gt-tree" style="width:' + indent + 'px"></span>' : '';
@@ -1666,23 +1710,19 @@ const GanttView = {
           inner = tree + exp + dia + '<span class="gt-name">' + esc(node.nama) + '</span>' + prog;
           break;
         }
-
         case 'duration':
           if (node.isMilestone) inner = '<span class="gt-dim">0</span>';
           else inner = '<span class="gt-num">' + (node.duration || 0) + '</span><span class="gt-dim">d</span>';
           break;
-
         case 'startISO':
         case 'finishISO':
           inner = '<span class="gt-date">' + esc(node[c.key] || '—') + '</span>';
           break;
-
         case 'predecessors':
           inner = node.predecessors
             ? '<span class="gt-pred">' + esc(node.predecessors) + '</span>'
             : '<span class="gt-dim">—</span>';
           break;
-
         case 'resources':
           inner = node.resources
             ? '<span class="gt-res">' + esc(node.resources) + '</span>'
@@ -1693,12 +1733,13 @@ const GanttView = {
       const justify = c.align === 'right'  ? 'flex-end'
                     : c.align === 'center' ? 'center'
                     : 'flex-start';
-      return '<div class="gantt-td" ' +
+      return '<div class="gantt-td" data-col-key="' + c.key + '" ' +
              'style="width:' + c.width + 'px;justify-content:' + justify + '">' +
              inner + '</div>';
     }).join('');
 
-    return '<div class="' + cls + '" data-idx="' + idx + '" data-node-id="' + esc(node.id) + '">' + cells + '</div>';
+    return '<div class="' + cls + '" data-idx="' + idx + '" data-node-id="' + esc(node.id) + '">' +
+           cells + '</div>';
   },
 
   /* ─────── AXIS ─────── */
@@ -1832,7 +1873,7 @@ const GanttView = {
       }
     });
 
-    // B. Garis horizontal per baris
+    // B. Garis horizontal
     ctx.strokeStyle = 'rgba(60, 90, 130, 0.85)';
     ctx.lineWidth = 1;
     for (let i = 1; i <= visibleNodes.length; i++){
@@ -1843,7 +1884,7 @@ const GanttView = {
       ctx.stroke();
     }
 
-    // C. Non-working day shading
+    // C. Shading libur
     const dShade = new Date(startDate);
     while (dShade <= state.endDate){
       if (!WorkingCalendar.isWorkDay(dShade, cal)){
@@ -1870,8 +1911,10 @@ const GanttView = {
       ctx.lineWidth = 1;
     }
 
-    // E. Bars — simpan posisi untuk dependency
-    const posMap = {};   // node.id → {x1, x2, y, rowIdx}
+    // E. Bars
+    const posMap = {};
+    state.posMap = posMap;
+
     visibleNodes.forEach((n, i) => {
       const y = i * rowH;
       if (!n.startISO || !n.finishISO) return;
@@ -1881,7 +1924,7 @@ const GanttView = {
 
       const x1 = sOff * px;
       const x2 = fOff * px;
-      posMap[n.id] = { x1, x2, y, rowIdx: i };
+      posMap[n.id] = { x1, x2, y, rowIdx: i, w: Math.max(3, x2 - x1) };
 
       if (n.isMilestone){
         const cx = x1;
@@ -1901,8 +1944,31 @@ const GanttView = {
       }
     });
 
-    // F. DEPENDENCY ARROWS
+    // F. Dependency arrows
     this.drawDependencies(ctx, state, posMap, rowH);
+
+    // G. Bar drag ghost
+    const bd = state.barDrag;
+    if (bd && bd.preview){
+      const pos = posMap[bd.nodeId];
+      if (pos){
+        const gx = bd.preview.x1;
+        const gw = bd.preview.w;
+        const gy = pos.y + (rowH - 14)/2;
+        ctx.save();
+        ctx.globalAlpha = .55;
+        ctx.fillStyle = bd.isCritical ? '#dc2626' : '#2f81f7';
+        this.rrect(ctx, gx, gy, gw, 14, 3);
+        ctx.fill();
+        ctx.strokeStyle = '#fff';
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([4, 3]);
+        this.rrect(ctx, gx, gy, gw, 14, 3);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.restore();
+      }
+    }
   },
 
   taskBar(ctx, x, y, w, h, fill, stroke, pct){
@@ -2018,12 +2084,13 @@ const GanttView = {
     const btnToday   = container.querySelector('.gantt-btn-today');
     const btnExpand  = container.querySelector('.gantt-btn-expand-all');
     const btnCollapse= container.querySelector('.gantt-btn-collapse-all');
+    const btnPNG     = container.querySelector('.gantt-btn-export-png');
+    const btnPDF     = container.querySelector('.gantt-btn-export-pdf');
+    const selBar     = container.querySelector('.gantt-sel-bar');
 
     if (!leftBody || !rightScr || !axisTrack) return;
 
     let syncing = false;
-
-    // Sinkron scroll vertikal + axis horizontal
     rightScr.addEventListener('scroll', () => {
       axisTrack.style.transform = 'translateX(' + (-rightScr.scrollLeft) + 'px)';
       if (!syncing){ syncing = true; leftBody.scrollTop = rightScr.scrollTop; syncing = false; }
@@ -2033,12 +2100,9 @@ const GanttView = {
       syncing = true; rightScr.scrollTop = leftBody.scrollTop; syncing = false;
     });
 
-    // Zoom
     if (zoomSel) zoomSel.onchange = e => {
       this.mount(state.container, state.proj.id, { mode: state.mode, zoom: e.target.value });
     };
-
-    // Today
     if (btnToday) btnToday.onclick = () => {
       const today = new Date(); today.setHours(0,0,0,0);
       const off = Math.round((today - state.startDate) / 86400000);
@@ -2046,8 +2110,6 @@ const GanttView = {
       rightScr.scrollLeft = Math.max(0, x - rightScr.clientWidth / 2);
       axisTrack.style.transform = 'translateX(' + (-rightScr.scrollLeft) + 'px)';
     };
-
-    // Expand/Collapse All
     if (btnExpand) btnExpand.onclick = () => {
       state.collapsed.clear();
       this.mount(state.container, state.proj.id, { mode: state.mode, zoom: state.zoom });
@@ -2058,20 +2120,98 @@ const GanttView = {
       this.mount(state.container, state.proj.id, { mode: state.mode, zoom: state.zoom });
     };
 
-    // Toggle individual collapse — event delegation
+    // Export
+    if (btnPNG) btnPNG.onclick = () => this.exportPNG(state, false);
+    if (btnPDF) btnPDF.onclick = () => this.exportPNG(state, true);
+
+    // ── Expand/Collapse individual ──
     leftBody.addEventListener('click', e => {
-      const target = e.target.closest('[data-toggle-id]');
-      if (!target) return;
-      const id = target.getAttribute('data-toggle-id');
-      if (state.collapsed.has(id)) state.collapsed.delete(id);
-      else                         state.collapsed.add(id);
-      this.mount(state.container, state.proj.id, { mode: state.mode, zoom: state.zoom });
+      const tog = e.target.closest('[data-toggle-id]');
+      if (tog){
+        const id = tog.getAttribute('data-toggle-id');
+        if (state.collapsed.has(id)) state.collapsed.delete(id);
+        else                         state.collapsed.add(id);
+        this.mount(state.container, state.proj.id, { mode: state.mode, zoom: state.zoom });
+        return;
+      }
+
+      // Checkbox click
+      const chk = e.target.closest('[data-select-id]');
+      if (chk){
+        e.stopPropagation();
+        const id = chk.getAttribute('data-select-id');
+        this.toggleSelect(state, id, e.shiftKey);
+        return;
+      }
+
+      // Row click (selection)
+      const row = e.target.closest('.gantt-row');
+      if (row && !e.target.closest('.gt-id-badge')){
+        const id = row.getAttribute('data-node-id');
+        if (e.ctrlKey || e.metaKey) this.toggleSelect(state, id, false);
+        else if (e.shiftKey)         this.rangeSelect(state, id);
+        else                         this.singleSelect(state, id);
+      }
     });
 
-    // Tooltip — canvas mousemove
+    // ── Column resize ──
+    const thead = container.querySelector('.gantt-thead');
+    thead.addEventListener('mousedown', e => {
+      const rez = e.target.closest('.gantt-th-resizer');
+      if (!rez) return;
+      e.preventDefault(); e.stopPropagation();
+      this.beginColResize(state, rez, e);
+    });
+
+    // ── Row reorder (HTML5 DnD) ──
+    leftBody.addEventListener('dragstart', e => {
+      const badge = e.target.closest('[data-drag-id]');
+      if (!badge) return;
+      state.reorderSrc = badge.getAttribute('data-drag-id');
+      e.dataTransfer.effectAllowed = 'move';
+      try { e.dataTransfer.setData('text/plain', state.reorderSrc); } catch(err){}
+      badge.closest('.gantt-row').classList.add('is-dragging');
+    });
+    leftBody.addEventListener('dragend', e => {
+      container.querySelectorAll('.gantt-row').forEach(r => {
+        r.classList.remove('is-dragging','is-drop-above','is-drop-below');
+      });
+      state.reorderSrc = null;
+    });
+    leftBody.addEventListener('dragover', e => {
+      if (!state.reorderSrc) return;
+      e.preventDefault();
+      const row = e.target.closest('.gantt-row');
+      container.querySelectorAll('.gantt-row').forEach(r => r.classList.remove('is-drop-above','is-drop-below'));
+      if (!row) return;
+      const rect = row.getBoundingClientRect();
+      const isAbove = (e.clientY - rect.top) < rect.height / 2;
+      row.classList.add(isAbove ? 'is-drop-above' : 'is-drop-below');
+    });
+    leftBody.addEventListener('drop', e => {
+      if (!state.reorderSrc) return;
+      e.preventDefault();
+      const row = e.target.closest('.gantt-row');
+      if (!row) return;
+      const targetId = row.getAttribute('data-node-id');
+      const rect = row.getBoundingClientRect();
+      const isAbove = (e.clientY - rect.top) < rect.height / 2;
+      this.reorderRow(state, state.reorderSrc, targetId, isAbove);
+    });
+
+    // ── Bar drag-to-move ──
+    this.wireBarDrag(state, rightScr);
+
+    // ── Selection toolbar ──
+    const selClear    = container.querySelector('.sel-btn-clear');
+    const selClearAll = container.querySelector('.sel-btn-clear-all');
+    if (selClear)    selClear.onclick    = () => { state.selected.clear(); this.refreshSelectionUI(state); };
+    if (selClearAll) selClearAll.onclick = () => { state.selected.clear(); this.refreshSelectionUI(state); };
+
+    // ── Tooltip ──
     this.wireTooltip(state, rightScr, axisTrack);
 
-    // Auto-scroll ke today
+    // Auto-scroll to today
     setTimeout(() => {
       const today = new Date(); today.setHours(0,0,0,0);
       const off = Math.round((today - state.startDate) / 86400000);
@@ -2081,6 +2221,303 @@ const GanttView = {
         axisTrack.style.transform = 'translateX(' + (-rightScr.scrollLeft) + 'px)';
       }
     }, 30);
+  },
+
+     /* ═══════════════════════════════════════════════════════════
+     (a) COLUMN RESIZE
+     ═══════════════════════════════════════════════════════════ */
+  beginColResize(state, handle, ev){
+    const colIdx = parseInt(handle.getAttribute('data-col-idx'), 10);
+    const col = this.COLUMNS[colIdx];
+    if (!col) return;
+
+    handle.classList.add('is-active');
+    const startX = ev.clientX;
+    const startW = col.width;
+    const minW = 44;
+    const maxW = 500;
+    const body = document.body;
+    const prevCursor = body.style.cursor;
+    body.style.cursor = 'col-resize';
+    body.style.userSelect = 'none';
+
+    const onMove = e => {
+      const delta = e.clientX - startX;
+      const newW = Math.max(minW, Math.min(maxW, startW + delta));
+      col.width = newW;
+      state.colWidths[col.key] = newW;
+
+      // Update header
+      const th = handle.parentElement;
+      th.style.width = newW + 'px';
+
+      // Update all rows
+      const rows = state.container.querySelectorAll('.gantt-row');
+      rows.forEach(r => {
+        const td = r.querySelector('.gantt-td[data-col-key="' + col.key + '"]');
+        if (td) td.style.width = newW + 'px';
+      });
+
+      // Update grid table width
+      const root = state.container.querySelector('.gantt-root');
+      root.style.setProperty('--gantt-table-w', this.tableWidth() + 'px');
+    };
+
+    const onUp = () => {
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+      handle.classList.remove('is-active');
+      body.style.cursor = prevCursor;
+      body.style.userSelect = '';
+      this.saveColWidths(state.colWidths);
+    };
+
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  },
+
+  /* ═══════════════════════════════════════════════════════════
+     (b) ROW REORDER
+     ═══════════════════════════════════════════════════════════ */
+  reorderRow(state, srcId, targetId, before){
+    if (srcId === targetId) return;
+
+    const src = DB.project_wbs.find(w => w.id === srcId);
+    const tgt = DB.project_wbs.find(w => w.id === targetId);
+    if (!src || !tgt) return;
+
+    // Hanya boleh reorder kalau parent sama
+    if ((src.parent_id || '') !== (tgt.parent_id || '')){
+      toast('Hanya bisa reorder item dengan induk (parent) yang sama', false);
+      return;
+    }
+
+    // Rebuild ordered siblings
+    const siblings = DB.project_wbs
+      .filter(w => (w.parent_id || '') === (src.parent_id || '') && w.project_id === state.proj.id)
+      .sort((a,b) => (a.urut||0) - (b.urut||0));
+
+    const fromIdx = siblings.findIndex(w => w.id === srcId);
+    if (fromIdx < 0) return;
+    siblings.splice(fromIdx, 1);
+
+    let toIdx = siblings.findIndex(w => w.id === targetId);
+    if (toIdx < 0) toIdx = siblings.length;
+    if (!before) toIdx += 1;
+    siblings.splice(toIdx, 0, src);
+
+    // Renumber
+    siblings.forEach((w, i) => { w.urut = i + 1; });
+    saveDB();
+    this.mount(state.container, state.proj.id, { mode: state.mode, zoom: state.zoom });
+    toast('Urutan WBS diperbarui');
+  },
+
+  /* ═══════════════════════════════════════════════════════════
+     (c) EXPORT PNG / PDF
+     ═══════════════════════════════════════════════════════════ */
+  exportPNG(state, asPDF){
+    const axis = state.container.querySelector('.gantt-axis');
+    const bars = state.container.querySelector('.gantt-bars');
+    if (!axis || !bars) { toast('Canvas belum siap', false); return; }
+
+    const W = state.chartWidth;
+    const H = this.AXIS_H + state.totalHeight;
+    const out = document.createElement('canvas');
+    out.width = W;
+    out.height = H;
+    const ctx = out.getContext('2d');
+
+    // Background
+    ctx.fillStyle = '#0b1220';
+    ctx.fillRect(0, 0, W, H);
+
+    // Axis di atas
+    ctx.drawImage(axis, 0, 0, W, this.AXIS_H);
+    // Bars di bawah
+    ctx.drawImage(bars, 0, this.AXIS_H, W, state.totalHeight);
+
+    // Footer watermark
+    ctx.fillStyle = '#3a5590';
+    ctx.font = 'bold 12px Segoe UI';
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'bottom';
+    ctx.fillText('Manajemen Konstruksi v1 — ' + state.proj.kode + ' — ' + today(), W - 12, H - 6);
+
+    const dataURL = out.toDataURL('image/png');
+
+    if (asPDF){
+      const w = window.open('', '_blank');
+      if (!w){ toast('Popup diblokir browser', false); return; }
+      w.document.write(
+        '<html><head><title>Gantt ' + esc(state.proj.kode) + '</title>' +
+        '<style>@page{size:landscape;margin:10mm}body{margin:0;background:#fff}' +
+        'img{width:100%;height:auto;display:block}</style></head>' +
+        '<body><img src="' + dataURL + '">' +
+        '<script>window.onload=function(){setTimeout(function(){window.print()},300)}<\/script>' +
+        '</body></html>'
+      );
+      w.document.close();
+      toast('PDF window dibuka — pilih "Save as PDF"');
+    } else {
+      const a = document.createElement('a');
+      a.href = dataURL;
+      a.download = 'gantt-' + state.proj.kode + '-' + today() + '.png';
+      a.click();
+      toast('PNG berhasil diexport');
+    }
+  },
+
+  /* ═══════════════════════════════════════════════════════════
+     (d) ROW SELECTION
+     ═══════════════════════════════════════════════════════════ */
+  singleSelect(state, id){
+    state.selected.clear();
+    state.selected.add(id);
+    this.refreshSelectionUI(state);
+  },
+  toggleSelect(state, id, additive){
+    if (!additive && state.selected.size === 1 && state.selected.has(id)){
+      state.selected.clear();
+    } else if (state.selected.has(id)){
+      state.selected.delete(id);
+    } else {
+      state.selected.add(id);
+    }
+    this.refreshSelectionUI(state);
+  },
+  rangeSelect(state, id){
+    const list = state.visibleNodes.map(n => n.id);
+    const toIdx = list.indexOf(id);
+    if (toIdx < 0) return;
+    let anchor = list.findIndex(x => state.selected.has(x));
+    if (anchor < 0) anchor = toIdx;
+    const [a, b] = anchor <= toIdx ? [anchor, toIdx] : [toIdx, anchor];
+    state.selected.clear();
+    for (let i = a; i <= b; i++) state.selected.add(list[i]);
+    this.refreshSelectionUI(state);
+  },
+  refreshSelectionUI(state){
+    // Update checkboxes
+    state.container.querySelectorAll('.gt-check[data-select-id]').forEach(el => {
+      const id = el.getAttribute('data-select-id');
+      el.classList.toggle('is-checked', state.selected.has(id));
+    });
+    // Update row highlight
+    state.container.querySelectorAll('.gantt-row').forEach(r => {
+      const id = r.getAttribute('data-node-id');
+      r.classList.toggle('is-selected', state.selected.has(id));
+    });
+    this.updateSelBar(state);
+  },
+  updateSelBar(state){
+    const bar = state.container.querySelector('.gantt-sel-bar');
+    if (!bar) return;
+    const cnt = state.selected.size;
+    bar.classList.toggle('show', cnt > 0);
+    const el = bar.querySelector('.sel-count');
+    if (el) el.textContent = cnt;
+  },
+
+  /* ═══════════════════════════════════════════════════════════
+     (e) BAR DRAG-TO-MOVE
+     ═══════════════════════════════════════════════════════════ */
+  wireBarDrag(state, rightScr){
+    const canvas = state.container.querySelector('.gantt-bars');
+    if (!canvas) return;
+
+    const hitTest = (clientX, clientY) => {
+      const rect = canvas.getBoundingClientRect();
+      const cy = clientY - rect.top;
+      const rowIdx = Math.floor(cy / this.ROW_H);
+      if (rowIdx < 0 || rowIdx >= state.visibleNodes.length) return null;
+      const node = state.visibleNodes[rowIdx];
+      if (!node || !node.startISO) return null;
+      const pos = state.posMap[node.id];
+      if (!pos) return null;
+      const cx = clientX - rect.left;
+      // Hit horizontal: bar + 4px toleransi
+      if (cx < pos.x1 - 4 || cx > pos.x2 + 4) return null;
+      // Hit vertikal: hanya area bar (bukan seluruh row)
+      const barTop = pos.y + (this.ROW_H - 14) / 2;
+      const barBot = barTop + 14;
+      if (cy < barTop - 3 || cy > barBot + 3) return null;
+      return { node, pos };
+    };
+
+    rightScr.addEventListener('mousedown', e => {
+      if (e.button !== 0) return;
+      const hit = hitTest(e.clientX, e.clientY);
+      if (!hit) return;
+      if (hit.node.isSummary) return;  // summary tidak bisa di-drag
+
+      e.preventDefault();
+      state.barDrag = {
+        nodeId: hit.node.id,
+        node: hit.node,
+        startMouseX: e.clientX,
+        origStartISO: hit.node.startISO,
+        origFinishISO: hit.node.finishISO,
+        startDateSnapshot: new Date(state.startDate),
+        pxPerDay: state.zoomCfg.pxPerDay,
+        isCritical: hit.node.isCritical,
+        preview: null
+      };
+      state.container.querySelector('.gantt-bars-wrap').classList.add('is-dragging-bar');
+
+      const onMove = ev => {
+        const bd = state.barDrag;
+        if (!bd) return;
+        const dx = ev.clientX - bd.startMouseX;
+        const deltaDays = Math.round(dx / bd.pxPerDay);
+        bd.deltaDays = deltaDays;
+        const sOff = Math.round((new Date(bd.origStartISO)  - state.startDate) / 86400000);
+        const fOff = Math.round((new Date(bd.origFinishISO) - state.startDate) / 86400000);
+        bd.preview = {
+          x1: (sOff + deltaDays) * bd.pxPerDay,
+          w: Math.max(3, (fOff - sOff) * bd.pxPerDay)
+        };
+        this.drawBars(state, canvas);
+      };
+
+      const onUp = () => {
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onUp);
+        state.container.querySelector('.gantt-bars-wrap').classList.remove('is-dragging-bar');
+
+        const bd = state.barDrag;
+        state.barDrag = null;
+        if (!bd || !bd.deltaDays) { this.drawBars(state, canvas); return; }
+
+        // Hitung tanggal baru — snap ke hari kerja
+        const origStart = new Date(bd.origStartISO + 'T00:00:00');
+        const wbsItem = DB.project_wbs.find(w => w.id === bd.nodeId);
+        if (!wbsItem){ this.drawBars(state, canvas); return; }
+
+        const cal = WorkingCalendar.get(wbsItem.calendar_id || state.proj.calendar_id);
+        const snapped = WorkingCalendar.addWorkDays(origStart, bd.deltaDays, cal);
+        const newStartISO = WorkingCalendar.fmt(snapped);
+
+        // Terapkan sebagai constraint SNET (Start No Earlier Than)
+        writeScheduleField(wbsItem, 'constraint_type', 'SNET');
+        writeScheduleField(wbsItem, 'constraint_date', newStartISO);
+
+        runCPM(state.proj.id);
+        saveDB();
+        this.mount(state.container, state.proj.id, { mode: state.mode, zoom: state.zoom });
+        toast('Jadwal ' + (wbsItem.kode_wbs || '') + ' diubah → ' + newStartISO);
+      };
+
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onUp);
+    });
+
+    // Cursor hint
+    rightScr.addEventListener('mousemove', e => {
+      if (state.barDrag) return;
+      const hit = hitTest(e.clientX, e.clientY);
+      rightScr.classList.toggle('is-over-bar', !!hit);
+    });
   },
 
      /* Hover tooltip pada bar chart */
@@ -2138,6 +2575,7 @@ const GanttView = {
     const hideTip = () => tip.classList.remove('show');
 
     rightScr.addEventListener('mousemove', e => {
+      if (state.barDrag){ hideTip(); return; }   // ← tambah baris ini
       const rect = canvas.getBoundingClientRect();
       // Koordinat relatif ke canvas
       const cx = e.clientX - rect.left;
