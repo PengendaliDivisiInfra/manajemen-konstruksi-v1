@@ -9,9 +9,6 @@
     if (window._emptyStateInstalled) return;
     window._emptyStateInstalled = true;
 
-    /* ═══════════════════════════════════════════════════════════
-       TEMPLATES — icon per kategori
-       ═══════════════════════════════════════════════════════════ */
     var ICONS = {
       data:     '📊',
       project:  '🏗',
@@ -31,42 +28,26 @@
       });
     }
 
-    /* ═══════════════════════════════════════════════════════════
-       BUILD HTML
-       opts = {
-         icon: 'data' | emoji custom,
-         title: 'Judul',
-         message: 'Penjelasan',
-         hint: 'Hint tambahan',
-         cta: { label: 'Tambah WBS', action: fn }
-       }
-       ═══════════════════════════════════════════════════════════ */
     function build(opts){
       opts = opts || {};
       var icon = ICONS[opts.icon] || opts.icon || ICONS.data;
       var size = opts.size || 'md';
 
-      var html =
-        '<div class="empty-state empty-' + size + '">' +
-          '<div class="empty-icon">' + icon + '</div>' +
-          '<div class="empty-title">' + _esc(opts.title || 'Tidak ada data') + '</div>' +
-          (opts.message ? '<div class="empty-message">' + _esc(opts.message) + '</div>' : '') +
-          (opts.hint ? '<div class="empty-hint">' + opts.hint + '</div>' : '') +
-          (opts.cta && opts.cta.label
-            ? '<div class="empty-cta">' +
-                '<button class="btn btn-primary btn-empty-cta" type="button">' +
-                  _esc(opts.cta.label) +
-                '</button>' +
-              '</div>'
-            : '') +
-        '</div>';
-
-      return html;
+      return '<div class="empty-state empty-' + size + '">' +
+        '<div class="empty-icon">' + icon + '</div>' +
+        '<div class="empty-title">' + _esc(opts.title || 'Tidak ada data') + '</div>' +
+        (opts.message ? '<div class="empty-message">' + _esc(opts.message) + '</div>' : '') +
+        (opts.hint ? '<div class="empty-hint">' + opts.hint + '</div>' : '') +
+        (opts.cta && opts.cta.label
+          ? '<div class="empty-cta">' +
+              '<button class="btn btn-primary btn-empty-cta" type="button">' +
+                _esc(opts.cta.label) +
+              '</button>' +
+            '</div>'
+          : '') +
+      '</div>';
     }
 
-    /* ═══════════════════════════════════════════════════════════
-       MOUNT — inject ke container + wire CTA
-       ═══════════════════════════════════════════════════════════ */
     function mount(container, opts){
       if (!container) return;
       if (typeof container === 'string'){
@@ -80,9 +61,6 @@
       }
     }
 
-    /* ═══════════════════════════════════════════════════════════
-       PUBLIC API
-       ═══════════════════════════════════════════════════════════ */
     window.EmptyState = {
       build: build,
       mount: mount,
