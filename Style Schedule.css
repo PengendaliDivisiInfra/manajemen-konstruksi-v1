@@ -2539,3 +2539,191 @@ canvas:not(.gantt-axis):not(.gantt-bars){
 .exec-health.h-good{background:rgba(34,197,94,.20);color:#4ade80}
 .exec-health.h-warn{background:rgba(245,158,11,.20);color:#fbbf24}
 .exec-health.h-bad{background:rgba(220,38,38,.20);color:#f87171}
+
+/* =====================================================================
+   FASE 6B — EVM DASHBOARD
+   ===================================================================== */
+.evm-kpi{
+  background:linear-gradient(160deg,var(--panel),#0d1728);
+  border:1px solid var(--line);
+  border-radius:var(--radius);
+  padding:14px 16px;
+  position:relative;
+  overflow:hidden;
+}
+.evm-kpi::before{
+  content:'';
+  position:absolute;
+  top:0; left:0; right:0;
+  height:3px;
+  background:var(--acc);
+}
+.evm-kpi.good::before{background:var(--ok)}
+.evm-kpi.warn::before{background:var(--warn)}
+.evm-kpi.bad::before{background:var(--danger)}
+.evm-kpi .lbl{
+  font-size:10px;
+  color:var(--muted);
+  text-transform:uppercase;
+  letter-spacing:.6px;
+  font-weight:700;
+}
+.evm-kpi .val{
+  font-size:22px;
+  font-weight:800;
+  margin-top:6px;
+  font-variant-numeric:tabular-nums;
+  line-height:1.1;
+}
+.evm-kpi .val.good{color:#4ade80}
+.evm-kpi .val.warn{color:#fbbf24}
+.evm-kpi .val.bad{color:#f87171}
+.evm-kpi .sub{
+  font-size:10.5px;
+  color:var(--muted);
+  margin-top:4px;
+  line-height:1.4;
+}
+.evm-kpi .icon{
+  position:absolute;
+  top:12px; right:14px;
+  font-size:20px;
+  opacity:.25;
+}
+
+#tblEvm tbody tr.evm-row:hover{background:rgba(47,129,247,.10)}
+#tblEvm tbody tr.evm-forecast{
+  background:linear-gradient(90deg,rgba(168,85,247,.10),rgba(168,85,247,.02));
+  font-weight:700;
+}
+#tblEvm .spi-ok,.cpi-ok{color:#4ade80;font-weight:700}
+#tblEvm .spi-warn,.cpi-warn{color:#fbbf24;font-weight:700}
+#tblEvm .spi-bad,.cpi-bad{color:#f87171;font-weight:700}
+
+/* =====================================================================
+   FASE 6C — IMPORT EXCEL BQ
+   ===================================================================== */
+.imp-dropzone{
+  border:2px dashed var(--line);
+  border-radius:12px;
+  padding:34px 20px;
+  text-align:center;
+  background:rgba(47,129,247,.03);
+  cursor:pointer;
+  transition:.15s;
+  margin-bottom:16px;
+}
+.imp-dropzone:hover,.imp-dropzone.dragover{
+  border-color:var(--acc);
+  background:rgba(47,129,247,.10);
+}
+.imp-dropzone .imp-icon{
+  font-size:42px;
+  margin-bottom:10px;
+  opacity:.7;
+}
+.imp-dropzone .imp-title{
+  font-size:14px;
+  font-weight:700;
+  color:var(--txt);
+  margin-bottom:4px;
+}
+.imp-dropzone .imp-hint{
+  font-size:11.5px;
+  color:var(--muted);
+}
+
+.imp-mapper{
+  background:rgba(47,129,247,.06);
+  border:1px solid rgba(47,129,247,.20);
+  border-radius:10px;
+  padding:14px 16px;
+  margin-bottom:14px;
+}
+.imp-mapper h4{
+  font-size:12px;
+  font-weight:700;
+  color:#7cb3ff;
+  text-transform:uppercase;
+  letter-spacing:.6px;
+  margin-bottom:10px;
+}
+.imp-map-grid{
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(200px,1fr));
+  gap:10px;
+}
+.imp-map-item label{
+  display:block;
+  font-size:10.5px;
+  color:var(--muted);
+  text-transform:uppercase;
+  letter-spacing:.4px;
+  font-weight:700;
+  margin-bottom:4px;
+}
+.imp-map-item select{
+  padding:5px 8px;
+  font-size:11.5px;
+}
+
+.imp-preview{
+  max-height:340px;
+  overflow:auto;
+  border:1px solid var(--line);
+  border-radius:8px;
+  background:#0c1729;
+  margin-bottom:14px;
+}
+.imp-preview table{
+  min-width:auto;
+  font-size:11.5px;
+}
+.imp-preview thead th{
+  background:#0e1a30;
+  padding:7px 9px;
+  font-size:10px;
+  position:sticky;
+  top:0;
+}
+.imp-preview tbody td{
+  padding:6px 9px;
+  border-bottom:1px solid rgba(36,54,92,.4);
+  font-size:11px;
+  max-width:200px;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+
+.imp-summary{
+  display:flex;
+  gap:16px;
+  padding:10px 14px;
+  background:rgba(47,129,247,.08);
+  border:1px solid rgba(47,129,247,.25);
+  border-radius:8px;
+  margin-bottom:14px;
+  font-size:12px;
+  flex-wrap:wrap;
+}
+.imp-summary .imp-stat{
+  display:flex;
+  flex-direction:column;
+  gap:2px;
+}
+.imp-summary .imp-stat .lbl{
+  font-size:9.5px;
+  color:var(--muted);
+  text-transform:uppercase;
+  letter-spacing:.5px;
+  font-weight:600;
+}
+.imp-summary .imp-stat .val{
+  font-size:16px;
+  font-weight:800;
+  color:#7cb3ff;
+  font-variant-numeric:tabular-nums;
+}
+.imp-summary .imp-stat .val.warn{color:#fbbf24}
+.imp-summary .imp-stat .val.bad{color:#f87171}
