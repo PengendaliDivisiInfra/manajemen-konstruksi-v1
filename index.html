@@ -2448,8 +2448,21 @@ function renderSettings(){
 
   SyncManager.status().then(s => {
     if (!s || !s.ok){
-      l.textContent = '⚠ Tidak dapat terhubung ke server';
-      l.style.color = 'var(--warn)';
+      let msg = '⚠ Tidak dapat terhubung ke server';
+      let color = 'var(--warn)';
+
+      if (s && s.code === 'DEAD_ENDPOINT'){
+        msg = '❌ Deployment tidak ditemukan (404) — cek URL & redeploy';
+        color = 'var(--danger)';
+      } else if (s && s.code === 'CIRCUIT_OPEN'){
+        msg = '⚠ Endpoint offline — ' + (s.hint || 'cek koneksi/deployment');
+        color = 'var(--warn)';
+      } else if (s && s.code === 'NO_URL'){
+        msg = '— URL belum diisi';
+        color = 'var(--muted)';
+      }
+      l.textContent = msg;
+      l.style.color = color;
       return;
     }
     if (s.blind){
@@ -2463,7 +2476,6 @@ function renderSettings(){
     l.textContent = '⚠ Gagal cek status';
     l.style.color = 'var(--warn)';
   });
-}
   
 /* ---------- MODAL ---------- */
 let _submitHandler = null;
@@ -2612,8 +2624,21 @@ $('#btnPrintAnalysis').onclick = () => window.print();
 $('#btnSaveSet').onclick = () => {
   SET.overhead = num($('#setOh').value);
   SET.ppn = num($('#setPpn').value);
-  SET.sheetUrl = $('#setUrl').value.trim();
-  saveSET(); renderAll(); toast('Pengaturan disimpan');
+
+  const newUrl = $('#setUrl').value.trim();
+  const urlChanged = newUrl !== SET.sheetUrl;
+  SET.sheetUrl = newUrl;
+  saveSET();
+
+  // Reset circuit breaker saat URL berubah
+  if (urlChanged && typeof resetEndpointCircuit === 'function'){
+    resetEndpointCircuit();
+    if (typeof LiveSync !== 'undefined') LiveSync.start();
+  }
+
+  renderAll();
+  if (typeof renderSettings === 'function') renderSettings();
+  toast('Pengaturan disimpan');
 };
 
 $('#btnExport').onclick = () => {
