@@ -4155,3 +4155,620 @@ const SyncManager = {
     wire();
   }
 })();
+
+/* =====================================================================
+   FASE 5A — EXPORT EXCEL (SheetJS multi-sheet)
+   ===================================================================== */
+const ExportExcel = {
+  exportProject(projectId){
+    if (typeof XLSX === 'undefined'){ toast('SheetJS belum dimuat (cek koneksi)', false); return; }
+    const proj = DB.projects.find(p => p.id === projectId);
+    if (!proj){ toast('Proyek tidak ditemukan', false); return; }
+
+    const wb = XLSX.utils.book_new();
+
+    /* Sheet 1 — Info Proyek */
+    const infoRows = [
+      ['Kode Proyek', proj.kode],
+      ['Nama', proj.nama],
+      ['Lokasi', proj.lokasi || ''],
+      ['Owner', proj.owner || ''],
+      ['Nilai Kontrak', num(proj.nilai_kontrak)],
+      ['PPN (%)', num(proj.ppn || SET.ppn)],
+      ['Overhead (%)', num(proj.overhead || SET.overhead)],
+      ['Tgl Mulai', proj.tgl_mulai || ''],
+      ['Tgl Selesai', proj.tgl_selesai || ''],
+      ['Durasi (hari)', num(proj.durasi_hari)],
+      ['Durasi (minggu)', num(proj.durasi_minggu)],
+      ['Hari Kerja Efektif', num(proj.durasi_kerja)],
+      ['Status', proj.status || ''],
+      ['Diekspor', new Date().toLocaleString('id-ID')]
+    ];
+    const wsInfo = XLSX.utils.aoa_to_sheet(infoRows);
+    wsInfo['!cols'] = [{ wch:22 }, { wch:60 }];
+    XLSX.utils.book_append_sheet(wb, wsInfo, 'Info');
+
+    /* Sheet 2 — WBS + Biaya */
+    const wbsRows = Calc.wbsRows(projectId);
+    const wbsData = wbsRows.map(w => ({
+      'Kode': w.kode_wbs,
+      'Uraian': w.uraian,
+      'STA': w.sta || '',
+      'Satuan': w.satuan || '',
+      'Vol RAB': num(w.volume_rab),
+      'HPS RAB': Math.round(num(w.harga_satuan_rab)),
+      'Total RAB': Math.round(num(w.total_rab)),
+      'Vol RAP': num(w.volume_rap),
+      'HPS RAP': Math.round(num(w.harga_satuan_rap)),
+      'Total RAP': Math.round(num(w.total_rap)),
+      'Deviasi Rp': Math.round(num(w.deviasi)),
+      'Deviasi %': +num(w.deviasi_pct).toFixed(2),
+      'Durasi (hari)': num(w.durasi_hari) || num(w.duration) || 1,
+      'Mulai': w.tgl_mulai_rencana || '',
+      'Selesai': w.tgl_selesai_rencana || '',
+      'Float': num(w.float_total ?? w.total_float),
+      'Kritis': num(w.is_critical) === 1 ? 'YA' : '',
+      'Pred': w.predecessor ? ((DB.project_wbs.find(x=>x.id===w.predecessor)?.kode_wbs)||'') + ' ' + (w.pred_type||'FS') : ''
+    }));
+    const wsWBS = XLSX.utils.json_to_sheet(wbsData);
+    wsWBS['!cols'] = [
+      { wch:10 }, { wch:42 }, { wch:22 }, { wch:8 },
+      { wch:10 }, { wch:14 }, { wch:16 },
+      { wch:10 }, { wch:14 }, { wch:16 },
+      { wch:14 }, { wch:10 },
+      { wch:11 }, { wch:12 }, { wch:12 }, { wch:8 }, { wch:8 }, { wch:14 }
+    ];
+    XLSX.utils.book_append_sheet(wb, wsWBS, 'WBS');
+
+    /* Sheet 3 — Resources */
+    const resData = DB.master_resources.map(r => ({
+      'Kode': r.kode,
+      'Nama': r.nama,
+      'Jenis': r.jenis,
+      'Satuan': r.satuan,
+      'Harga RAB': Math.round(num(r.harga_rab)),
+      'Harga RAP': Math.round(num(r.harga_rap)),
+      'Kapasitas/hari': num(r.kapasitas_harian)
+    }));
+    const wsRes = XLSX.utils.json_to_sheet(resData);
+    wsRes['!cols'] = [{ wch:10 }, { wch:36 }, { wch:10 }, { wch:8 }, { wch:14 }, { wch:14 }, { wch:14 }];
+    XLSX.utils.book_append_sheet(wb, wsRes, 'Resources');
+
+    /* Sheet 4 — Baseline & Variance (kalau ada) */
+    if (Baseline.isSet(projectId, 1) || Baseline.isSet(projectId, 2) || Baseline.isSet(projectId, 3)){
+      const baselineIdx = Baseline.isSet(projectId, 3) ? 3 : Baseline.isSet(projectId, 2) ? 2 : 1;
+      const vars = Baseline.variance(projectId, baselineIdx);
+      const varData = vars.map(v => ({
+        'Kode': v.w.kode_wbs,
+        'Uraian': v.w.uraian,
+        'Baseline Mulai': v.bStart,
+        'Baseline Selesai': v.bFinish,
+        'Current Mulai': v.cStart,
+        'Current Selesai': v.cFinish,
+        'Slip (hari)': v.slip === null ? '' : v.slip,
+        'Slip Start': v.slipStart === null ? '' : v.slipStart
+      }));
+      const wsBL = XLSX.utils.json_to_sheet(varData);
+      wsBL['!cols'] = [
+        { wch:10 }, { wch:42 },
+        { wch:14 }, { wch:14 },
+        { wch:14 }, { wch:14 },
+        { wch:10 }, { wch:10 }
+      ];
+      XLSX.utils.book_append_sheet(wb, wsBL, 'Baseline BL' + baselineIdx);
+    }
+
+    /* Sheet 5 — Resource Loading */
+    const rl = ResourceLoader.load(projectId, { granularity: 'weekly', mode: 'rab' });
+    if (rl.ok){
+      const loadData = rl.buckets.map(b => ({
+        'Periode': b.bucket_key,
+        'Mulai': b.tanggal_mulai,
+        'Selesai': b.tanggal_selesai,
+        'Upah': Math.round(b.upah),
+        'Bahan': Math.round(b.bahan),
+        'Alat': Math.round(b.alat),
+        'Total': Math.round(b.upah + b.bahan + b.alat)
+      }));
+      const wsLoad = XLSX.utils.json_to_sheet(loadData);
+      wsLoad['!cols'] = [{ wch:10 }, { wch:12 }, { wch:12 }, { wch:14 }, { wch:14 }, { wch:14 }, { wch:14 }];
+      XLSX.utils.book_append_sheet(wb, wsLoad, 'Resource Loading');
+    }
+
+    /* Sheet 6 — Progress */
+    const progRows = DB.progress.filter(p => p.project_id === projectId);
+    if (progRows.length){
+      const progData = progRows.map(p => {
+        const w = DB.project_wbs.find(x => x.id === p.wbs_id);
+        return {
+          'Minggu': num(p.minggu),
+          'Kode WBS': w ? w.kode_wbs : '',
+          'Uraian': w ? w.uraian : '',
+          'Satuan': w ? w.satuan : '',
+          'Volume': num(p.volume),
+          'Tanggal': p.tanggal || ''
+        };
+      });
+      const wsProg = XLSX.utils.json_to_sheet(progData);
+      wsProg['!cols'] = [{ wch:8 }, { wch:10 }, { wch:36 }, { wch:8 }, { wch:10 }, { wch:12 }];
+      XLSX.utils.book_append_sheet(wb, wsProg, 'Progress');
+    }
+
+    /* Write file */
+    const fn = 'MK-' + proj.kode + '-' + new Date().toISOString().slice(0,10) + '.xlsx';
+    XLSX.writeFile(wb, fn);
+    toast('✅ Excel diexport: ' + fn);
+  }
+};
+
+/* =====================================================================
+   FASE 5B — EXPORT GOOGLE CALENDAR (.ics)
+   Milestone = task dengan duration = 0
+   ===================================================================== */
+const CalendarExport = {
+  exportICS(projectId){
+    const proj = DB.projects.find(p => p.id === projectId);
+    if (!proj){ toast('Proyek tidak ditemukan', false); return; }
+
+    const milestones = DB.project_wbs.filter(w =>
+      w.project_id === projectId && !w.is_group &&
+      (num(w.durasi_hari) === 0 || num(w.duration) === 0) &&
+      w.tgl_mulai_rencana
+    );
+
+    if (!milestones.length){
+      toast('Tidak ada milestone (task durasi = 0) untuk diexport', false);
+      return;
+    }
+
+    const lines = [];
+    lines.push('BEGIN:VCALENDAR');
+    lines.push('VERSION:2.0');
+    lines.push('PRODID:-//Manajemen Konstruksi v1//EN');
+    lines.push('CALSCALE:GREGORIAN');
+    lines.push('METHOD:PUBLISH');
+    lines.push('X-WR-CALNAME:' + this._esc(proj.kode + ' — ' + proj.nama));
+    lines.push('X-WR-TIMEZONE:Asia/Jakarta');
+
+    const stamp = this._fmt(new Date(), true);
+    const cal = WorkingCalendar.get(proj.calendar_id);
+
+    milestones.forEach(w => {
+      const d = new Date(w.tgl_mulai_rencana + 'T00:00:00');
+      const dEnd = new Date(d); dEnd.setDate(dEnd.getDate() + 1);
+      const uid = 'mk-' + w.id + '@mk-v1.local';
+      const desc = 'Kode: ' + (w.kode_wbs||'') + '\\n' +
+                   'Uraian: ' + (w.uraian||'') + '\\n' +
+                   'STA: ' + (w.sta||'-') + '\\n' +
+                   'Volume RAB: ' + num(w.volume_rab) + ' ' + (w.satuan||'') + '\\n' +
+                   'Status: MILESTONE';
+      lines.push('BEGIN:VEVENT');
+      lines.push('UID:' + uid);
+      lines.push('DTSTAMP:' + stamp);
+      lines.push('DTSTART;VALUE=DATE:' + this._fmt(d, false));
+      lines.push('DTEND;VALUE=DATE:' + this._fmt(dEnd, false));
+      lines.push('SUMMARY:' + this._esc('📌 ' + (w.kode_wbs||'') + ' — ' + (w.uraian||'')));
+      lines.push('DESCRIPTION:' + desc);
+      lines.push('CATEGORIES:Milestone Proyek');
+      lines.push('STATUS:CONFIRMED');
+      lines.push('TRANSP:TRANSPARENT');
+      lines.push('END:VEVENT');
+    });
+
+    lines.push('END:VCALENDAR');
+    const ics = lines.join('\r\n');
+    const blob = new Blob([ics], { type:'text/calendar;charset=utf-8' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'milestones-' + proj.kode + '-' + today() + '.ics';
+    a.click();
+    toast('✅ ' + milestones.length + ' milestone diexport ke .ics');
+  },
+
+  _fmt(d, isDateTime){
+    const pad = n => String(n).padStart(2, '0');
+    const Y = d.getUTCFullYear();
+    const M = pad(d.getUTCMonth() + 1);
+    const D = pad(d.getUTCDate());
+    if (isDateTime){
+      return Y + M + D + 'T' + pad(d.getUTCHours()) + pad(d.getUTCMinutes()) + pad(d.getUTCSeconds()) + 'Z';
+    }
+    return Y + M + D;
+  },
+
+  _esc(s){
+    return String(s || '')
+      .replace(/\\/g, '\\\\')
+      .replace(/;/g, '\\;')
+      .replace(/,/g, '\\,')
+      .replace(/\n/g, '\\n');
+  }
+};
+
+/* =====================================================================
+   FASE 5C — LIVE COLLABORATION (polling awareness)
+   Poll /softStatus tiap 30 detik; deteksi perubahan versi di server
+   ===================================================================== */
+const LiveSync = {
+  INTERVAL_MS: 30000,
+  _timer: null,
+  _remoteVersion: null,
+  _paused: false,
+
+  start(){
+    this.stop();
+    if (!SET.sheetUrl || !SET.sheetUrl.trim()) return;
+    this._timer = setInterval(() => this.tick(), this.INTERVAL_MS);
+    this.tick();  // cek pertama kali
+  },
+
+  stop(){
+    if (this._timer) clearInterval(this._timer);
+    this._timer = null;
+  },
+
+  pause(){ this._paused = true; },
+  resume(){ this._paused = false; },
+
+  async tick(){
+    if (this._paused) return;
+    if (!SET.sheetUrl) return;
+    // Skip kalau modal terbuka atau drag aktif
+    if (document.getElementById('overlay')?.classList.contains('show')) return;
+    if (typeof GanttView !== 'undefined' && GanttView._state?.barDrag) return;
+
+    const ind = document.getElementById('liveIndicator');
+    if (ind) ind.classList.add('is-syncing');
+
+    try {
+      const out = await SyncManager.status();
+      if (!out || !out.ok){
+        this._setIndicator('err', 'Offline');
+        return;
+      }
+      const remoteVer = out.dbVersion;
+
+      // Pertama kali → simpan baseline
+      if (this._remoteVersion === null){
+        this._remoteVersion = remoteVer;
+        this._setIndicator('ok', 'Live');
+        return;
+      }
+
+      // Bandingkan dengan versi lokal
+      const localVer = STATE.dbVersion;
+      if (remoteVer !== this._remoteVersion){
+        this._remoteVersion = remoteVer;
+        if (localVer === null || remoteVer > localVer){
+          this._showBanner(remoteVer);
+          this._setIndicator('warn', 'Update tersedia');
+        }
+      } else {
+        this._setIndicator('ok', 'Live');
+      }
+    } catch(e){
+      this._setIndicator('err', 'Offline');
+    } finally {
+      if (ind) ind.classList.remove('is-syncing');
+    }
+  },
+
+  _setIndicator(state, text){
+    const ind = document.getElementById('liveIndicator');
+    if (!ind) return;
+    ind.classList.remove('is-ok','is-warn','is-err');
+    ind.classList.add('is-' + state);
+    const t = ind.querySelector('.live-text');
+    if (t) t.textContent = text;
+  },
+
+  _showBanner(remoteVer){
+    let b = document.getElementById('remoteBanner');
+    if (!b){
+      b = document.createElement('div');
+      b.className = 'remote-banner';
+      b.id = 'remoteBanner';
+      b.innerHTML =
+        '<span>🔄 <b>Data di server diperbarui</b> (v' + remoteVer + '). Klik untuk sinkronisasi.</span>' +
+        '<button class="remote-btn-pull">Pull Sekarang</button>' +
+        '<button class="remote-btn-later">Nanti</button>';
+      document.body.appendChild(b);
+    }
+    b.classList.add('show');
+    b.querySelector('.remote-btn-pull').onclick = () => {
+      b.classList.remove('show');
+      if (typeof $('#btnPull') !== 'undefined' && $('#btnPull')) $('#btnPull').click();
+    };
+    b.querySelector('.remote-btn-later').onclick = () => b.classList.remove('show');
+  }
+};
+
+/* =====================================================================
+   FASE 5D — MOBILE VIEW
+   ===================================================================== */
+const MobileView = {
+  init(){
+    const btn = document.getElementById('mobileMenuBtn');
+    const tabs = document.getElementById('mainTabs');
+    if (!btn || !tabs) return;
+
+    btn.onclick = () => {
+      tabs.classList.toggle('open');
+      btn.textContent = tabs.classList.contains('open') ? '✕ Tutup' : '☰ Menu';
+    };
+
+    // Tutup menu saat tab dipilih
+    document.querySelectorAll('.tab').forEach(t => {
+      t.addEventListener('click', () => {
+        if (window.innerWidth <= 768){
+          tabs.classList.remove('open');
+          btn.textContent = '☰ Menu';
+        }
+      });
+    });
+
+    // Auto-close saat layar dibesarkan
+    window.addEventListener('resize', () => {
+      if (window.innerWidth > 768){
+        tabs.classList.remove('open');
+        btn.textContent = '☰ Menu';
+      }
+    });
+  }
+};
+
+/* =====================================================================
+   FASE 5E — EXECUTIVE DASHBOARD (multi-project)
+   ===================================================================== */
+const ExecDashboard = {
+  render(){
+    if (!DB.projects.length){
+      document.getElementById('execKPI').innerHTML =
+        '<div class="kpi"><div class="lbl">Status</div><div class="val">Belum ada proyek</div></div>';
+      document.getElementById('tblExecPortfolio').innerHTML =
+        '<tbody><tr><td class="empty">Tambahkan proyek untuk melihat dashboard executive.</td></tr></tbody>';
+      document.getElementById('execAlerts').innerHTML = '';
+      return;
+    }
+
+    // Kumpulkan KPI per proyek
+    const rows = DB.projects.map(p => {
+      const t = Calc.totals(p.id);
+      const nilaiKontrak = num(p.nilai_kontrak);
+      const netto = nilaiKontrak / (1 + num(SET.ppn)/100);
+      const margin = t.margin_pct;
+      const sisaKontrak = netto - t.rap;
+
+      // Baseline slip
+      let baselineIdx = 0;
+      if (Baseline.isSet(p.id, 3)) baselineIdx = 3;
+      else if (Baseline.isSet(p.id, 2)) baselineIdx = 2;
+      else if (Baseline.isSet(p.id, 1)) baselineIdx = 1;
+      let kpi = null;
+      if (baselineIdx) kpi = Baseline.kpi(p.id, baselineIdx);
+
+      // Health score
+      const marginScore   = Math.min(100, Math.max(0, margin * 8.33));   // 12% = 100
+      const scheduleScore = kpi ? Math.max(0, 100 - kpi.avgSlip * 10) : 80;
+      const budgetScore   = sisaKontrak >= 0 ? 100 : Math.max(0, 100 + sisaKontrak/1e6);
+      const health = Math.round((marginScore * 0.4 + scheduleScore * 0.3 + budgetScore * 0.3));
+
+      let healthLbl, healthCls;
+      if (health >= 75){ healthLbl = 'SEHAT'; healthCls = 'h-good'; }
+      else if (health >= 50){ healthLbl = 'WASPADA'; healthCls = 'h-warn'; }
+      else { healthLbl = 'KRITIS'; healthCls = 'h-bad'; }
+
+      return {
+        proj: p,
+        rab: t.rab, rap: t.rap, dev: t.dev,
+        nilaiKontrak, netto, sisaKontrak,
+        margin,
+        baselineIdx, kpi,
+        health, healthLbl, healthCls
+      };
+    });
+
+    // ── KPI Cards ──
+    const totalPortfolio = rows.reduce((s,r) => s + r.nilaiKontrak, 0);
+    const totalRAB       = rows.reduce((s,r) => s + r.rab, 0);
+    const totalRAP       = rows.reduce((s,r) => s + r.rap, 0);
+    const totalDev       = totalRAB - totalRAP;
+    const avgHealth      = Math.round(rows.reduce((s,r) => s + r.health, 0) / rows.length);
+    const criticalCount  = rows.filter(r => r.healthLbl === 'KRITIS').length;
+
+    document.getElementById('execKPI').innerHTML =
+      '<div class="kpi">' +
+        '<div class="lbl">Total Proyek</div>' +
+        '<div class="val">' + rows.length + '</div>' +
+        '<div class="sub">' + criticalCount + ' kritis · avg health ' + avgHealth + '</div>' +
+      '</div>' +
+      '<div class="kpi k2">' +
+        '<div class="lbl">Nilai Portofolio</div>' +
+        '<div class="val">' + rp(totalPortfolio) + '</div>' +
+        '<div class="sub">Total kontrak incl. PPN</div>' +
+      '</div>' +
+      '<div class="kpi k3">' +
+        '<div class="lbl">Total RAB</div>' +
+        '<div class="val">' + rp(totalRAB) + '</div>' +
+        '<div class="sub">RAP: ' + rp(totalRAP) + '</div>' +
+      '</div>' +
+      '<div class="kpi ' + (totalDev >= 0 ? 'k5' : 'k4') + '">' +
+        '<div class="lbl">Deviasi Portofolio</div>' +
+        '<div class="val ' + (totalDev >= 0 ? 'pos' : 'neg') + '">' + rp(totalDev) + '</div>' +
+        '<div class="sub ' + (totalDev >= 0 ? 'pos' : 'neg') + '">' +
+          (totalRAB > 0 ? fmt(totalDev/totalRAB*100, 2) : '0.00') + '% dari RAB' +
+        '</div>' +
+      '</div>';
+
+    // ── Tabel Portfolio ──
+    const head = '<thead><tr>' +
+      '<th>Kode</th><th>Nama</th><th>Status</th>' +
+      '<th class="num">Nilai Kontrak</th>' +
+      '<th class="num">RAB</th><th class="num">RAP</th>' +
+      '<th class="num">Margin %</th>' +
+      '<th class="num">Sisa Kontrak</th>' +
+      '<th class="center">Baseline</th>' +
+      '<th class="center">Health</th>' +
+    '</tr></thead>';
+
+    const body = rows.map(r => {
+      const isActive = r.proj.id === STATE.activeProject;
+      return '<tr class="exec-row ' + (isActive ? 'is-active' : '') + '" data-exec-prj="' + r.proj.id + '">' +
+        '<td><b>' + esc(r.proj.kode) + '</b></td>' +
+        '<td>' + esc(r.proj.nama) + '</td>' +
+        '<td><span class="badge ' + (r.proj.status === 'Selesai' ? 'b-ok' : r.proj.status === 'Ditunda' ? 'b-danger' : 'b-warn') + '">' +
+          esc(r.proj.status || '-') + '</span></td>' +
+        '<td class="num">' + rp(r.nilaiKontrak) + '</td>' +
+        '<td class="num">' + rp(r.rab) + '</td>' +
+        '<td class="num">' + rp(r.rap) + '</td>' +
+        '<td class="num ' + (r.margin >= 8 ? 'pos' : r.margin >= 5 ? '' : 'neg') + '">' +
+          fmt(r.margin, 2) + '%</td>' +
+        '<td class="num ' + (r.sisaKontrak >= 0 ? 'pos' : 'neg') + '">' +
+          rp(r.sisaKontrak) + '</td>' +
+        '<td class="center">' + (r.baselineIdx ? 'BL' + r.baselineIdx : '—') + '</td>' +
+        '<td class="center">' +
+          '<span class="exec-health ' + r.healthCls + '">' + r.healthLbl + ' ' + r.health + '</span>' +
+        '</td>' +
+      '</tr>';
+    }).join('');
+
+    document.getElementById('tblExecPortfolio').innerHTML = head + '<tbody>' + body + '</tbody>';
+
+    // Click → switch project
+    document.querySelectorAll('[data-exec-prj]').forEach(tr => {
+      tr.onclick = () => {
+        STATE.activeProject = tr.getAttribute('data-exec-prj');
+        $('#activeProject').value = STATE.activeProject;
+        switchTab('dashboard');
+        renderAll();
+        toast('Beralih ke proyek: ' + (activeProj()?.kode || ''));
+      };
+    });
+
+    // ── Chart Perbandingan ──
+    const cv = document.getElementById('chartExecCompare');
+    if (cv){
+      if (STATE.chartExec) STATE.chartExec.destroy();
+      STATE.chartExec = new Chart(cv.getContext('2d'), {
+        type: 'bar',
+        data: {
+          labels: rows.map(r => r.proj.kode),
+          datasets: [
+            { label:'Nilai Kontrak', data: rows.map(r => r.nilaiKontrak),
+              backgroundColor:'rgba(47,129,247,.75)', borderRadius:6 },
+            { label:'Total RAB', data: rows.map(r => r.rab),
+              backgroundColor:'rgba(26,188,156,.75)', borderRadius:6 },
+            { label:'Total RAP', data: rows.map(r => r.rap),
+              backgroundColor:'rgba(245,158,11,.75)', borderRadius:6 }
+          ]
+        },
+        options: {
+          responsive:true, maintainAspectRatio:false,
+          plugins: {
+            legend: { labels:{color:'#e6edf7', font:{size:11}} },
+            tooltip: { callbacks:{ label: c => c.dataset.label + ': ' + rp(c.parsed.y) } }
+          },
+          scales: {
+            x: { ticks:{color:'#8fa3c4'}, grid:{display:false} },
+            y: { ticks:{color:'#8fa3c4', callback:v => 'Rp ' + (v/1e9).toFixed(2) + ' M'},
+                 grid:{color:'rgba(36,54,92,.5)'} }
+          }
+        }
+      });
+    }
+
+    // ── Alerts ──
+    const alerts = [];
+    rows.forEach(r => {
+      if (r.sisaKontrak < 0){
+        alerts.push('<div class="alert"><span>🚨</span><div><b>' + esc(r.proj.kode) + '</b> — Total RAP melampaui nilai kontrak netto (' + rp(r.sisaKontrak) + '). Segera review BQ & koefisien.</div></div>');
+      }
+      if (r.margin < 5 && r.rab > 0){
+        alerts.push('<div class="alert warn"><span>⚠</span><div><b>' + esc(r.proj.kode) + '</b> — Margin rendah (' + fmt(r.margin,2) + '%). Target 8–12%.</div></div>');
+      }
+      if (r.kpi && r.kpi.late > 0){
+        alerts.push('<div class="alert warn"><span>⏰</span><div><b>' + esc(r.proj.kode) + '</b> — ' + r.kpi.late + ' task telat vs Baseline BL' + r.baselineIdx + ' (avg slip ' + fmt(r.kpi.avgSlip,1) + ' hari).</div></div>');
+      }
+      if (r.healthLbl === 'KRITIS'){
+        alerts.push('<div class="alert"><span>🔴</span><div><b>' + esc(r.proj.kode) + '</b> — Health score KRITIS (' + r.health + '). Cek margin, baseline, dan resource allocation.</div></div>');
+      }
+    });
+    document.getElementById('execAlerts').innerHTML = alerts.length
+      ? alerts.join('')
+      : '<div class="alert ok"><span>✅</span><div><b>Semua proyek dalam kondisi sehat.</b></div></div>';
+  }
+};
+
+/* =====================================================================
+   FASE 5 — EVENT WIRING (init)
+   ===================================================================== */
+(function wireFase5(){
+  function ready(fn){
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', fn);
+    else fn();
+  }
+
+  ready(() => {
+    // ── Mobile ──
+    if (typeof MobileView !== 'undefined') MobileView.init();
+
+    // ── Tombol Export Excel ──
+    const btnXlsx = document.getElementById('btnExcel');
+    if (btnXlsx){
+      btnXlsx.onclick = () => {
+        if (!STATE.activeProject){ toast('Pilih proyek aktif dulu', false); return; }
+        ExportExcel.exportProject(STATE.activeProject);
+      };
+    }
+
+    // ── Tombol iCal ──
+    const btnIcal = document.getElementById('btnIcal');
+    if (btnIcal){
+      btnIcal.onclick = () => {
+        if (!STATE.activeProject){ toast('Pilih proyek aktif dulu', false); return; }
+        CalendarExport.exportICS(STATE.activeProject);
+      };
+    }
+
+    // ── Live indicator klik → toggle panel? ──
+    const ind = document.getElementById('liveIndicator');
+    if (ind){
+      ind.onclick = () => {
+        if (!SET.sheetUrl){ toast('URL Apps Script belum diatur (tab Pengaturan)', false); return; }
+        LiveSync.tick();
+      };
+    }
+
+    // ── Executive refresh ──
+    const btnExec = document.getElementById('btnExecRefresh');
+    if (btnExec) btnExec.onclick = () => { ExecDashboard.render(); toast('Executive dashboard di-refresh'); };
+
+    // ── Start LiveSync ──
+    setTimeout(() => LiveSync.start(), 1500);
+
+    // ── Pause LiveSync saat tab disembunyikan ──
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') LiveSync.resume();
+      else LiveSync.pause();
+    });
+  });
+
+  // ── Hook ke switchTab untuk Executive ──
+  if (typeof window._origSwitchTab === 'undefined'){
+    window._origSwitchTab = switchTab;
+    window.switchTab = function(name){
+      window._origSwitchTab(name);
+      if (name === 'executive') ExecDashboard.render();
+    };
+  }
+
+  // ── Hook renderAll → pastikan Executive ikut ──
+  if (typeof window._origRenderAll === 'undefined'){
+    window._origRenderAll = renderAll;
+    window.renderAll = function(){
+      window._origRenderAll();
+      const cur = document.querySelector('.tab.active')?.dataset.tab;
+      if (cur === 'executive') ExecDashboard.render();
+    };
+  }
+})();
