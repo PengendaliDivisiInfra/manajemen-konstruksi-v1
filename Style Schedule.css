@@ -1781,3 +1781,180 @@ canvas:not(.gantt-axis):not(.gantt-bars){
 .gt-var-early{background:rgba(34,197,94,.20);color:#4ade80}
 .gt-var-ok{background:rgba(47,129,247,.18);color:#7cb3ff}
 .gt-var-na{background:rgba(143,163,196,.12);color:#8fa3c4}
+
+/* =====================================================================
+   FASE 4B — FILTER · SEARCH · SORT · GROUP
+   ===================================================================== */
+
+/* ── Filter toolbar ── */
+.gantt-filterbar{
+  display:flex;
+  gap:8px;
+  padding:9px 16px;
+  background:linear-gradient(180deg,#0e1a30,#0b1426);
+  border-bottom:1px solid var(--line);
+  flex-shrink:0;
+  flex-wrap:wrap;
+  align-items:center;
+}
+.gantt-filterbar .fb-search{
+  flex:0 0 200px;
+  padding:5px 10px 5px 28px;
+  background:#0c1729 url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="%238fa3c4" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>') no-repeat 8px center;
+  border:1px solid var(--line);
+  border-radius:6px;
+  color:var(--txt);
+  font-size:11.5px;
+  outline:none;
+  transition:.15s;
+}
+.gantt-filterbar .fb-search::placeholder{color:#8fa3c4}
+.gantt-filterbar .fb-search:focus{
+  border-color:var(--acc);
+  box-shadow:0 0 0 3px rgba(47,129,247,.15);
+}
+.gantt-filterbar .fb-chip{
+  padding:4px 11px;
+  font-size:11px;
+  border-radius:14px;
+  background:#16233f;
+  border:1px solid var(--line);
+  color:var(--muted);
+  cursor:pointer;
+  transition:.12s;
+  user-select:none;
+  font-weight:600;
+  white-space:nowrap;
+}
+.gantt-filterbar .fb-chip:hover{color:var(--txt);border-color:#33507f}
+.gantt-filterbar .fb-chip.active{
+  background:var(--acc);
+  border-color:var(--acc);
+  color:#fff;
+  box-shadow:0 2px 6px rgba(47,129,247,.35);
+}
+.gantt-filterbar .fb-chip.active.chip-critical{
+  background:#dc2626;border-color:#dc2626;
+  box-shadow:0 2px 6px rgba(220,38,38,.4);
+}
+.gantt-filterbar .fb-chip.active.chip-late{
+  background:#f59e0b;border-color:#f59e0b;
+  box-shadow:0 2px 6px rgba(245,158,11,.4);
+}
+.gantt-filterbar .fb-chip.active.chip-ms{
+  background:#a855f7;border-color:#a855f7;
+  box-shadow:0 2px 6px rgba(168,85,247,.4);
+}
+.gantt-filterbar .fb-select{
+  padding:4px 9px;
+  font-size:11px;
+  width:auto;
+  border-radius:6px;
+  background:#16233f;
+  border:1px solid var(--line);
+  color:var(--txt);
+}
+.gantt-filterbar .fb-lbl{
+  font-size:10px;
+  color:var(--muted);
+  text-transform:uppercase;
+  letter-spacing:.5px;
+  font-weight:700;
+}
+.gantt-filterbar .fb-clear{
+  margin-left:auto;
+  padding:4px 11px;
+  font-size:11px;
+  border-radius:6px;
+  background:transparent;
+  border:1px solid var(--line);
+  color:var(--muted);
+  cursor:pointer;
+  transition:.12s;
+  font-weight:600;
+}
+.gantt-filterbar .fb-clear:hover{
+  color:var(--danger);
+  border-color:var(--danger);
+  background:rgba(239,68,68,.08);
+}
+.gantt-filterbar .fb-count{
+  font-size:11px;
+  color:var(--muted);
+  letter-spacing:.3px;
+  white-space:nowrap;
+  font-variant-numeric:tabular-nums;
+}
+.gantt-filterbar .fb-count b{color:#7cb3ff;font-weight:800}
+
+/* ── Sort indicator pada header ── */
+.gantt-th{cursor:pointer;user-select:none}
+.gantt-th:hover{background:rgba(47,129,247,.08)}
+.gantt-th .sort-ind{
+  display:inline-block;
+  margin-left:4px;
+  font-size:8px;
+  color:#7cb3ff;
+  width:8px;
+  transition:opacity .15s;
+}
+.gantt-th .sort-ind.off{opacity:0}
+.gantt-th:hover .sort-ind.off{opacity:.5;color:#8fa3c4}
+
+/* ── Group header row ── */
+.gantt-row.is-group-header{
+  background:linear-gradient(90deg, #1a2b4a 0%, #101d33 100%) !important;
+  border-top:2px solid #2f81f7 !important;
+  border-bottom:1px solid #2f81f7 !important;
+  font-weight:700;
+  height:var(--gantt-row-h);
+  cursor:pointer;
+}
+.gantt-row.is-group-header:hover{
+  background:linear-gradient(90deg, #223962 0%, #14243c 100%) !important;
+}
+.gantt-row.is-group-header .gantt-td{
+  width:100% !important;
+  justify-content:flex-start !important;
+  border-right:none !important;
+  color:#7cb3ff;
+  padding-left:12px;
+  gap:10px;
+}
+.gt-group-toggle{
+  cursor:pointer;
+  color:#7cb3ff;
+  font-size:10px;
+  width:12px;
+  display:inline-block;
+  user-select:none;
+  text-align:center;
+  transition:color .12s;
+}
+.gantt-row.is-group-header:hover .gt-group-toggle{color:#fff}
+.gt-group-name{
+  color:#a8c8ff;
+  font-size:11.5px;
+  letter-spacing:.3px;
+  font-weight:700;
+}
+.gt-group-count{
+  color:#8fa3c4;
+  font-size:10px;
+  font-weight:500;
+  margin-left:auto;
+  padding-right:14px;
+}
+
+/* Empty state */
+.gantt-tbody .gantt-row.gt-empty-state{
+  background:transparent !important;
+  height:auto !important;
+  padding:32px 16px;
+  color:var(--muted);
+  font-style:italic;
+  font-size:12.5px;
+  justify-content:center;
+  display:flex;
+}
+.gantt-tbody .gantt-row.gt-empty-state::before{display:none}
