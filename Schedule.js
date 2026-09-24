@@ -1589,6 +1589,7 @@ const GanttEngine = {
     walk('__root__', 0);
 
     this.rollup(nodes);
+    this.computeCostAggregates(nodes);   // ← Fase 3A-3
     return { ok:true, nodes, proj };
   },
 
@@ -1609,6 +1610,11 @@ const GanttEngine = {
       }
     }
 
+    /* ── Fase 3A-3: Cost fields ── */
+    const costTotal = isSummary ? 0 : num(w.volume_rab) * Calc.hargaSatuanRAB(proj.id, w.ahsp_id);
+    const durationForCost = duration || 1;
+    const costPerDay = isSummary ? 0 : (costTotal / durationForCost);
+
     return {
       id: w.id,
       kode: w.kode_wbs || '',
@@ -1625,6 +1631,11 @@ const GanttEngine = {
       progressPct,
       parentId: w.parent_id || null,
       totalRab: num(w.volume_rab) * Calc.hargaSatuanRAB(proj.id, w.ahsp_id),
+      /* Fase 3A-3 */
+      costTotal,
+      costPerDay,
+      pctBudget: 0,
+      cumPct: 0,
       raw: w
     };
   },
@@ -1680,8 +1691,41 @@ const GanttEngine = {
           n.progressPct = kids.reduce((s,c) => s + c.progressPct * c.totalRab, 0) / weight;
         }
         n.isCritical = kids.some(c => c.isCritical);
+
+        /* Fase 3A-3: rollup cost dari children */
+        const kidsCost = kids.reduce((s,c) => s + (c.costTotal || 0), 0);
+        n.costTotal = kidsCost;
+        n.costPerDay = n.duration > 0 ? (kidsCost / n.duration) : 0;
       });
     }
+  },
+
+  /* ═══════════════════════════════════════════════════════════
+     FASE 3A-3 — COMPUTE COST AGGREGATES
+     pct_budget: cost task / total biaya proyek
+     cum_pct   : kumulatif % mengikuti urutan hierarki
+     ═══════════════════════════════════════════════════════════ */
+  computeCostAggregates(nodes){
+    const leaves = nodes.filter(n => !n.isSummary && !n.isGroupHeader);
+    const totalCost = leaves.reduce((s, n) => s + (n.costTotal || 0), 0);
+
+    if (totalCost <= 0){
+      nodes.forEach(n => { n.pctBudget = 0; n.cumPct = 0; });
+      return;
+    }
+
+    let running = 0;
+    nodes.forEach(n => {
+      const cost = n.costTotal || 0;
+      n.pctBudget = (cost / totalCost) * 100;
+      if (n.isSummary){
+        // Summary: cum% mengikuti running (posisi hierarkis)
+        n.cumPct = (running / totalCost) * 100;
+      } else {
+        running += cost;
+        n.cumPct = (running / totalCost) * 100;
+      }
+    });
   }
 };
 
@@ -1705,7 +1749,13 @@ const GanttView = {
     { key:'duration',     label:'Dur',       width: 48, align:'right' },
     { key:'startISO',     label:'Start',     width: 78, align:'center'},
     { key:'finishISO',    label:'Finish',    width: 78, align:'center'},
-    { key:'variance',     label:'Var',       width: 56, align:'center'},  // ← NEW
+    { key:'variance',     label:'Var',       width: 56, align:'center'},
+    /* ── Fase 3A-3: Cost Table Columns ── */
+    { key:'cost_total',   label:'Cost Total', width:110, align:'right', cost: true },
+    { key:'cost_day',     label:'Cost/Day',   width: 95, align:'right', cost: true },
+    { key:'pct_budget',   label:'% Budget',   width: 72, align:'right', cost: true },
+    { key:'cum_pct',      label:'Cum %',      width: 68, align:'right', cost: true },
+    /* ── Existing ── */
     { key:'predecessors', label:'Pred',      width: 62, align:'left'  },
     { key:'resources',    label:'Resources', width:108, align:'left'  }
   ],
@@ -1844,7 +1894,9 @@ const GanttView = {
       costPerDay: null,
       /* Fase 3A-2 — S-Curve Overlay */
       sCurveOverlay: localStorage.getItem('mk_gantt_scurve') === 'on',
-      sCurveData: null
+      sCurveData: null,
+      /* Fase 3A-3 — Cost Columns */
+      costColumns: localStorage.getItem('mk_gantt_cost_cols') === 'on'
     };
 
     this._state = state;
@@ -2118,14 +2170,17 @@ const GanttView = {
     state.colWidths = {};
     this.COLUMNS.forEach(c => state.colWidths[c.key] = c.width);
   },
-  tableWidth(){
-    return this.COLUMNS.reduce((s,c) => s + c.width, 0);
+  tableWidth(showCost){
+    return this.COLUMNS.reduce((s,c) => {
+      if (c.cost && !showCost) return s;
+      return s + c.width;
+    }, 0);
   },
 
   /* ─────── LAYOUT (Fase 1.2 — grid 2×2) ─────── */
   renderLayout(state){
     const {container, proj, zoom, chartWidth, totalHeight, visibleNodes, selected, baselineIdx} = state;
-    const tableW = this.tableWidth();
+    const tableW = this.tableWidth(state.costColumns);
 
     const blIsSet = baselineIdx && Baseline.isSet(proj.id, baselineIdx);
 
@@ -2157,8 +2212,10 @@ const GanttView = {
         '</div>';
     }
 
+    const rootCls = 'gantt-root' + (state.costColumns ? ' has-cost-cols' : '');
+
     container.innerHTML =
-      '<div class="gantt-root" style="--gantt-table-w:' + tableW + 'px">' +
+      '<div class="' + rootCls + '" style="--gantt-table-w:' + tableW + 'px">' +
         '<div class="gantt-toolbar">' +
           '<div class="gantt-toolbar-left">' +
             '<div class="gantt-title">🗓 ' + esc(proj.kode) + ' — Gantt Chart</div>' +
@@ -2178,6 +2235,7 @@ const GanttView = {
             '<button class="gantt-btn-tool gantt-btn-bl-clear" title="Clear Baseline">🗑 Clear</button>' +
             '<button class="gantt-btn-cost-toggle' + (state.costStrip ? ' is-on' : '') + '" title="Tampilkan/Sembunyikan Cost Loading Strip">💰 Cost</button>' +
             '<button class="gantt-btn-scurve-toggle' + (state.sCurveOverlay ? ' is-on' : '') + '" title="Tampilkan/Sembunyikan S-Curve Overlay di Gantt">📈 S-Curve</button>' +
+            '<button class="gantt-btn-costcols-toggle' + (state.costColumns ? ' is-on' : '') + '" title="Tampilkan Kolom Cost di Tabel">💵 Cost Columns</button>' +
             '<span class="gantt-lbl" style="margin-left:8px">Style</span>' +
             '<select class="gantt-bar-style">' +
               Object.keys(this.BAR_STYLES).map(k =>
@@ -2236,7 +2294,8 @@ const GanttView = {
               const ind = isActiveSort
                 ? '<span class="sort-ind">' + (state.filter.sort.dir === 'asc' ? '▲' : '▼') + '</span>'
                 : '<span class="sort-ind off">▲</span>';
-              return '<div class="gantt-th' + cls + '" data-col-key="' + c.key + '" style="width:' + c.width + 'px">' +
+              const costAttr = c.cost ? ' data-cost="true"' : '';
+              return '<div class="gantt-th' + cls + '" data-col-key="' + c.key + '"' + costAttr + ' style="width:' + c.width + 'px">' +
                      esc(c.label) + ind + resize + '</div>';
             }).join('') +
           '</div>' +
@@ -2629,6 +2688,33 @@ const GanttView = {
           }
           break;
         }
+         /* ── Fase 3A-3: Cost columns ── */
+        case 'cost_total':
+          inner = node.isSummary
+            ? '<b class="gt-cost-sum">' + rp(node.costTotal || 0) + '</b>'
+            : '<span class="gt-cost">' + rp(node.costTotal || 0) + '</span>';
+          break;
+        case 'cost_day':
+          if (node.isSummary){
+            inner = '<span class="gt-cost-sum-dim">' + rp(node.costPerDay || 0) + '</span>';
+          } else if ((node.costTotal || 0) <= 0){
+            inner = '<span class="gt-dim">—</span>';
+          } else {
+            inner = '<span class="gt-cost-dim">' + rp(node.costPerDay || 0) + '</span>';
+          }
+          break;
+        case 'pct_budget': {
+          const pct = num(node.pctBudget);
+          const cls = node.isSummary ? 'gt-pct-sum' : (pct >= 10 ? 'gt-pct-hi' : 'gt-pct');
+          inner = '<span class="' + cls + '">' + fmt(pct, 2) + '%</span>';
+          break;
+        }
+        case 'cum_pct': {
+          const cp = num(node.cumPct);
+          inner = '<span class="gt-cum">' + fmt(cp, 2) + '%</span>';
+          break;
+        }
+
         case 'predecessors':
           inner = node.predecessors
             ? '<span class="gt-pred">' + esc(node.predecessors) + '</span>'
@@ -2644,7 +2730,8 @@ const GanttView = {
       const justify = c.align === 'right'  ? 'flex-end'
                     : c.align === 'center' ? 'center'
                     : 'flex-start';
-      return '<div class="gantt-td" data-col-key="' + c.key + '" ' +
+      const costAttr = c.cost ? ' data-cost="true"' : '';
+      return '<div class="gantt-td" data-col-key="' + c.key + '"' + costAttr + ' ' +
              'style="width:' + c.width + 'px;justify-content:' + justify + '">' +
              inner + '</div>';
     }).join('');
@@ -3823,6 +3910,16 @@ const GanttView = {
       };
     }
 
+    /* ── Fase 3A-3: Cost Columns Toggle ── */
+    const btnCostCols = container.querySelector('.gantt-btn-costcols-toggle');
+    if (btnCostCols){
+      btnCostCols.onclick = () => {
+        const next = !state.costColumns;
+        localStorage.setItem('mk_gantt_cost_cols', next ? 'on' : 'off');
+        this.mount(state.container, state.proj.id, { mode: state.mode, zoom: state.zoom });
+      };
+    }
+     
     /* ── Fase 2C: Bar Style dropdown ── */
     const styleSel = container.querySelector('.gantt-bar-style');
     if (styleSel){
@@ -4186,9 +4283,11 @@ const GanttView = {
       body.style.cursor = prevCursor;
       body.style.userSelect = '';
       this.saveColWidths(state.colWidths);
-      state._lastResizeAt = Date.now();   // ← NEW: blokir sort setelah resize
+      state._lastResizeAt = Date.now();
+      /* Fase 3A-3: update table width setelah resize */
+      const root = state.container.querySelector('.gantt-root');
+      if (root) root.style.setProperty('--gantt-table-w', this.tableWidth(state.costColumns) + 'px');
     };
-
     document.addEventListener('mousemove', onMove);
     document.addEventListener('mouseup', onUp);
   },
