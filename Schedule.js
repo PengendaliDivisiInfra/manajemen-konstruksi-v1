@@ -2831,6 +2831,15 @@ const GanttView = {
     }
   },
 
+  /* ── ISO Week helper (Fase 2B) ── */
+  isoWeek(d){
+    const t = new Date(d.valueOf());
+    const dn = (d.getDay() + 6) % 7;
+    t.setDate(t.getDate() - dn + 3);
+    const ft = new Date(t.getFullYear(), 0, 4);
+    return 1 + Math.round((t - ft) / (7 * 86400000));
+  },
+
   /* ─────── BARS ─────── */
   drawBars(state, canvas){
     if (!canvas) return;
