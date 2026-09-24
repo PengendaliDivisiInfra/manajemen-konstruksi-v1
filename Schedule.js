@@ -1351,13 +1351,13 @@ const GanttView = {
   AXIS_H: 60,
 
   COLUMNS: [
-    { key:'kode',         label:'ID',        width: 60, align:'left'  },
-    { key:'nama',         label:'Task Name', width:230, align:'left'  },
-    { key:'duration',     label:'Dur',       width: 44, align:'right' },
-    { key:'startISO',     label:'Start',     width: 82, align:'center'},
-    { key:'finishISO',    label:'Finish',    width: 82, align:'center'},
-    { key:'predecessors', label:'Pred',      width: 66, align:'left'  },
-    { key:'resources',    label:'Resources', width:130, align:'left'  }
+    { key:'kode',         label:'ID',        width: 68, align:'left'  },
+    { key:'nama',         label:'Task Name', width:240, align:'left'  },
+    { key:'duration',     label:'Dur',       width: 48, align:'right' },
+    { key:'startISO',     label:'Start',     width: 78, align:'center'},
+    { key:'finishISO',    label:'Finish',    width: 78, align:'center'},
+    { key:'predecessors', label:'Pred',      width: 68, align:'left'  },
+    { key:'resources',    label:'Resources', width:128, align:'left'  }
   ],
 
   _state: null,
@@ -1478,26 +1478,57 @@ const GanttView = {
     const cls = [
       'gantt-row',
       node.isSummary   ? 'is-summary'  : '',
-      node.isCritical  ? 'is-critical' : ''
+      node.isCritical  ? 'is-critical' : '',
+      node.isMilestone ? 'is-milestone': ''
     ].filter(Boolean).join(' ');
 
-    const indent = node.level * 16;
-
     const cells = this.COLUMNS.map(c => {
-      let html;
-      if (c.key === 'nama'){
-        const exp = node.isSummary ? '<span class="gantt-expand">▾</span>' : '';
-        const dia = node.isMilestone ? '<span class="gantt-diamond-inline">◆</span>' : '';
-        html = '<span class="gantt-indent" style="padding-left:' + indent + 'px"></span>' +
-               exp + dia + esc(node.nama);
-      } else if (c.key === 'duration'){
-        html = node.isMilestone ? '0' : fmt(node.duration, 0);
-      } else if (c.key === 'startISO' || c.key === 'finishISO'){
-        html = esc(node[c.key] || '—');
-      } else {
-        html = esc(node[c.key] || '—');
+      let inner = '';
+      switch (c.key){
+        case 'kode':
+          inner = '<span class="gt-id-badge">' + esc(node.kode || '—') + '</span>';
+          break;
+
+        case 'nama': {
+          const indent = node.level * 14;
+          const tree   = indent > 0 ? '<span class="gt-tree" style="width:' + indent + 'px"></span>' : '';
+          const exp    = node.isSummary ? '<span class="gt-expand">▾</span>' : '<span class="gt-expand"></span>';
+          const dia    = node.isMilestone ? '<span class="gt-ms">◆</span>' : '';
+          const prog   = (!node.isSummary && node.progressPct > 0)
+                       ? '<span class="gt-prog">' + Math.round(node.progressPct) + '%</span>' : '';
+          inner = tree + exp + dia + '<span class="gt-name">' + esc(node.nama) + '</span>' + prog;
+          break;
+        }
+
+        case 'duration':
+          if (node.isMilestone) inner = '<span class="gt-dim">0</span>';
+          else inner = '<span class="gt-num">' + (node.duration || 0) + '</span><span class="gt-dim">d</span>';
+          break;
+
+        case 'startISO':
+        case 'finishISO':
+          inner = '<span class="gt-date">' + esc(node[c.key] || '—') + '</span>';
+          break;
+
+        case 'predecessors':
+          inner = node.predecessors
+            ? '<span class="gt-pred">' + esc(node.predecessors) + '</span>'
+            : '<span class="gt-dim">—</span>';
+          break;
+
+        case 'resources':
+          inner = node.resources
+            ? '<span class="gt-res">' + esc(node.resources) + '</span>'
+            : '<span class="gt-dim">—</span>';
+          break;
       }
-      return '<div class="gantt-td" style="width:' + c.width + 'px;text-align:' + c.align + '">' + html + '</div>';
+
+      const justify = c.align === 'right'  ? 'flex-end'
+                    : c.align === 'center' ? 'center'
+                    : 'flex-start';
+      return '<div class="gantt-td" ' +
+             'style="width:' + c.width + 'px;justify-content:' + justify + '">' +
+             inner + '</div>';
     }).join('');
 
     return '<div class="' + cls + '" data-idx="' + idx + '">' + cells + '</div>';
