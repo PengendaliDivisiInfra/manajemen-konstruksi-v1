@@ -255,7 +255,19 @@
     </div>
     <div class="panel">
       <div class="panel-head">
-        <div><h2>📊 Gantt Chart — MS Project Style</h2>
+           <div class="panel">
+      <div class="panel-head">
+        <div>
+          <h2>📊 Gantt Chart & Resource Sheet</h2>
+          <p>Batang <span style="color:#2f81f7">biru</span> = normal · <span style="color:#dc2626">merah</span> = jalur kritis · <span style="color:#0f172a">hitam</span> = summary · ◆ = milestone</p>
+        </div>
+        <div class="sched-view-tabs" id="schedViewTabs">
+          <button class="sched-view-btn is-active" data-view="gantt">📅 Gantt</button>
+          <button class="sched-view-btn" data-view="resource">📊 Resource Sheet</button>
+        </div>
+      </div>
+      <div id="ganttContainer"></div>
+    </div>
           <p>Batang <span style="color:#2f81f7">biru</span> = normal · <span style="color:#dc2626">merah</span> = jalur kritis · <span style="color:#0f172a">hitam</span> = summary · ◆ = milestone</p>
         </div>
       </div>
