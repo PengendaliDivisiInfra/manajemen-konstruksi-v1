@@ -3427,6 +3427,27 @@ canvas:not(.gantt-axis):not(.gantt-bars){
   gap: 12px;
   align-items: end;
   margin-top: 12px;
+  transition: grid-template-columns .25s ease;
+}
+
+/* Opsi B: date field hidden saat constraint kosong */
+.wbs-form-2col.is-date-hidden{
+  grid-template-columns: 1fr 0;
+  gap: 0;
+}
+.wbs-form-2col.is-date-hidden > #fw_cd_field{
+  overflow: hidden;
+  opacity: 0;
+  transform: translateX(10px);
+  pointer-events: none;
+  transition: opacity .2s ease, transform .25s ease;
+}
+
+/* Normal state (muncul kembali) */
+.wbs-form-2col > #fw_cd_field{
+  transition: opacity .25s ease .05s, transform .3s ease;
+  opacity: 1;
+  transform: translateX(0);
 }
 .wbs-form-2col > .field{
   min-width: 0;
