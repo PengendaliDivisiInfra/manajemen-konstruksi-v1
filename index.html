@@ -2658,38 +2658,104 @@ $('#btnSeed').onclick = () => {
   renderAll(); toast('Data contoh dimuat');
 };
 
-/* ---------- SPREADSHEET SYNC ---------- */
+/* ═══════════════════════════════════════════════════════════
+   ENDPOINT HEALTH — Circuit Breaker (Koreksi 1C)
+   Mencegah spam 404 di Console saat deployment mati
+   ═══════════════════════════════════════════════════════════ */
+const ENDPOINT_HEALTH = {
+  dead: false,
+  deadUntil: 0,
+  consecutiveFails: 0,
+  lastError: null,
+  DEAD_TTL_MS: 5 * 60 * 1000,   // 5 menit
+  FAIL_THRESHOLD: 3
+};
+
 async function sheetRequest(action, payload){
   if (!SET.sheetUrl){
     toast('URL Apps Script belum diatur', false);
-    throw new Error('no url');
+    throw Object.assign(new Error('no url'), { code: 'NO_URL' });
+  }
+
+  // Circuit breaker: skip kalau endpoint baru error beruntun
+  if (ENDPOINT_HEALTH.dead && Date.now() < ENDPOINT_HEALTH.deadUntil){
+    throw Object.assign(
+      new Error('Endpoint unavailable (circuit open)'),
+      { code: 'CIRCUIT_OPEN', hint: ENDPOINT_HEALTH.lastError?.hint }
+    );
   }
 
   try {
     const res = await fetch(SET.sheetUrl, {
       method: 'POST',
-      redirect: 'follow',                    // ← WAJIB: ikuti redirect Google
-      headers: {'Content-Type': 'text/plain;charset=utf-8'}, // ← hindari preflight
+      redirect: 'follow',
+      headers: {'Content-Type': 'text/plain;charset=utf-8'},
       body: JSON.stringify({action, payload})
     });
-    if (!res.ok) throw new Error('HTTP ' + res.status);
-    const text = await res.text();
-    return JSON.parse(text);
-  } catch (err){
-    console.error('[sheetRequest] gagal:', err.message);
-    // Fallback blind mode
-    try {
-      await fetch(SET.sheetUrl, {
-        method: 'POST',
-        mode: 'no-cors',
-        headers: {'Content-Type': 'text/plain;charset=utf-8'},
-        body: JSON.stringify({action, payload})
-      });
-      return { ok: true, message: 'Terkirim (blind mode)', blind: true };
-    } catch(e2){
-      throw err;
+
+    // ── SUKSES → reset health ──
+    if (res.ok){
+      ENDPOINT_HEALTH.consecutiveFails = 0;
+      ENDPOINT_HEALTH.dead = false;
+      ENDPOINT_HEALTH.lastError = null;
+      const text = await res.text();
+      return JSON.parse(text);
     }
+
+    // ── 404 → endpoint mati (deployment dihapus / URL stale) ──
+    if (res.status === 404){
+      const e = Object.assign(new Error('HTTP 404 — deployment tidak ditemukan'), {
+        code: 'HTTP_404',
+        hint: 'Cek Apps Script → Deploy → Manage deployments. Pastikan Web App aktif, ' +
+              'Execute as "Me", Who has access "Anyone". Copy URL /exec yang baru.'
+      });
+      ENDPOINT_HEALTH.dead = true;
+      ENDPOINT_HEALTH.deadUntil = Date.now() + ENDPOINT_HEALTH.DEAD_TTL_MS;
+      ENDPOINT_HEALTH.consecutiveFails++;
+      ENDPOINT_HEALTH.lastError = e;
+      // JANGAN fallback blind untuk 404 — ini bug config, bukan CORS
+      console.warn('[sheetRequest] 404 → circuit opened for 5 min');
+      throw e;
+    }
+
+    // ── 5xx / 403 / 405 → coba fallback blind (kemungkinan CORS) ──
+    if (res.status >= 500 || res.status === 403 || res.status === 405){
+      throw Object.assign(new Error('HTTP ' + res.status), { code: 'HTTP_' + res.status });
+    }
+
+    throw Object.assign(new Error('HTTP ' + res.status), { code: 'HTTP_' + res.status });
+
+  } catch (err){
+    // ── Network error (TypeError) → coba fallback blind CORS ──
+    if (!err.code || err.code === 'TypeError'){
+      try {
+        await fetch(SET.sheetUrl, {
+          method: 'POST',
+          mode: 'no-cors',
+          headers: {'Content-Type': 'text/plain;charset=utf-8'},
+          body: JSON.stringify({action, payload})
+        });
+        return { ok: true, message: 'Terkirim (blind mode)', blind: true };
+      } catch(e2){ /* fall-through */ }
+    }
+
+    ENDPOINT_HEALTH.consecutiveFails++;
+    if (ENDPOINT_HEALTH.consecutiveFails >= ENDPOINT_HEALTH.FAIL_THRESHOLD){
+      ENDPOINT_HEALTH.dead = true;
+      ENDPOINT_HEALTH.deadUntil = Date.now() + ENDPOINT_HEALTH.DEAD_TTL_MS;
+    }
+    ENDPOINT_HEALTH.lastError = err;
+    console.warn('[sheetRequest] gagal:', err.message);
+    throw err;
   }
+}
+
+/* ── Helper: reset circuit (dipanggil setelah user update URL) ── */
+function resetEndpointCircuit(){
+  ENDPOINT_HEALTH.dead = false;
+  ENDPOINT_HEALTH.deadUntil = 0;
+  ENDPOINT_HEALTH.consecutiveFails = 0;
+  ENDPOINT_HEALTH.lastError = null;
 }
 
 $('#btnPush').onclick = async () => {
