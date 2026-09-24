@@ -486,6 +486,176 @@
 <!-- ===================== SCRIPTS ===================== -->
 <script src="Schedule.js"></script>
 
+<!-- ═══════════════════════════════════════════════════════════
+     FASE 1C OVERRIDE — MS Project Style Dependency Arrows
+     Non-invasive: Schedule.js tidak disentuh
+     ═══════════════════════════════════════════════════════════ -->
+<script>
+(function fase1COverride(){
+  function apply(){
+    if (typeof GanttView === 'undefined' || typeof CPM === 'undefined'){
+      console.warn('[1C] GanttView/CPM belum siap, retry in 200ms...');
+      setTimeout(apply, 200);
+      return;
+    }
+
+    GanttView.drawDependencies = function(ctx, state, posMap, rowH){
+      const {nodes} = state;
+      const visibleNodes = state.visibleNodes.filter(n => !n.isGroupHeader);
+
+      const nodeById = {};
+      const nodeByKode = {};
+      nodes.forEach(n => {
+        nodeById[n.id] = n;
+        if (n.kode) nodeByKode[String(n.kode).trim()] = n;
+      });
+
+      const ARROW = 7, GAP = 5, ROUTE_OFFSET = 12, DETOUR_EXTRA = 24;
+
+      ctx.save();
+      ctx.lineWidth = 1.5;
+      ctx.lineCap   = 'round';
+      ctx.lineJoin  = 'round';
+
+      const drawnEdges = new Set();
+
+      visibleNodes.forEach(succNode => {
+        if (succNode.isGroupHeader) return;
+        const succRaw = succNode.raw || {};
+        if (!succRaw.predecessor) return;
+
+        const rels = CPM.getRelationships(succRaw);
+        if (!rels || !rels.length) return;
+
+        const s = posMap[succNode.id];
+        if (!s) return;
+
+        rels.forEach(rel => {
+          const predRef = rel.predRef;
+          const predNode = nodeById[predRef] || nodeByKode[String(predRef).trim()];
+          if (!predNode) return;
+
+          const p = posMap[predNode.id];
+          if (!p) return;
+
+          const type = (rel.type || 'FS').toUpperCase();
+          const edgeKey = predNode.id + '>' + succNode.id + ':' + type;
+          if (drawnEdges.has(edgeKey)) return;
+          drawnEdges.add(edgeKey);
+
+          const isCrit = succNode.isCritical || predNode.isCritical;
+          const pMidY = p.y + rowH / 2;
+          const sMidY = s.y + rowH / 2;
+
+          let sx, sy, tx, ty, arrowDir;
+          switch (type){
+            case 'SS': sx = p.x1 - GAP; sy = pMidY; tx = s.x1 - GAP; ty = sMidY; arrowDir = 'right'; break;
+            case 'FF': sx = p.x2 + GAP; sy = pMidY; tx = s.x2 + GAP; ty = sMidY; arrowDir = 'left';  break;
+            case 'SF': sx = p.x1 - GAP; sy = pMidY; tx = s.x2 + GAP; ty = sMidY; arrowDir = 'left';  break;
+            default:   sx = p.x2 + GAP; sy = pMidY; tx = s.x1 - GAP; ty = sMidY; arrowDir = 'right'; break;
+          }
+
+          const strokeColor = isCrit ? '#dc2626' : '#94a3b8';
+          ctx.strokeStyle = strokeColor;
+          ctx.fillStyle   = strokeColor;
+
+          GanttView._drawDependencyPath(ctx, {
+            sx, sy, tx, ty, type, arrowDir,
+            ARROW, ROUTE_OFFSET, DETOUR_EXTRA
+          });
+        });
+      });
+      ctx.restore();
+    };
+
+    GanttView._drawDependencyPath = function(ctx, o){
+      const { sx, sy, tx, ty, type, arrowDir, ARROW, ROUTE_OFFSET, DETOUR_EXTRA } = o;
+      const sameRow = Math.abs(sy - ty) < 2;
+      const stopX = arrowDir === 'right' ? tx - ARROW : tx + ARROW;
+
+      if (sameRow){
+        ctx.beginPath();
+        ctx.moveTo(sx, sy);
+        ctx.lineTo(stopX, ty);
+        ctx.stroke();
+        GanttView._drawArrowHead(ctx, tx, ty, arrowDir, ARROW);
+        return;
+      }
+
+      if (type === 'FS' || type === 'SF'){
+        if (sx < stopX){
+          const midX = (sx + stopX) / 2;
+          ctx.beginPath();
+          ctx.moveTo(sx, sy);
+          ctx.lineTo(midX, sy);
+          ctx.lineTo(midX, ty);
+          ctx.lineTo(stopX, ty);
+          ctx.stroke();
+        } else {
+          const detourX = Math.max(sx, stopX) + DETOUR_EXTRA;
+          ctx.beginPath();
+          ctx.moveTo(sx, sy);
+          ctx.lineTo(detourX, sy);
+          ctx.lineTo(detourX, ty);
+          ctx.lineTo(stopX, ty);
+          ctx.stroke();
+        }
+      } else if (type === 'SS'){
+        const detourX = Math.min(sx, stopX) - ROUTE_OFFSET;
+        ctx.beginPath();
+        ctx.moveTo(sx, sy);
+        ctx.lineTo(detourX, sy);
+        ctx.lineTo(detourX, ty);
+        ctx.lineTo(stopX, ty);
+        ctx.stroke();
+      } else if (type === 'FF'){
+        const detourX = Math.max(sx, stopX) + ROUTE_OFFSET;
+        ctx.beginPath();
+        ctx.moveTo(sx, sy);
+        ctx.lineTo(detourX, sy);
+        ctx.lineTo(detourX, ty);
+        ctx.lineTo(stopX, ty);
+        ctx.stroke();
+      }
+
+      GanttView._drawArrowHead(ctx, tx, ty, arrowDir, ARROW);
+    };
+
+    GanttView._drawArrowHead = function(ctx, x, y, dir, size){
+      ctx.beginPath();
+      if (dir === 'right'){
+        ctx.moveTo(x, y);
+        ctx.lineTo(x - size, y - size * 0.55);
+        ctx.lineTo(x - size, y + size * 0.55);
+      } else if (dir === 'left'){
+        ctx.moveTo(x, y);
+        ctx.lineTo(x + size, y - size * 0.55);
+        ctx.lineTo(x + size, y + size * 0.55);
+      } else if (dir === 'down'){
+        ctx.moveTo(x, y);
+        ctx.lineTo(x - size * 0.55, y - size);
+        ctx.lineTo(x + size * 0.55, y - size);
+      } else {
+        ctx.moveTo(x, y);
+        ctx.lineTo(x - size * 0.55, y + size);
+        ctx.lineTo(x + size * 0.55, y + size);
+      }
+      ctx.closePath();
+      ctx.fill();
+    };
+
+    console.log('%c[1C Override] Dependency arrows upgraded → MS Project style',
+      'color:#22c55e;font-weight:bold');
+  }
+
+  if (document.readyState === 'loading'){
+    document.addEventListener('DOMContentLoaded', apply);
+  } else {
+    apply();
+  }
+})();
+</script>
+
 <script>
 /* =====================================================================
    CORE APP — DB Layer, Seed, Calc, Render UI, Event Wiring
