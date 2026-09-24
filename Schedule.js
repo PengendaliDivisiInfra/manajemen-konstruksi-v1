@@ -1704,7 +1704,7 @@ const GanttEngine = {
       });
     }
   }
-};
+},
 
   makeNode(w, level, proj, mode){
     const isSummary = !!w.is_group;
