@@ -211,7 +211,15 @@
       var tasks = list.tasks;
 
       if (!tasks.length){
-        wrap.innerHTML = '<div class="pw-empty">Tidak ada task yang cocok dengan filter</div>';
+        wrap.innerHTML = window.EmptyState
+          ? EmptyState.build({
+              icon: 'filter',
+              title: 'Tidak ada task yang cocok',
+              message: 'Coba longgarkan filter kriteria atau grup.',
+              hint: 'Kriteria saat ini: <code>' + _state.criteria + '</code>' +
+                    (_state.filterGrup ? ' · grup terpilih' : '')
+            })
+          : '<div class="pw-empty">Tidak ada task yang cocok dengan filter</div>';
         updateSummary();
         return;
       }
