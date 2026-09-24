@@ -2257,19 +2257,52 @@ function renderSettings(){
   $('#setUrl').value = SET.sheetUrl || '';
   $('#setOh').value  = SET.overhead;
   $('#setPpn').value = SET.ppn;
-    const vEl = document.getElementById('dbVersionLabel');
+
+  const vEl = document.getElementById('dbVersionLabel');
   if (vEl) vEl.textContent = STATE.dbVersion != null ? ('v' + STATE.dbVersion) : '—';
   const cEl = document.getElementById('clientIdLabel');
   if (cEl) cEl.textContent = SyncManager.CLIENT_ID;
+
+  // ── Status lock hanya dicek kalau URL valid ──
+  const l = document.getElementById('lockStatusLabel');
+  if (!l) return;
+
+  const url = (SET.sheetUrl || '').trim();
+
+  // Kalau URL kosong atau format tidak valid → skip tanpa panggil server
+  if (!url){
+    l.textContent = '—';
+    l.style.color = 'var(--muted)';
+    return;
+  }
+  if (!/^https:\/\/script\.google\.com\/macros\/s\/[\w-]+\/exec$/.test(url)){
+    l.textContent = '⚠ URL tidak valid (harus /macros/s/…/exec)';
+    l.style.color = 'var(--warn)';
+    return;
+  }
+
+  l.textContent = '⏳ Mengecek…';
+  l.style.color = 'var(--muted)';
+
   SyncManager.status().then(s => {
-    const l = document.getElementById('lockStatusLabel');
-    if (!l) return;
-    if (!s.ok) { l.textContent = '—'; return; }
+    if (!s || !s.ok){
+      l.textContent = '⚠ Tidak dapat terhubung ke server';
+      l.style.color = 'var(--warn)';
+      return;
+    }
+    if (s.blind){
+      l.textContent = '⚠ Mode blind (server tidak merespons)';
+      l.style.color = 'var(--warn)';
+      return;
+    }
     l.textContent = s.locked ? ('🔒 dipegang ' + s.holder) : '🟢 bebas';
     l.style.color = s.locked ? 'var(--warn)' : 'var(--ok)';
-  }).catch(() => {});
+  }).catch(() => {
+    l.textContent = '⚠ Gagal cek status';
+    l.style.color = 'var(--warn)';
+  });
 }
-
+  
 /* ---------- MODAL ---------- */
 let _submitHandler = null;
 function openModal(title, bodyHTML, onSubmit){
@@ -2281,6 +2314,13 @@ function openModal(title, bodyHTML, onSubmit){
 function closeModal(){
   $('#overlay').classList.remove('show');
   _submitHandler = null;
+  // ── Restore default button state (Fase 4D fix) ──
+  // Leveling.openUI() menyembunyikan mSubmit & ubah text mCancel.
+  // Tanpa restore ini, semua modal berikutnya kehilangan tombol Simpan.
+  const sBtn = document.getElementById('mSubmit');
+  if (sBtn) sBtn.style.display = '';
+  const cBtn = document.getElementById('mCancel');
+  if (cBtn) cBtn.textContent = 'Batal';
 }
 $('#mClose').onclick = closeModal;
 $('#mCancel').onclick = closeModal;
