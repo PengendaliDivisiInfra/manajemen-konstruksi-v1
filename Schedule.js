@@ -130,16 +130,21 @@ function writeScheduleField(wbsItem, field, value){
   return true;
 }
 
+const CONSTRAINT_TYPES = {
+  ASAP: 'As Soon As Possible',
+  ALAP: 'As Late As Possible',
+  SNET: 'Start No Earlier Than',
+  SNLT: 'Start No Later Than',
+  FNET: 'Finish No Earlier Than',
+  FNLT: 'Finish No Later Than',
+  MSO:  'Must Start On',
+  MFO:  'Must Finish On'
+};
+
 /* ── Fase 2E: Work Contour types (MS Project standard) ── */
 const WORK_CONTOURS = Object.freeze({
   uniform:     'Uniform (Merata)',
-  front:       'Front Loaded (Berat di Awal)',
-  back:        'Back Loaded (Berat di Akhir)',
-  bell:        'Bell (Lonceng)',
-  early_peak:  'Early Peak (Puncak Awal)',
-  late_peak:   'Late Peak (Puncak Akhir)',
-  double_peak: 'Double Peak (Dua Puncak)',
-  triangular:  'Triangular (Segitiga)'
+  ...
 });
 
 /* =====================================================================
