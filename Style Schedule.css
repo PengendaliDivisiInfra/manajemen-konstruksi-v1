@@ -4447,3 +4447,452 @@ canvas:not(.gantt-axis):not(.gantt-bars){
     max-width: 95vw !important;
   }
 }
+
+/* =====================================================================
+   FASE 3E-1 — MOBILE RESPONSIVE COMPREHENSIVE AUDIT
+   Target: 320–480px (mobile) · 481–1024px (tablet)
+   ===================================================================== */
+
+/* ═══════════════════════════════════════════════════════════
+   TABLET (≤ 1024px)
+   ═══════════════════════════════════════════════════════════ */
+@media (max-width: 1024px){
+
+  /* ── Topbar: compact ── */
+  .topbar{
+    padding: 10px 14px;
+    gap: 10px;
+  }
+  .topbar-right{
+    gap: 6px;
+  }
+  .topbar-right .btn{
+    padding: 6px 10px;
+    font-size: 11px;
+  }
+  .topbar-right label{
+    font-size: 10px;
+  }
+
+  /* ── Gantt Toolbar: wrap multi-baris ── */
+  .gantt-toolbar{
+    padding: 10px 12px;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .gantt-toolbar-right{
+    flex-wrap: wrap;
+    gap: 5px;
+    width: 100%;
+  }
+  .gantt-toolbar-right button,
+  .gantt-toolbar-right select{
+    font-size: 10.5px;
+    padding: 5px 8px;
+  }
+  .gantt-lbl{ display: none; }
+
+  /* ── Filterbar: horizontal scroll ── */
+  .gantt-filterbar{
+    padding: 8px 12px;
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    scrollbar-width: thin;
+  }
+  .gantt-filterbar::-webkit-scrollbar{ height: 5px; }
+  .gantt-filterbar .fb-search{ flex: 0 0 170px; }
+  .gantt-filterbar .fb-chip{ padding: 4px 9px; font-size: 10.5px; flex-shrink: 0; }
+  .gantt-filterbar .fb-count{ flex-shrink: 0; }
+  .gantt-filterbar .fb-clear{ flex-shrink: 0; }
+
+  /* ── Tabel Gantt: compact ── */
+  .gantt-th, .gantt-td{
+    font-size: 10.5px;
+    padding: 0 6px;
+  }
+  .gantt-row{ --gantt-row-h: 24px; }
+
+  /* ── Tracking columns compact ── */
+  .gt-track-date{ font-size: 9.5px; }
+  .gt-track-badge{
+    font-size: 8.5px;
+    padding: 1px 6px;
+    min-width: 62px;
+  }
+  .gt-track-slip{
+    font-size: 9px;
+    padding: 1px 6px;
+  }
+
+  /* ── Report dialog: 2 kolom ── */
+  .rpt-template-grid{
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .rpt-kpi-grid{
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+
+  /* ── Progress Wizard: 2 kolom filter ── */
+  .pw-filter-bar{
+    grid-template-columns: 1fr 1fr;
+  }
+  .pw-action-bar{
+    gap: 5px;
+  }
+  .pw-btn{
+    font-size: 10.5px;
+    padding: 5px 9px;
+  }
+
+  /* ── Portfolio Timeline: sidebar collapse ── */
+  .pt-head-sidebar, .pt-sidebar{
+    width: 190px !important;
+  }
+  .pt-side-kode{ font-size: 10px; }
+  .pt-side-nama{ font-size: 10.5px; }
+  .pt-side-meta{ font-size: 9px; }
+
+  /* ── Modal: wide → full ── */
+  .modal-wide{
+    max-width: 96vw !important;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   MOBILE (≤ 640px)
+   ═══════════════════════════════════════════════════════════ */
+@media (max-width: 640px){
+
+  /* ── Global: reduce padding ── */
+  main{ padding: 10px; }
+  .panel{ padding: 12px; margin-bottom: 12px; }
+  .panel-head{
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+  .panel-head h2{ font-size: 13.5px; }
+  .panel-head p{ font-size: 10.5px; }
+
+  /* ── Topbar: icon-only mode ── */
+  .topbar{
+    padding: 8px 10px;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .brand h1{ font-size: 13px; }
+  .brand p{ display: none; }
+  .logo{ width: 34px; height: 34px; font-size: 13px; }
+  .topbar-right{
+    width: 100%;
+    gap: 4px;
+    justify-content: flex-start;
+  }
+  .topbar-right > div:first-child{ width: 100%; }
+  #activeProject{ min-width: 100% !important; }
+  .topbar-right .btn{
+    padding: 5px 9px;
+    font-size: 10.5px;
+  }
+  .topbar-right .btn-sm{
+    padding: 4px 7px;
+    font-size: 10px;
+  }
+  .live-indicator .live-text{ display: none; }
+
+  /* ── Tabs: horizontal scroll ── */
+  .tabs{
+    padding: 8px 10px 0;
+    overflow-x: auto;
+  }
+  .tab{
+    padding: 8px 12px;
+    font-size: 11.5px;
+    white-space: nowrap;
+  }
+
+  /* ── KPI: 2 kolom ── */
+  .grid.g4{
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 8px;
+  }
+  .grid.g2{ grid-template-columns: 1fr; }
+  .kpi{ padding: 12px; }
+  .kpi .val{ font-size: 15px; }
+  .kpi .lbl{ font-size: 9.5px; }
+  .kpi .sub{ font-size: 10px; }
+
+  /* ── Gantt Toolbar: ultra compact ── */
+  .gantt-toolbar{
+    padding: 8px 8px;
+    gap: 6px;
+  }
+  .gantt-title{ font-size: 11.5px; }
+  .gantt-subtitle{ font-size: 9.5px; }
+  .gantt-toolbar-right{
+    gap: 3px;
+  }
+  .gantt-toolbar-right button,
+  .gantt-toolbar-right select{
+    font-size: 10px;
+    padding: 4px 7px;
+  }
+
+  /* ── Gantt body: 220px sidebar ── */
+  .gantt-body{
+    height: 55vh;
+    min-height: 300px;
+    grid-template-columns: 220px 1fr;
+    grid-template-rows: 52px 1fr;
+  }
+  .gantt-thead{
+    height: 52px !important;
+    min-height: 52px !important;
+    max-height: 52px !important;
+    font-size: 9.5px;
+  }
+  .gantt-axis-wrap{
+    height: 52px !important;
+    min-height: 52px !important;
+    max-height: 52px !important;
+  }
+  .gantt-row{ --gantt-row-h: 22px; }
+  .gantt-td{
+    font-size: 10px;
+    padding: 0 4px;
+    gap: 4px;
+  }
+  .gt-id-badge{
+    font-size: 9px;
+    padding: 1px 5px;
+  }
+  .gt-name{ font-size: 10px; }
+
+  /* ── Tracking columns compact ── */
+  .gt-track-badge{
+    font-size: 8px;
+    padding: 1px 5px;
+    min-width: 54px;
+  }
+  .gt-track-date{ font-size: 9px; }
+  .gt-track-slip{ font-size: 8.5px; padding: 0 5px; }
+
+  /* ── Filterbar: scroll ── */
+  .gantt-filterbar{
+    padding: 6px 8px;
+    gap: 4px;
+  }
+  .gantt-filterbar .fb-search{
+    flex: 0 0 140px;
+    font-size: 10.5px;
+  }
+  .gantt-filterbar .fb-chip{
+    padding: 3px 8px;
+    font-size: 9.5px;
+  }
+  .gantt-filterbar .fb-count{
+    font-size: 9.5px;
+  }
+
+  /* ── Modal: full screen ── */
+  .overlay{
+    padding: 10px 6px;
+    align-items: flex-start;
+  }
+  .modal{
+    max-width: 100vw;
+    border-radius: 10px;
+  }
+  .modal-wide{ max-width: 100vw !important; }
+  .modal-head{
+    padding: 12px 14px;
+  }
+  .modal-head h3{ font-size: 13px; }
+  .modal-body{
+    padding: 12px 14px;
+    max-height: 78vh;
+  }
+  .modal-foot{
+    padding: 10px 14px;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .modal-foot .btn{
+    flex: 1;
+    justify-content: center;
+    min-width: 0;
+  }
+
+  /* ── Report dialog: 1 kolom ── */
+  .rpt-template-grid{
+    grid-template-columns: 1fr;
+  }
+  .rpt-tpl-card{
+    min-height: 90px;
+    padding: 10px;
+  }
+  .rpt-tpl-icon{ font-size: 18px; }
+  .rpt-tpl-name{ font-size: 12px; }
+  .rpt-tpl-desc{ font-size: 10px; }
+
+  /* ── Progress Wizard: stack filters ── */
+  .pw-filter-bar{
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+  .pw-action-bar{
+    flex-direction: column;
+    align-items: stretch;
+    gap: 6px;
+  }
+  .pw-btn{
+    width: 100%;
+    justify-content: center;
+    font-size: 11px;
+    padding: 7px 10px;
+  }
+  .pw-summary{
+    margin-left: 0;
+    text-align: center;
+    padding-top: 4px;
+    border-top: 1px dashed rgba(47,129,247,.3);
+  }
+
+  /* ── Progress Wizard: table scroll ── */
+  .pw-table-wrap{
+    max-height: 45vh;
+    overflow-x: auto;
+  }
+  .pw-table{
+    min-width: 600px;
+  }
+  .pw-th-uraian{ min-width: 150px; }
+  .pw-td-uraian{ font-size: 10px; max-width: 150px; }
+  .pw-input{
+    font-size: 10.5px;
+    padding: 4px 5px;
+    min-width: 55px;
+  }
+  .pw-td-kode, .pw-td-sat{ font-size: 9.5px; }
+  .pw-td-vol, .pw-td-input, .pw-td-pct{ font-size: 10px; }
+
+  /* ── Portfolio Timeline: collapse sidebar ── */
+  .pt-toolbar{
+    padding: 8px 10px;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .pt-zoom-tabs{
+    gap: 2px;
+  }
+  .pt-zoom-btn{
+    padding: 4px 10px;
+    font-size: 10.5px;
+  }
+  .pt-count{ font-size: 10px; }
+
+  .pt-head-sidebar{
+    width: 140px !important;
+    padding: 0 8px;
+  }
+  .pt-head-title{ font-size: 10px; }
+  .pt-sidebar{ width: 140px !important; }
+  .pt-side-row{ padding: 4px 8px; gap: 1px; }
+  .pt-side-kode{ font-size: 9px; }
+  .pt-side-nama{ font-size: 9.5px; }
+  .pt-side-meta{ font-size: 8.5px; gap: 4px; }
+  .pt-health{ padding: 1px 5px; }
+
+  /* ── Portfolio: horizontal scroll untuk chart ── */
+  .pt-chart-wrap{
+    overflow-x: auto;
+    scrollbar-width: thin;
+  }
+  .pt-chart-wrap::-webkit-scrollbar{ height: 6px; }
+
+  /* ── Toast: full width bottom ── */
+  .toast{
+    left: 10px;
+    right: 10px;
+    bottom: 10px;
+    max-width: none;
+    font-size: 11.5px;
+  }
+
+  /* ── Tabel umum: scroll ── */
+  .tw{ max-height: 55vh; }
+  table{ font-size: 11px; }
+  thead th{ padding: 8px 6px; font-size: 9.5px; }
+  tbody td{ padding: 7px 6px; font-size: 10.5px; }
+
+  /* ── Form inputs: lebih lega untuk jari ── */
+  input, select, textarea{
+    padding: 9px 10px;
+    font-size: 13px;
+    min-height: 38px;
+  }
+  .btn{
+    min-height: 34px;
+  }
+
+  /* ── Date widget: jaga ukuran tap ── */
+  .dw-face{
+    padding: 8px 10px;
+    min-height: 38px;
+  }
+  .dw-native{
+    min-height: 38px;
+  }
+
+  /* ── Executive table: scroll ── */
+  .exec-row td{ font-size: 10.5px; padding: 6px 5px; }
+
+  /* ── Progress wizard action buttons: full width ── */
+  .pw-filter-bar input,
+  .pw-filter-bar select{
+    font-size: 12px;
+    padding: 8px 10px;
+    min-height: 36px;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   MOBILE KECIL (≤ 400px) — extra
+   ═══════════════════════════════════════════════════════════ */
+@media (max-width: 400px){
+  .brand h1{ font-size: 12px; }
+  .logo{ width: 30px; height: 30px; font-size: 11px; }
+  .topbar-right .btn{
+    padding: 4px 7px;
+    font-size: 9.5px;
+  }
+
+  .gantt-body{
+    grid-template-columns: 180px 1fr;
+  }
+  .gantt-title{ font-size: 11px; }
+  .gantt-toolbar-right button,
+  .gantt-toolbar-right select{
+    font-size: 9.5px;
+    padding: 3px 6px;
+  }
+
+  .pw-th-kode{ min-width: 55px; }
+  .pw-th-uraian{ min-width: 120px; }
+
+  .pt-head-sidebar, .pt-sidebar{ width: 110px !important; }
+  .pt-side-nama{ font-size: 9px; }
+
+  .rpt-tpl-name{ font-size: 11px; }
+  .rpt-tpl-desc{ font-size: 9.5px; }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   PRINT — jangan ganggu layout cetak
+   ═══════════════════════════════════════════════════════════ */
+@media print{
+  /* override semua mobile rules saat print */
+  .gantt-toolbar, .gantt-filterbar, .topbar, .tabs{
+    display: none !important;
+  }
+}
