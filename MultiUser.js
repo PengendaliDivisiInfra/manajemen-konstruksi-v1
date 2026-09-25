@@ -387,3 +387,61 @@
     bootstrap(0);
   }
 })();
+
+/* ==========================================
+   MULTI-USER PERMISSION CONTROL
+   ========================================== */
+
+function applyPermissions() {
+    const userInfo = JSON.parse(localStorage.getItem('mk_v1_user_info') || '{}');
+    const role = userInfo.role || 'guest';
+    const activeProject = getActiveProjectCode(); // Fungsi untuk mendapatkan Kode Proyek yang sedang aktif di dropdown
+    
+    console.log(`[RBAC] Menerapkan izin untuk Role: ${role}, Proyek: ${activeProject}`);
+
+    // 1. Sembunyikan semua tombol aksi/edit terlebih dahulu untuk keamanan
+    const actionButtons = document.querySelectorAll('.btn-edit, .btn-delete, .btn-save, .btn-push, .btn-import, .btn-tambah');
+    actionButtons.forEach(btn => btn.style.display = 'none');
+    
+    // Sembunyikan juga elemen input jika perlu (opsional)
+    // document.querySelectorAll('input, select, textarea').forEach(el => el.disabled = true);
+
+    // 2. Terapkan aturan berdasarkan Role
+    if (role === 'superadmin' || role === 'admin') {
+        // ADMIN: Akses ke semua proyek, bisa edit semuanya
+        console.log('[RBAC] Admin Mode: Full Access');
+        actionButtons.forEach(btn => btn.style.display = 'inline-block');
+        // enableInputs(); // Fungsi untuk mengaktifkan input jika ada
+
+    } else if (role === 'owner') {
+        // OWNER: Hanya bisa melihat (Read-Only)
+        console.log('[RBAC] Owner Mode: Read-Only');
+        // Tombol edit tetap hidden. Hanya tombol navigasi/lihat yang muncul.
+        // Pastikan tombol "Push ke Sheet" atau "Import" tidak muncul.
+        
+    } else if (role === 'user') {
+        // USER: Hanya bisa edit jika Proyek Aktif ada di dalam daftar project_ids miliknya
+        const allowedProjects = (userInfo.project_ids || '').split(',').map(s => s.trim());
+        
+        if (allowedProjects.includes('*') || allowedProjects.includes(activeProject)) {
+            console.log(`[RBAC] User Mode: Akses diberikan untuk proyek ${activeProject}`);
+            // Tampilkan tombol yang diizinkan untuk user (misal hanya edit progress, bukan hapus proyek)
+            document.querySelectorAll('.btn-edit, .btn-save').forEach(btn => btn.style.display = 'inline-block');
+            // document.querySelectorAll('.btn-delete, .btn-push').forEach(btn => btn.style.display = 'none'); // Sembunyikan tombol khusus admin
+        } else {
+            console.log(`[RBAC] User Mode: Akses DITOLAK untuk proyek ${activeProject}`);
+            alert('Anda tidak memiliki akses ke proyek ini!');
+            // Kosongkan dropdown proyek atau logout paksa
+        }
+    }
+}
+
+// Panggil fungsi ini setiap kali user memilih proyek di dropdown "PROYEK AKTIF"
+document.getElementById('dropdown-proyek-aktif').addEventListener('change', function() {
+    applyPermissions();
+});
+
+// Panggil juga saat pertama kali halaman dimuat
+window.addEventListener('load', () => {
+    setTimeout(applyPermissions, 1000); // Beri jeda agar UI selesai render
+});
