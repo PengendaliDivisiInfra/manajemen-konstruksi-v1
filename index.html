@@ -519,8 +519,18 @@
 <!-- ===================== SCRIPTS ===================== -->
 <script>
   // Set URL default jika belum ada di localStorage
-  if (!localStorage.getItem('mk_v1_sheet_url') && !localStorage.getItem('mk_v1_api_url')) {
-    localStorage.setItem('mk_v1_sheet_url', 'https://script.google.com/macros/s/AKfycbwYvThLZbTt5APGR9zyWCwTcdyGlXAJRFxxDPP_kku97A4XfMhseneUP5vkxXyEUaPeTQ/exec');
+  // GANTI URL DI BAWAH INI DENGAN URL /EXEC ANDA YANG VALID!
+  var urlDefault = 'https://script.google.com/macros/s/AKfycbwYvThLZbTt5APGR9zyWCwTcdyGlXAJRFxxDPP_kku97A4XfMhseneUP5vkxXyEUaPeTQ/exec'; 
+  
+  if (!localStorage.getItem('mk_v1_sheet_url')) {
+    localStorage.setItem('mk_v2_sheet_url', urlDefault);
+  }
+  if (!localStorage.getItem('mk_v2_api_url')) {
+    localStorage.setItem('mk_v1_api_url', urlDefault);
+  }
+  // Beberapa versi aplikasi menyimpan pengaturan dalam bentuk JSON object
+  if (!localStorage.getItem('mk_v2_settings')) {
+    localStorage.setItem('mk_v2_settings', JSON.stringify({ sheetUrl: urlDefault, apiUrl: urlDefault }));
   }
 </script>
 <script src="Schedule.js"></script>
