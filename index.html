@@ -517,6 +517,12 @@
 <div class="toast" id="toast"></div>
 
 <!-- ===================== SCRIPTS ===================== -->
+<script>
+  // Set URL default jika belum ada di localStorage
+  if (!localStorage.getItem('mk_v1_sheet_url') && !localStorage.getItem('mk_v1_api_url')) {
+    localStorage.setItem('mk_v1_sheet_url', 'https://script.google.com/macros/s/AKfycbwYvThLZbTt5APGR9zyWCwTcdyGlXAJRFxxDPP_kku97A4XfMhseneUP5vkxXyEUaPeTQ/exec');
+  }
+</script>
 <script src="Schedule.js"></script>
 <script src="LoadingIndicator.js"></script>
 <script src="EmptyState.js"></script>
