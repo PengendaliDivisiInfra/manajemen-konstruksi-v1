@@ -1425,6 +1425,7 @@ function renderProjectSelector(){
 function switchTab(name){
   $$('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === name));
   $$('.section').forEach(s => s.classList.toggle('active', s.id === 'sec-' + name));
+  
   if (name === 'dashboard') renderDashboard();
   if (name === 'resources') renderResources();
   if (name === 'ahsp')      renderAhspTab();
@@ -1438,6 +1439,12 @@ function switchTab(name){
   if (name === 'settings')  renderSettings();
   if (name === 'recon')     { if (!DB.bj_material) seedReconMasterData(); renderReconRekap(); }
   if (name === 'lembar')    { initLembar(); }
+
+  // ═══ TAMBAHKAN BARIS INI ═══
+  // Terapkan ulang izin setiap kali pindah tab
+  if (typeof applyPermissions === 'function') {
+    setTimeout(applyPermissions, 100); 
+  }
 }
 
 function renderAll(){
