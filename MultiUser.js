@@ -370,6 +370,139 @@
     }
 
     /* ═══════════════════════════════════════════════════════════
+       USER MANAGEMENT UI (Khusus Superadmin)
+       ═══════════════════════════════════════════════════════════ */
+    
+    // Fungsi untuk memuat dan menampilkan daftar user
+    async function renderUserManagement() {
+      if (!Auth.isSuperadmin()) return; // Hanya superadmin yang boleh melihat
+
+      const tbl = document.getElementById('tblUsers');
+      if (!tbl) return;
+
+      tbl.innerHTML = '<tbody><tr><td class="empty">Memuat data user...</td></tr></tbody>';
+
+      try {
+        const out = await sheetRequest('listUsers', { token: Auth.token });
+        if (!out.ok) {
+          tbl.innerHTML = `<tbody><tr><td class="empty">Gagal memuat: ${out.message}</td></tr></tbody>`;
+          return;
+        }
+
+        const head = `<thead><tr>
+          <th>Username</th><th>Nama</th><th>Role</th><th>Proyek</th><th>Status</th><th class="center">Aksi</th>
+        </tr></thead>`;
+
+        const body = out.users.map(u => {
+          const projText = u.project_ids.includes('*') ? 'Semua Proyek' : u.project_ids.join(', ');
+          const statusBadge = u.aktif ? '<span class="badge b-ok">AKTIF</span>' : '<span class="badge b-danger">NONAKTIF</span>';
+          return `<tr>
+            <td><b>${esc(u.username)}</b></td>
+            <td>${esc(u.nama)}</td>
+            <td><span class="badge b-warn">${esc(u.role)}</span></td>
+            <td style="font-size:11px">${esc(projText)}</td>
+            <td>${statusBadge}</td>
+            <td class="center">
+              <button class="btn btn-sm" data-edit-user="${u.username}">✎</button>
+              ${u.username !== 'admin' ? `<button class="btn btn-sm btn-danger" data-del-user="${u.username}">✕</button>` : ''}
+            </td>
+          </tr>`;
+        }).join('');
+
+        tbl.innerHTML = head + `<tbody>${body}</tbody>`;
+
+        // Wire tombol edit & hapus
+        tbl.querySelectorAll('[data-edit-user]').forEach(b => b.onclick = () => formUser(b.dataset.editUser, out.users));
+        tbl.querySelectorAll('[data-del-user]').forEach(b => b.onclick = async () => {
+          if (!confirm(`Hapus user "${b.dataset.delUser}"?`)) return;
+          const res = await sheetRequest('deleteUser', { token: Auth.token, username: b.dataset.delUser });
+          if (res.ok) { toast('User dihapus'); renderUserManagement(); }
+          else toast(res.message, false);
+        });
+
+      } catch (e) {
+        tbl.innerHTML = `<tbody><tr><td class="empty">Error: ${e.message}</td></tr></tbody>`;
+      }
+    }
+
+    // Form Modal untuk Tambah/Edit User
+    function formUser(username, users) {
+      const isEdit = !!username;
+      const u = isEdit ? users.find(x => x.username === username) : null;
+
+      const roleOpts = ['superadmin', 'admin', 'owner', 'user'].map(r => 
+        `<option value="${r}" ${u?.role === r ? 'selected' : ''}>${r}</option>`
+      ).join('');
+
+      const body = `
+        <div class="row">
+          <div class="field"><label class="f">Username</label><input id="mu_user" value="${esc(u?.username || '')}" ${isEdit ? 'readonly' : ''} /></div>
+          <div class="field"><label class="f">Nama Lengkap</label><input id="mu_nama" value="${esc(u?.nama || '')}" /></div>
+        </div>
+        <div class="row" style="margin-top:12px">
+          <div class="field"><label class="f">Email</label><input id="mu_email" value="${esc(u?.email || '')}" /></div>
+          <div class="field"><label class="f">PIN ${isEdit ? '(Kosongkan jika tidak diubah)' : ''}</label><input id="mu_pin" type="password" placeholder="••••••" /></div>
+        </div>
+        <div class="row" style="margin-top:12px">
+          <div class="field"><label class="f">Role</label><select id="mu_role">${roleOpts}</select></div>
+          <div class="field" style="flex:3"><label class="f">Project IDs (pisahkan dengan koma)</label><input id="mu_proj" value="${esc(u?.project_ids_raw || (u?.project_ids ? u.project_ids.join(', ') : ''))}" placeholder="SDA-2026-001, SDA-2026-002 atau *" /></div>
+        </div>
+        <div class="row" style="margin-top:12px">
+          <div class="field"><label class="f">Status</label>
+            <select id="mu_aktif">
+              <option value="1" ${u?.aktif !== false ? 'selected' : ''}>Aktif</option>
+              <option value="0" ${u?.aktif === false ? 'selected' : ''}>Nonaktif</option>
+            </select>
+          </div>
+        </div>
+      `;
+
+      // Kita gunakan openModal dari Schedule.js (karena global)
+      openModal(isEdit ? 'Edit User' : 'Tambah User Baru', body, async () => {
+        const payload = {
+          username: document.getElementById('mu_user').value.trim().toLowerCase(),
+          nama: document.getElementById('mu_nama').value.trim(),
+          email: document.getElementById('mu_email').value.trim(),
+          role: document.getElementById('mu_role').value,
+          project_ids: document.getElementById('mu_proj').value.trim(),
+          aktif: document.getElementById('mu_aktif').value === '1'
+        };
+        
+        const pin = document.getElementById('mu_pin').value.trim();
+        if (pin) payload.pin = pin;
+
+        if (!payload.username || !payload.nama) {
+          toast('Username & Nama wajib diisi', false);
+          return false;
+        }
+        if (!isEdit && !pin) {
+          toast('PIN wajib diisi untuk user baru', false);
+          return false;
+        }
+
+        const action = isEdit ? 'updateUser' : 'addUser';
+        const res = await sheetRequest(action, { token: Auth.token, user: payload });
+
+        if (res.ok) {
+          toast(res.message || 'User disimpan');
+          renderUserManagement();
+        } else {
+          toast(res.message, false);
+          return false; // Jangan tutup modal jika gagal
+        }
+      });
+    }
+
+    // Hubungkan tombol "+ User Baru"
+    document.getElementById('btnAddUser')?.addEventListener('click', () => formUser(null, []));
+    
+    // Panggil renderUserManagement saat tab Pengaturan dibuka
+    // Kita bisa memodifikasi fungsi switchTab, atau menambahkan listener ke tab
+    document.querySelector('.tab[data-tab="settings"]')?.addEventListener('click', () => {
+        setTimeout(renderUserManagement, 300);
+    });
+
+    /* ═══════════════════════════════════════════════════════════
        PUBLIC API
        ═══════════════════════════════════════════════════════════ */
     window.MultiUser = {
