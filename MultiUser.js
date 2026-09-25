@@ -107,7 +107,6 @@
           '</div>';
         document.body.appendChild(ov);
 
-        /* Wire events */
         document.getElementById('loginSubmit').onclick = doLogin;
         document.getElementById('loginPin').addEventListener('keypress', function(e){
           if (e.key === 'Enter') doLogin();
@@ -176,22 +175,18 @@
     }
 
     /* ═══════════════════════════════════════════════════════════
-       POST-LOGIN: filter UI + wire logout
+       POST-LOGIN: Setup UI, Filter, dan RBAC
        ═══════════════════════════════════════════════════════════ */
     function afterLogin(){
       console.log('%c[MultiUser] Logged in as ' + Auth.user.username + ' (' + Auth.user.role + ')',
         'color:#22c55e;font-weight:bold');
 
-      /* 1. Filter project dropdown */
       filterProjectDropdown();
-
-      /* 2. Hide master data tabs untuk non-superadmin */
       applyRoleVisibility();
-
-      /* 3. Wire logout + user info di topbar */
       wireTopbarUser();
+      patchProjectSelector();
 
-      /* 4. Auto-select first accessible project */
+      // Auto-select project pertama yang bisa diakses
       if (!Auth.canAccess(STATE.activeProject)){
         var firstAccessible = DB.projects.find(function(p){ return Auth.canAccess(p.id); });
         if (firstAccessible){
@@ -199,21 +194,28 @@
           var sel = document.getElementById('activeProject');
           if (sel) sel.value = STATE.activeProject;
           if (typeof renderAll === 'function') renderAll();
-        } else {
-          console.warn('[MultiUser] User tidak punya akses ke proyek manapun');
         }
       }
 
-      /* 5. Patch renderProjectSelector untuk preserve filter */
-      patchProjectSelector();
-      applyPermissions();
+      // Terapkan izin tombol setelah semua UI dirender
+      setTimeout(applyPermissions, 500);
+
+      // Listener untuk ganti proyek
+      var selProj = document.getElementById('activeProject');
+      if (selProj && !selProj.dataset.rbacWired) {
+          selProj.addEventListener('change', function() {
+              STATE.activeProject = selProj.value;
+              applyPermissions();
+              if (typeof renderAll === 'function') renderAll();
+          });
+          selProj.dataset.rbacWired = 'true';
+      }
     }
 
     function filterProjectDropdown(){
       var sel = document.getElementById('activeProject');
       if (!sel) return;
 
-      // Filter proyek berdasarkan akses user
       var allowed = DB.projects.filter(function(p){ return Auth.canAccess(p.id); });
       
       sel.innerHTML = allowed.length
@@ -222,7 +224,6 @@
           }).join('')
         : '<option value="">(Tidak ada proyek yang bisa diakses)</option>';
         
-      // Jika proyek aktif saat ini tidak ada di daftar yang diizinkan, pilih yang pertama
       if (allowed.length && !allowed.find(p => p.id === STATE.activeProject)) {
         STATE.activeProject = allowed[0].id;
         sel.value = STATE.activeProject;
@@ -230,31 +231,26 @@
     }
 
     function patchProjectSelector(){
-      /* Override renderProjectSelector agar selalu filter by role */
       if (typeof window._origRenderProjectSelector !== 'undefined') return;
       window._origRenderProjectSelector = window.renderProjectSelector;
+      
       window.renderProjectSelector = function(){
         var sel = document.getElementById('activeProject');
         if (!sel) return;
         var allowed = DB.projects.filter(function(p){ return Auth.canAccess(p.id); });
+        
         sel.innerHTML = allowed.length
           ? allowed.map(function(p){
               return '<option value="' + p.id + '">' + esc(p.kode) + ' — ' + esc(p.nama) + '</option>';
             }).join('')
           : '<option value="">(Tidak ada proyek)</option>';
+          
         if (STATE.activeProject && allowed.find(function(p){ return p.id === STATE.activeProject; })){
           sel.value = STATE.activeProject;
         } else if (allowed.length){
           STATE.activeProject = allowed[0].id;
           sel.value = STATE.activeProject;
         }
-        var sel = document.getElementById('activeProject');
-      if (sel && !sel.dataset.rbacWired) {
-          sel.addEventListener('change', function() {
-              applyPermissions();
-          });
-          sel.dataset.rbacWired = 'true';
-      }
       };
     }
 
@@ -270,7 +266,6 @@
         if (sec) sec.style.display = 'none';
       });
 
-      /* Kalau tab aktif termasuk restricted, pindah ke dashboard */
       var activeTab = document.querySelector('.tab.active');
       if (activeTab && restrictedTabs.indexOf(activeTab.dataset.tab) >= 0){
         if (typeof switchTab === 'function') switchTab('dashboard');
@@ -294,85 +289,63 @@
     }
 
     /* ═══════════════════════════════════════════════════════════
-       SYNC MANAGER EXTENSION — pushProject
+       RBAC — ROLE BASED ACCESS CONTROL (Tombol & UI)
        ═══════════════════════════════════════════════════════════ */
-    SyncManager.pushProject = async function(projectId, db){
-      if (!Auth.token){
-        throw Object.assign(new Error('Belum login'), { code: 'NO_SESSION' });
-      }
-      if (!Auth.canAccess(projectId)){
-        throw Object.assign(new Error('Tidak punya akses ke proyek ini'), { code: 'NO_ACCESS' });
-      }
+    function applyPermissions() {
+      if (!Auth.user) return;
 
-      /* Ambil slice data proyek */
-      var data = {
-        projects: (db.projects || []).filter(function(p){ return p.id === projectId; }),
-        project_wbs: (db.project_wbs || []).filter(function(w){ return w.project_id === projectId; }),
-        project_ahsp_details: (db.project_ahsp_details || []).filter(function(a){ return a.project_id === projectId; }),
-        progress: (db.progress || []).filter(function(p){ return p.project_id === projectId; })
-      };
+      var role = Auth.user.role;
+      var activeProjectId = STATE.activeProject;
+      var allowedProjects = Auth.user.project_ids || [];
+      var isAllowedInProject = allowedProjects.indexOf('*') >= 0 || allowedProjects.indexOf(String(activeProjectId)) >= 0;
 
-      /* Strip field transien */
-      if (SyncManager.sanitize){
-        data = SyncManager.sanitize(data);
-      }
+      console.log(`[RBAC] Role: ${role}, Project: ${activeProjectId}, Access: ${isAllowedInProject}`);
 
-      var sizeKB = SyncManager.estimateSizeKB ? SyncManager.estimateSizeKB(data) : 0;
-      console.log('[MultiUser] pushProject payload:', sizeKB, 'KB');
+      // 1. Daftar tombol yang HANYA boleh diakses Superadmin/Admin
+      var adminOnlyButtons = [
+        '#btnAddRes', '#btnAddAhsp', '#btnAddProj', '#btnAddCalendar', '#btnAddHoliday',
+        '#btnReset', '#btnSeed', '#btnPush', '#btnPull', '#btnSaveSet', '#btnSyncAlat', '#btnSaveKoef'
+      ];
 
-      var out = await sheetRequest('pushProject', {
-        token: Auth.token,
-        projectId: projectId,
-        data: data
-      });
+      // 2. Daftar tombol yang boleh diakses User (di proyeknya) tapi TIDAK Owner
+      var editorButtons = [
+        '#btnAddWbs', '#btnAddWbsGroup', '#btnImportBQ', '#btnRunCPMWBS',
+        '#btnAddProg', '#btnProgressWizard', '#btnRunCPM'
+      ];
 
-      if (out.ok && typeof out.dbVersion === 'number'){
-        STATE.dbVersion = out.dbVersion;
-      }
-      return Object.assign(out, { sizeKB: sizeKB });
-    };
+      // 3. Sembunyikan semua tombol edit/hapus universal
+      var deleteButtons = document.querySelectorAll('.btn-danger, [data-del-res], [data-del-wbs], [data-del-pg], [data-del-prj]');
 
-    SyncManager.pullProject = async function(projectId){
-      if (!Auth.token){
-        throw Object.assign(new Error('Belum login'), { code: 'NO_SESSION' });
-      }
-      var out = await sheetRequest('getProject', {
-        token: Auth.token,
-        projectId: projectId
-      });
-      return out;
-    };
+      // --- Terapkan Aturan ---
+      if (role === 'superadmin' || role === 'admin') {
+        adminOnlyButtons.forEach(sel => { var el = document.querySelector(sel); if (el) el.style.display = ''; });
+        editorButtons.forEach(sel => { var el = document.querySelector(sel); if (el) el.style.display = ''; });
+        deleteButtons.forEach(el => el.style.display = '');
+        
+      } else if (role === 'owner') {
+        adminOnlyButtons.forEach(sel => { var el = document.querySelector(sel); if (el) el.style.display = 'none'; });
+        editorButtons.forEach(sel => { var el = document.querySelector(sel); if (el) el.style.display = 'none'; });
+        deleteButtons.forEach(el => el.style.display = 'none');
 
-    /* ═══════════════════════════════════════════════════════════
-       INIT FLOW
-       ═══════════════════════════════════════════════════════════ */
-    async function init(){
-      if (Auth.load()){
-        /* Ada token → validate ke server */
-        try {
-          var out = await sheetRequest('getSession', { token: Auth.token });
-          if (out.ok && out.user){
-            Auth.user = out.user;
-            try { localStorage.setItem(USER_KEY, JSON.stringify(out.user)); } catch(e){}
-            hideLogin();
-            afterLogin();
-            return;
-          }
-        } catch(e){
-          console.warn('[MultiUser] Session invalid:', e.message);
+      } else if (role === 'user') {
+        adminOnlyButtons.forEach(sel => { var el = document.querySelector(sel); if (el) el.style.display = 'none'; });
+        
+        if (isAllowedInProject) {
+          editorButtons.forEach(sel => { var el = document.querySelector(sel); if (el) el.style.display = ''; });
+          deleteButtons.forEach(el => el.style.display = '');
+        } else {
+          editorButtons.forEach(sel => { var el = document.querySelector(sel); if (el) el.style.display = 'none'; });
+          deleteButtons.forEach(el => el.style.display = 'none');
         }
-        /* Token expired / invalid */
-        Auth.clear();
       }
 
-      /* Belum login */
-      showLogin();
+      var btnAddProj = document.getElementById('btnAddProj');
+      if (btnAddProj) btnAddProj.style.display = (role === 'superadmin' || role === 'admin') ? '' : 'none';
     }
 
     /* ═══════════════════════════════════════════════════════════
        USER MANAGEMENT UI (Khusus Superadmin)
        ═══════════════════════════════════════════════════════════ */
-    
     async function renderUserManagement() {
       if (!Auth.isSuperadmin()) return; 
 
@@ -455,7 +428,6 @@
       `;
 
       openModal(isEdit ? 'Edit User' : 'Tambah User Baru', body, () => {
-        // Gunakan IIFE async agar tidak mengembalikan Promise ke openModal
         (async () => {
           const payload = {
             username: document.getElementById('mu_user').value.trim().toLowerCase(),
@@ -471,11 +443,11 @@
 
           if (!payload.username || !payload.nama) {
             toast('Username & Nama wajib diisi', false);
-            return; // Jangan tutup modal
+            return;
           }
           if (!isEdit && !pin) {
             toast('PIN wajib diisi untuk user baru', false);
-            return; // Jangan tutup modal
+            return;
           }
 
           const action = isEdit ? 'updateUser' : 'addUser';
@@ -484,22 +456,88 @@
           if (res.ok) {
             toast(res.message || 'User disimpan');
             renderUserManagement();
-            closeModal(); // Tutup modal HANYA jika berhasil
+            closeModal();
           } else {
             toast(res.message, false);
-            // Modal tetap terbuka jika gagal
           }
         })();
       });
     }
 
-    // Hubungkan tombol "+ User Baru"
     document.getElementById('btnAddUser')?.addEventListener('click', () => formUser(null, []));
-    
-    // Panggil renderUserManagement saat tab Pengaturan dibuka
     document.querySelector('.tab[data-tab="settings"]')?.addEventListener('click', () => {
         setTimeout(renderUserManagement, 300);
     });
+
+    /* ═══════════════════════════════════════════════════════════
+       SYNC MANAGER EXTENSION — pushProject
+       ═══════════════════════════════════════════════════════════ */
+    SyncManager.pushProject = async function(projectId, db){
+      if (!Auth.token){
+        throw Object.assign(new Error('Belum login'), { code: 'NO_SESSION' });
+      }
+      if (!Auth.canAccess(projectId)){
+        throw Object.assign(new Error('Tidak punya akses ke proyek ini'), { code: 'NO_ACCESS' });
+      }
+
+      var data = {
+        projects: (db.projects || []).filter(function(p){ return p.id === projectId; }),
+        project_wbs: (db.project_wbs || []).filter(function(w){ return w.project_id === projectId; }),
+        project_ahsp_details: (db.project_ahsp_details || []).filter(function(a){ return a.project_id === projectId; }),
+        progress: (db.progress || []).filter(function(p){ return p.project_id === projectId; })
+      };
+
+      if (SyncManager.sanitize){
+        data = SyncManager.sanitize(data);
+      }
+
+      var sizeKB = SyncManager.estimateSizeKB ? SyncManager.estimateSizeKB(data) : 0;
+      console.log('[MultiUser] pushProject payload:', sizeKB, 'KB');
+
+      var out = await sheetRequest('pushProject', {
+        token: Auth.token,
+        projectId: projectId,
+        data: data
+      });
+
+      if (out.ok && typeof out.dbVersion === 'number'){
+        STATE.dbVersion = out.dbVersion;
+      }
+      return Object.assign(out, { sizeKB: sizeKB });
+    };
+
+    SyncManager.pullProject = async function(projectId){
+      if (!Auth.token){
+        throw Object.assign(new Error('Belum login'), { code: 'NO_SESSION' });
+      }
+      var out = await sheetRequest('getProject', {
+        token: Auth.token,
+        projectId: projectId
+      });
+      return out;
+    };
+
+    /* ═══════════════════════════════════════════════════════════
+       INIT FLOW
+       ═══════════════════════════════════════════════════════════ */
+    async function init(){
+      if (Auth.load()){
+        try {
+          var out = await sheetRequest('getSession', { token: Auth.token });
+          if (out.ok && out.user){
+            Auth.user = out.user;
+            try { localStorage.setItem(USER_KEY, JSON.stringify(out.user)); } catch(e){}
+            hideLogin();
+            afterLogin();
+            return;
+          }
+        } catch(e){
+          console.warn('[MultiUser] Session invalid:', e.message);
+        }
+        Auth.clear();
+      }
+      showLogin();
+    }
 
     /* ═══════════════════════════════════════════════════════════
        PUBLIC API
@@ -535,137 +573,3 @@
     bootstrap(0);
   }
 })();
-
-    /* ═══════════════════════════════════════════════════════════
-       RBAC — ROLE BASED ACCESS CONTROL
-       ═══════════════════════════════════════════════════════════ */
-    function applyPermissions() {
-      if (!Auth.user) return;
-
-      var role = Auth.user.role;
-      var activeProjectId = STATE.activeProject;
-      var allowedProjects = Auth.user.project_ids || [];
-      var isAllowedInProject = allowedProjects.indexOf('*') >= 0 || allowedProjects.indexOf(String(activeProjectId)) >= 0;
-
-      console.log(`[RBAC] Role: ${role}, Project: ${activeProjectId}, Access: ${isAllowedInProject}`);
-
-      // 1. Daftar tombol yang HANYA boleh diakses Superadmin/Admin
-      var adminOnlyButtons = [
-        '#btnAddRes', '#btnAddAhsp', '#btnAddProj', '#btnAddCalendar', '#btnAddHoliday',
-        '#btnReset', '#btnSeed', '#btnPush', '#btnPull', '#btnSaveSet', '#btnSyncAlat', '#btnSaveKoef'
-      ];
-
-      // 2. Daftar tombol yang boleh diakses User (di proyeknya) tapi TIDAK Owner
-      var editorButtons = [
-        '#btnAddWbs', '#btnAddWbsGroup', '#btnImportBQ', '#btnRunCPMWBS',
-        '#btnAddProg', '#btnProgressWizard', '#btnRunCPM'
-      ];
-
-      // 3. Sembunyikan semua tombol edit/hapus universal (trash icon)
-      var deleteButtons = document.querySelectorAll('.btn-danger, [data-del-res], [data-del-wbs], [data-del-pg], [data-del-prj]');
-
-      // --- Terapkan Aturan ---
-      
-      if (role === 'superadmin' || role === 'admin') {
-        // Admin: Tampilkan semua
-        adminOnlyButtons.forEach(sel => { var el = document.querySelector(sel); if (el) el.style.display = ''; });
-        editorButtons.forEach(sel => { var el = document.querySelector(sel); if (el) el.style.display = ''; });
-        deleteButtons.forEach(el => el.style.display = '');
-        console.log('[RBAC] Admin Mode: Full Access');
-        
-      } else if (role === 'owner') {
-        // Owner: Sembunyikan SEMUA tombol edit/tambah/hapus/push/pull
-        adminOnlyButtons.forEach(sel => { var el = document.querySelector(sel); if (el) el.style.display = 'none'; });
-        editorButtons.forEach(sel => { var el = document.querySelector(sel); if (el) el.style.display = 'none'; });
-        deleteButtons.forEach(el => el.style.display = 'none');
-        console.log('[RBAC] Owner Mode: Read-Only');
-
-      } else if (role === 'user') {
-        // User: Sembunyikan tombol admin
-        adminOnlyButtons.forEach(sel => { var el = document.querySelector(sel); if (el) el.style.display = 'none'; });
-        
-        if (isAllowedInProject) {
-          // Jika user punya akses ke proyek ini, tampilkan tombol editor
-          editorButtons.forEach(sel => { var el = document.querySelector(sel); if (el) el.style.display = ''; });
-          // User boleh hapus data di proyeknya (opsional, sesuaikan kebutuhan)
-          deleteButtons.forEach(el => el.style.display = '');
-          console.log('[RBAC] User Mode: Editor Access Granted');
-        } else {
-          // Jika tidak punya akses, jadikan read-only
-          editorButtons.forEach(sel => { var el = document.querySelector(sel); if (el) el.style.display = 'none'; });
-          deleteButtons.forEach(el => el.style.display = 'none');
-          console.log('[RBAC] User Mode: No Access to this Project');
-        }
-      }
-
-      // Sembunyikan tombol "+ Proyek Baru" di tab Proyek untuk non-admin
-      var btnAddProj = document.getElementById('btnAddProj');
-      if (btnAddProj) btnAddProj.style.display = (role === 'superadmin' || role === 'admin') ? '' : 'none';
-    }
-
-    // Di dalam fungsi afterLogin(), panggil applyPermissions()
-    function afterLogin(){
-      console.log('%c[MultiUser] Logged in as ' + Auth.user.username + ' (' + Auth.user.role + ')', 'color:#22c55e;font-weight:bold');
-
-      filterProjectDropdown();
-      applyRoleVisibility();
-      wireTopbarUser();
-      patchProjectSelector();
-
-      // Auto-select project pertama yang bisa diakses
-      if (!Auth.canAccess(STATE.activeProject)){
-        var firstAccessible = DB.projects.find(function(p){ return Auth.canAccess(p.id); });
-        if (firstAccessible){
-          STATE.activeProject = firstAccessible.id;
-          var sel = document.getElementById('activeProject');
-          if (sel) sel.value = STATE.activeProject;
-          if (typeof renderAll === 'function') renderAll();
-        }
-      }
-      
-      // Terapkan izin setelah semua UI dirender
-      setTimeout(applyPermissions, 500);
-    }
-
-    // Panggil applyPermissions setiap kali user ganti proyek di dropdown
-    // Tambahkan ini di dalam fungsi patchProjectSelector()
-    // document.getElementById('activeProject').addEventListener('change', function() {
-    //   setTimeout(applyPermissions, 300);
-    // });
-        if (!Auth.user) return; // Belum login
-
-        var role = Auth.user.role;
-        var activeProjectId = STATE.activeProject; // Ambil ID proyek yang sedang aktif
-        
-        console.log(`[RBAC] Menerapkan izin untuk Role: ${role}, Project ID: ${activeProjectId}`);
-
-        // 1. Sembunyikan semua tombol aksi/edit terlebih dahulu
-        var actionButtons = document.querySelectorAll('.btn-edit, .btn-delete, .btn-save, .btn-push, .btn-import, .btn-tambah');
-        actionButtons.forEach(function(btn){ btn.style.display = 'none'; });
-        
-        // 2. Terapkan aturan berdasarkan Role
-        if (role === 'superadmin' || role === 'admin') {
-            // ADMIN: Akses penuh
-            console.log('[RBAC] Admin Mode: Full Access');
-            actionButtons.forEach(function(btn){ btn.style.display = 'inline-block'; });
-            
-        } else if (role === 'owner') {
-            // OWNER: Hanya baca (Read-Only)
-            console.log('[RBAC] Owner Mode: Read-Only');
-            // Tombol edit tetap hidden
-            
-        } else if (role === 'user') {
-            // USER: Cek apakah punya akses ke proyek aktif
-            var allowedProjects = Auth.user.project_ids || [];
-            
-            // Auth.user.project_ids sudah berupa array ID dari backend
-            if (allowedProjects.indexOf('*') >= 0 || allowedProjects.indexOf(String(activeProjectId)) >= 0) {
-                console.log(`[RBAC] User Mode: Akses DIBERIKAN untuk proyek ${activeProjectId}`);
-                // Tampilkan tombol yang diizinkan untuk user (misal edit progress)
-                document.querySelectorAll('.btn-edit, .btn-save').forEach(function(btn){ btn.style.display = 'inline-block'; });
-            } else {
-                console.log(`[RBAC] User Mode: Akses DITOLAK untuk proyek ${activeProjectId}`);
-                // Opsional: alert atau redirect
-            }
-        }
-    }
