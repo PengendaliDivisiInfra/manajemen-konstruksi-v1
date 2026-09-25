@@ -254,21 +254,41 @@
     }
 
     function applyRoleVisibility(){
-      if (Auth.isSuperadmin()) return;
-
-      // Sembunyikan tab yang tidak boleh diakses Owner/Guest
-      var restrictedTabs = ['resources', 'ahsp', 'settings', 'projects'];
-      restrictedTabs.forEach(function(tabName){
+      var role = Auth.user.role;
+      var isAdmin = (role === 'superadmin' || role === 'admin');
+      var isUser = (role === 'user');
+      
+      // Daftar tab yang ada
+      var allTabs = ['resources', 'ahsp', 'settings', 'projects'];
+      
+      allTabs.forEach(function(tabName){
         var tab = document.querySelector('.tab[data-tab="' + tabName + '"]');
-        if (tab) tab.style.display = 'none';
-
         var sec = document.getElementById('sec-' + tabName);
-        if (sec) sec.style.display = 'none';
+        var hide = false;
+
+        if (isAdmin) {
+          hide = false; // Admin: Semua tab muncul
+        } else if (role === 'owner' || role === 'guest') {
+          hide = true;  // Owner/Guest: Sembunyikan Master & Pengaturan
+        } else if (isUser) {
+          // User: Sembunyikan Pengaturan & Proyek (tapi tetap bisa lihat Resources & AHSP)
+          if (tabName === 'settings' || tabName === 'projects') hide = true;
+        }
+
+        if (tab) tab.style.display = hide ? 'none' : '';
+        if (sec) sec.style.display = hide ? 'none' : '';
       });
 
-      // Kalau tab aktif termasuk restricted, pindah ke dashboard
+      // Panel Manajemen Pengguna di dalam Pengaturan
+      var userMgmtPanel = document.getElementById('tblUsers')?.closest('.panel');
+      if (userMgmtPanel) {
+         // Hanya Admin/Superadmin yang bisa lihat panel ini
+         userMgmtPanel.style.display = isAdmin ? 'block' : 'none';
+      }
+
+      // Jika tab aktif saat ini disembunyikan, pindah ke dashboard
       var activeTab = document.querySelector('.tab.active');
-      if (activeTab && restrictedTabs.indexOf(activeTab.dataset.tab) >= 0){
+      if (activeTab && activeTab.style.display === 'none'){
         if (typeof switchTab === 'function') switchTab('dashboard');
       }
     }
@@ -319,19 +339,15 @@
       var allowedProjects = Auth.user.project_ids || [];
       var isAllowedInProject = allowedProjects.indexOf('*') >= 0 || allowedProjects.indexOf(String(activeProjectId)) >= 0;
 
-      // 1. Daftar tombol Admin
+      // Daftar Tombol
       var adminOnlyButtons = [
         '#btnAddRes', '#btnAddAhsp', '#btnAddProj', '#btnAddCalendar', '#btnAddHoliday',
         '#btnReset', '#btnSeed', '#btnPush', '#btnPull', '#btnSaveSet', '#btnSyncAlat', '#btnSaveKoef'
       ];
-
-      // 2. Daftar tombol Editor (User)
       var editorButtons = [
         '#btnAddWbs', '#btnAddWbsGroup', '#btnImportBQ', '#btnRunCPMWBS',
         '#btnAddProg', '#btnProgressWizard', '#btnRunCPM'
       ];
-
-      // 3. Tombol Edit/Hapus di dalam tabel
       var tableActionButtons = document.querySelectorAll(
         '[data-edit-res], [data-del-res], [data-edit-wbs], [data-del-wbs], ' +
         '[data-edit-pg], [data-del-pg], [data-edit-prj], [data-del-prj], ' +
@@ -340,30 +356,27 @@
         '.btn-danger, .btn-edit, .btn-delete'
       );
 
-      // --- Terapkan Aturan ---
+      // --- TERAPKAN ATURAN ---
       if (role === 'superadmin' || role === 'admin') {
-        // Admin: Tampilkan semua
+        // ADMIN: Full Akses
         adminOnlyButtons.forEach(sel => { var el = document.querySelector(sel); if (el) el.style.display = ''; });
         editorButtons.forEach(sel => { var el = document.querySelector(sel); if (el) el.style.display = ''; });
         tableActionButtons.forEach(el => el.style.display = '');
         
       } else if (role === 'owner' || isGuest) {
-        // Owner / Guest: Sembunyikan SEMUA tombol edit/tambah/hapus
+        // OWNER / GUEST: Read-Only Total
         adminOnlyButtons.forEach(sel => { var el = document.querySelector(sel); if (el) el.style.display = 'none'; });
         editorButtons.forEach(sel => { var el = document.querySelector(sel); if (el) el.style.display = 'none'; });
         tableActionButtons.forEach(el => el.style.display = 'none');
 
       } else if (role === 'user') {
-        // User: Sembunyikan tombol admin
-        adminOnlyButtons.forEach(sel => { var el = document.querySelector(sel); if (el) el.style.display = 'none'; });
+        // USER: Full Edit (seperti Admin), tapi dibatasi proyeknya
+        adminOnlyButtons.forEach(sel => { var el = document.querySelector(sel); if (el) el.style.display = ''; });
+        editorButtons.forEach(sel => { var el = document.querySelector(sel); if (el) el.style.display = ''; });
         
         if (isAllowedInProject) {
-          // Jika user punya akses ke proyek ini
-          editorButtons.forEach(sel => { var el = document.querySelector(sel); if (el) el.style.display = ''; });
           tableActionButtons.forEach(el => el.style.display = '');
         } else {
-          // Jika tidak punya akses
-          editorButtons.forEach(sel => { var el = document.querySelector(sel); if (el) el.style.display = 'none'; });
           tableActionButtons.forEach(el => el.style.display = 'none');
         }
       }
@@ -373,7 +386,8 @@
        USER MANAGEMENT UI (Khusus Superadmin)
        ═══════════════════════════════════════════════════════════ */
     async function renderUserManagement() {
-      if (!Auth.isSuperadmin()) return; 
+      var role = Auth.user.role;
+      if (role !== 'superadmin' && role !== 'admin') return;
 
       const tbl = document.getElementById('tblUsers');
       if (!tbl) return;
@@ -542,12 +556,10 @@
       }
 
       // ═══ MODE GUEST (TANPA LOGIN) ═══
-      console.log('%c[MultiUser] Tidak ada sesi. Masuk Mode Guest (Read-Only).', 'color:#f59e0b;font-weight:bold');
-      
       Auth.user = { 
         username: 'guest', 
         nama: 'Tamu', 
-        role: 'owner', 
+        role: 'owner', // Role owner = Read-Only
         project_ids: ['*'] 
       };
       
