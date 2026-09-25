@@ -206,6 +206,7 @@
 
       /* 5. Patch renderProjectSelector untuk preserve filter */
       patchProjectSelector();
+      applyPermissions();
     }
 
     function filterProjectDropdown(){
@@ -239,6 +240,13 @@
           STATE.activeProject = allowed[0].id;
           sel.value = STATE.activeProject;
         }
+        var sel = document.getElementById('activeProject');
+      if (sel && !sel.dataset.rbacWired) {
+          sel.addEventListener('change', function() {
+              applyPermissions();
+          });
+          sel.dataset.rbacWired = 'true';
+      }
       };
     }
 
@@ -388,60 +396,44 @@
   }
 })();
 
-/* ==========================================
-   MULTI-USER PERMISSION CONTROL
-   ========================================== */
+    /* ═══════════════════════════════════════════════════════════
+       PERMISSION CONTROL (RBAC)
+       ═══════════════════════════════════════════════════════════ */
+    function applyPermissions() {
+        if (!Auth.user) return; // Belum login
 
-function applyPermissions() {
-    const userInfo = JSON.parse(localStorage.getItem('mk_v1_user_info') || '{}');
-    const role = userInfo.role || 'guest';
-    const activeProject = getActiveProjectCode(); // Fungsi untuk mendapatkan Kode Proyek yang sedang aktif di dropdown
-    
-    console.log(`[RBAC] Menerapkan izin untuk Role: ${role}, Proyek: ${activeProject}`);
-
-    // 1. Sembunyikan semua tombol aksi/edit terlebih dahulu untuk keamanan
-    const actionButtons = document.querySelectorAll('.btn-edit, .btn-delete, .btn-save, .btn-push, .btn-import, .btn-tambah');
-    actionButtons.forEach(btn => btn.style.display = 'none');
-    
-    // Sembunyikan juga elemen input jika perlu (opsional)
-    // document.querySelectorAll('input, select, textarea').forEach(el => el.disabled = true);
-
-    // 2. Terapkan aturan berdasarkan Role
-    if (role === 'superadmin' || role === 'admin') {
-        // ADMIN: Akses ke semua proyek, bisa edit semuanya
-        console.log('[RBAC] Admin Mode: Full Access');
-        actionButtons.forEach(btn => btn.style.display = 'inline-block');
-        // enableInputs(); // Fungsi untuk mengaktifkan input jika ada
-
-    } else if (role === 'owner') {
-        // OWNER: Hanya bisa melihat (Read-Only)
-        console.log('[RBAC] Owner Mode: Read-Only');
-        // Tombol edit tetap hidden. Hanya tombol navigasi/lihat yang muncul.
-        // Pastikan tombol "Push ke Sheet" atau "Import" tidak muncul.
+        var role = Auth.user.role;
+        var activeProjectId = STATE.activeProject; // Ambil ID proyek yang sedang aktif
         
-    } else if (role === 'user') {
-        // USER: Hanya bisa edit jika Proyek Aktif ada di dalam daftar project_ids miliknya
-        const allowedProjects = (userInfo.project_ids || '').split(',').map(s => s.trim());
+        console.log(`[RBAC] Menerapkan izin untuk Role: ${role}, Project ID: ${activeProjectId}`);
+
+        // 1. Sembunyikan semua tombol aksi/edit terlebih dahulu
+        var actionButtons = document.querySelectorAll('.btn-edit, .btn-delete, .btn-save, .btn-push, .btn-import, .btn-tambah');
+        actionButtons.forEach(function(btn){ btn.style.display = 'none'; });
         
-        if (allowedProjects.includes('*') || allowedProjects.includes(activeProject)) {
-            console.log(`[RBAC] User Mode: Akses diberikan untuk proyek ${activeProject}`);
-            // Tampilkan tombol yang diizinkan untuk user (misal hanya edit progress, bukan hapus proyek)
-            document.querySelectorAll('.btn-edit, .btn-save').forEach(btn => btn.style.display = 'inline-block');
-            // document.querySelectorAll('.btn-delete, .btn-push').forEach(btn => btn.style.display = 'none'); // Sembunyikan tombol khusus admin
-        } else {
-            console.log(`[RBAC] User Mode: Akses DITOLAK untuk proyek ${activeProject}`);
-            alert('Anda tidak memiliki akses ke proyek ini!');
-            // Kosongkan dropdown proyek atau logout paksa
+        // 2. Terapkan aturan berdasarkan Role
+        if (role === 'superadmin' || role === 'admin') {
+            // ADMIN: Akses penuh
+            console.log('[RBAC] Admin Mode: Full Access');
+            actionButtons.forEach(function(btn){ btn.style.display = 'inline-block'; });
+            
+        } else if (role === 'owner') {
+            // OWNER: Hanya baca (Read-Only)
+            console.log('[RBAC] Owner Mode: Read-Only');
+            // Tombol edit tetap hidden
+            
+        } else if (role === 'user') {
+            // USER: Cek apakah punya akses ke proyek aktif
+            var allowedProjects = Auth.user.project_ids || [];
+            
+            // Auth.user.project_ids sudah berupa array ID dari backend
+            if (allowedProjects.indexOf('*') >= 0 || allowedProjects.indexOf(String(activeProjectId)) >= 0) {
+                console.log(`[RBAC] User Mode: Akses DIBERIKAN untuk proyek ${activeProjectId}`);
+                // Tampilkan tombol yang diizinkan untuk user (misal edit progress)
+                document.querySelectorAll('.btn-edit, .btn-save').forEach(function(btn){ btn.style.display = 'inline-block'; });
+            } else {
+                console.log(`[RBAC] User Mode: Akses DITOLAK untuk proyek ${activeProjectId}`);
+                // Opsional: alert atau redirect
+            }
         }
     }
-}
-
-// Panggil fungsi ini setiap kali user memilih proyek di dropdown "PROYEK AKTIF"
-document.getElementById('dropdown-proyek-aktif').addEventListener('change', function() {
-    applyPermissions();
-});
-
-// Panggil juga saat pertama kali halaman dimuat
-window.addEventListener('load', () => {
-    setTimeout(applyPermissions, 1000); // Beri jeda agar UI selesai render
-});
