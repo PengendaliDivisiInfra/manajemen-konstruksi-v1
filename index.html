@@ -520,18 +520,17 @@
 <script>
   // Set URL default jika belum ada di localStorage
   // GANTI URL DI BAWAH INI DENGAN URL /EXEC ANDA YANG VALID!
-  var urlDefault = 'https://script.google.com/macros/s/AKfycbwYVThLZ.../exec'; 
-  
-  // Gunakan kunci 'mk_v1' secara konsisten
+  var urlDefault = 'https://script.google.com/macros/s/AKfycbwYvThLZbTt5APGR9zyWCwTcdyGlXAJRFxxDPP_kku97A4XfMhseneUP5vkxXyEUaPeTQ/exec'; 
+
+  // Kunci utama yang dibaca aplikasi
+  if (!localStorage.getItem('mk_v1_settings_v1')) {
+    var setDefault = { overhead: 10, ppn: 11, sheetUrl: urlDefault };
+    localStorage.setItem('mk_v1_settings_v1', JSON.stringify(setDefault));
+  }
+
+  // Kunci cadangan (untuk berjaga-jaga)
   if (!localStorage.getItem('mk_v1_sheet_url')) {
     localStorage.setItem('mk_v1_sheet_url', urlDefault);
-  }
-  if (!localStorage.getItem('mk_v1_api_url')) {
-    localStorage.setItem('mk_v1_api_url', urlDefault);
-  }
-  // Beberapa modul aplikasi membaca pengaturan dari format JSON ini
-  if (!localStorage.getItem('mk_v1_settings')) {
-    localStorage.setItem('mk_v1_settings', JSON.stringify({ sheetUrl: urlDefault, apiUrl: urlDefault }));
   }
 </script>
 <script src="Schedule.js"></script>
