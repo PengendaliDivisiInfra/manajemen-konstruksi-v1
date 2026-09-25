@@ -4516,48 +4516,23 @@ const GanttView = {
 
       // Update grid table width
       const root = state.container.querySelector('.gantt-root');
-      root.style.setProperty('--gantt-table-w', this.tableWidth() + 'px');
+      root.style.setProperty('--gantt-table-w', this.tableWidth(state.costColumns) + 'px');
     };
 
-      let isFinishing = false;
-      const finishDrag = () => {
-        if (isFinishing) return;
-        isFinishing = true;
-        document.removeEventListener('mousemove', onMove);
-        document.removeEventListener('mouseup', onUp);
-        document.removeEventListener('blur', finishDrag);
-        window.removeEventListener('blur', finishDrag);
+    const onUp = () => {
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+      body.style.cursor = prevCursor;
+      body.style.userSelect = '';
+      handle.classList.remove('is-active');
+      state._lastResizeAt = Date.now();
+      this.saveColWidths(state.colWidths);
+    };
 
-        state.container.querySelector('.gantt-bars-wrap').classList.remove('is-dragging-bar');
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  },
 
-        const bd = state.barDrag;
-        state.barDrag = null;
-        if (!bd || !bd.deltaDays) { this.drawBars(state, canvas); return; }
-
-        const origStart = new Date(bd.origStartISO + 'T00:00:00');
-        const wbsItem = DB.project_wbs.find(w => w.id === bd.nodeId);
-        if (!wbsItem){ this.drawBars(state, canvas); return; }
-        if (typeof Undo !== 'undefined') Undo.snapshot('Drag bar: ' + (wbsItem.kode_wbs || ''));
-
-        const cal = WorkingCalendar.get(wbsItem.calendar_id || state.proj.calendar_id);
-        const snapped = WorkingCalendar.addWorkDays(origStart, bd.deltaDays, cal);
-        const newStartISO = WorkingCalendar.fmt(snapped);
-
-        writeScheduleField(wbsItem, 'constraint_type', 'SNET');
-        writeScheduleField(wbsItem, 'constraint_date', newStartISO);
-
-        runCPM(state.proj.id);
-        saveDB();
-        this.mount(state.container, state.proj.id, { mode: state.mode, zoom: state.zoom });
-        toast('Jadwal ' + (wbsItem.kode_wbs || '') + ' diubah → ' + newStartISO);
-      };
-      const onUp = finishDrag;
-
-      document.addEventListener('mousemove', onMove);
-      document.addEventListener('mouseup', onUp);
-      document.addEventListener('blur', finishDrag);
-      window.addEventListener('blur', finishDrag);
-     
   /* ═══════════════════════════════════════════════════════════
      (b) ROW REORDER
      ═══════════════════════════════════════════════════════════ */
