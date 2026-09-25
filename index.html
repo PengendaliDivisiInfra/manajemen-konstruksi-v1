@@ -518,20 +518,44 @@
 
 <!-- ===================== SCRIPTS ===================== -->
 <script>
-  // Set URL default jika belum ada di localStorage
-  // GANTI URL DI BAWAH INI DENGAN URL /EXEC ANDA YANG VALID!
-  var urlDefault = 'https://script.google.com/macros/s/AKfycbwYvThLZbTt5APGR9zyWCwTcdyGlXAJRFxxDPP_kku97A4XfMhseneUP5vkxXyEUaPeTQ/exec'; 
+  // =========================================================
+  // KONFIGURASI DEFAULT API URL (AMAN & PERMANEN)
+  // =========================================================
+  var urlDefault = 'https://script.google.com/macros/s/AKfycbxZw4XjA8ROQNqONTxziBHT4XGW3whIY0ZRcG63CAxMJRvTgrzLXhEJ77lbXqNhrpcYoA/exec';
+  var setKey = 'mk_v1_settings_v1';
+  var existingSet = localStorage.getItem(setKey);
+  
+  // Struktur data default yang dibutuhkan aplikasi
+  var setData = { 
+    overhead: 10, 
+    ppn: 11, 
+    sheetUrl: urlDefault 
+  };
 
-  // Kunci utama yang dibaca aplikasi
-  if (!localStorage.getItem('mk_v1_settings_v1')) {
-    var setDefault = { overhead: 10, ppn: 11, sheetUrl: urlDefault };
-    localStorage.setItem('mk_v1_settings_v1', JSON.stringify(setDefault));
+  if (existingSet) {
+    try {
+      var parsed = JSON.parse(existingSet);
+      // Jika URL sudah diubah manual oleh admin di menu Pengaturan, biarkan saja.
+      // Tapi jika kosong, isi dengan URL default ini.
+      if (!parsed.sheetUrl) {
+        parsed.sheetUrl = urlDefault;
+        localStorage.setItem(setKey, JSON.stringify(parsed));
+      }
+    } catch(e) {
+      // Jika data di localStorage rusak/korup, timpa dengan default yang baru
+      localStorage.setItem(setKey, JSON.stringify(setData));
+    }
+  } else {
+    // Jika pengguna baru (localStorage kosong), langsung pasang default ini
+    localStorage.setItem(setKey, JSON.stringify(setData));
   }
 
-  // Kunci cadangan (untuk berjaga-jaga)
+  // Cadangan (backup) untuk kunci lama agar tidak error
   if (!localStorage.getItem('mk_v1_sheet_url')) {
     localStorage.setItem('mk_v1_sheet_url', urlDefault);
   }
+  
+  console.log('✅ [Init] Konfigurasi API URL default telah diamankan.');
 </script>
 <script src="Schedule.js"></script>
 <script src="LoadingIndicator.js"></script>
