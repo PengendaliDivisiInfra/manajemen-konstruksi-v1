@@ -213,12 +213,20 @@
       var sel = document.getElementById('activeProject');
       if (!sel) return;
 
+      // Filter proyek berdasarkan akses user
       var allowed = DB.projects.filter(function(p){ return Auth.canAccess(p.id); });
+      
       sel.innerHTML = allowed.length
         ? allowed.map(function(p){
             return '<option value="' + p.id + '">' + esc(p.kode) + ' — ' + esc(p.nama) + '</option>';
           }).join('')
         : '<option value="">(Tidak ada proyek yang bisa diakses)</option>';
+        
+      // Jika proyek aktif saat ini tidak ada di daftar yang diizinkan, pilih yang pertama
+      if (allowed.length && !allowed.find(p => p.id === STATE.activeProject)) {
+        STATE.activeProject = allowed[0].id;
+        sel.value = STATE.activeProject;
+      }
     }
 
     function patchProjectSelector(){
@@ -397,9 +405,101 @@
 })();
 
     /* ═══════════════════════════════════════════════════════════
-       PERMISSION CONTROL (RBAC)
+       RBAC — ROLE BASED ACCESS CONTROL
        ═══════════════════════════════════════════════════════════ */
     function applyPermissions() {
+      if (!Auth.user) return;
+
+      var role = Auth.user.role;
+      var activeProjectId = STATE.activeProject;
+      var allowedProjects = Auth.user.project_ids || [];
+      var isAllowedInProject = allowedProjects.indexOf('*') >= 0 || allowedProjects.indexOf(String(activeProjectId)) >= 0;
+
+      console.log(`[RBAC] Role: ${role}, Project: ${activeProjectId}, Access: ${isAllowedInProject}`);
+
+      // 1. Daftar tombol yang HANYA boleh diakses Superadmin/Admin
+      var adminOnlyButtons = [
+        '#btnAddRes', '#btnAddAhsp', '#btnAddProj', '#btnAddCalendar', '#btnAddHoliday',
+        '#btnReset', '#btnSeed', '#btnPush', '#btnPull', '#btnSaveSet', '#btnSyncAlat', '#btnSaveKoef'
+      ];
+
+      // 2. Daftar tombol yang boleh diakses User (di proyeknya) tapi TIDAK Owner
+      var editorButtons = [
+        '#btnAddWbs', '#btnAddWbsGroup', '#btnImportBQ', '#btnRunCPMWBS',
+        '#btnAddProg', '#btnProgressWizard', '#btnRunCPM'
+      ];
+
+      // 3. Sembunyikan semua tombol edit/hapus universal (trash icon)
+      var deleteButtons = document.querySelectorAll('.btn-danger, [data-del-res], [data-del-wbs], [data-del-pg], [data-del-prj]');
+
+      // --- Terapkan Aturan ---
+      
+      if (role === 'superadmin' || role === 'admin') {
+        // Admin: Tampilkan semua
+        adminOnlyButtons.forEach(sel => { var el = document.querySelector(sel); if (el) el.style.display = ''; });
+        editorButtons.forEach(sel => { var el = document.querySelector(sel); if (el) el.style.display = ''; });
+        deleteButtons.forEach(el => el.style.display = '');
+        console.log('[RBAC] Admin Mode: Full Access');
+        
+      } else if (role === 'owner') {
+        // Owner: Sembunyikan SEMUA tombol edit/tambah/hapus/push/pull
+        adminOnlyButtons.forEach(sel => { var el = document.querySelector(sel); if (el) el.style.display = 'none'; });
+        editorButtons.forEach(sel => { var el = document.querySelector(sel); if (el) el.style.display = 'none'; });
+        deleteButtons.forEach(el => el.style.display = 'none');
+        console.log('[RBAC] Owner Mode: Read-Only');
+
+      } else if (role === 'user') {
+        // User: Sembunyikan tombol admin
+        adminOnlyButtons.forEach(sel => { var el = document.querySelector(sel); if (el) el.style.display = 'none'; });
+        
+        if (isAllowedInProject) {
+          // Jika user punya akses ke proyek ini, tampilkan tombol editor
+          editorButtons.forEach(sel => { var el = document.querySelector(sel); if (el) el.style.display = ''; });
+          // User boleh hapus data di proyeknya (opsional, sesuaikan kebutuhan)
+          deleteButtons.forEach(el => el.style.display = '');
+          console.log('[RBAC] User Mode: Editor Access Granted');
+        } else {
+          // Jika tidak punya akses, jadikan read-only
+          editorButtons.forEach(sel => { var el = document.querySelector(sel); if (el) el.style.display = 'none'; });
+          deleteButtons.forEach(el => el.style.display = 'none');
+          console.log('[RBAC] User Mode: No Access to this Project');
+        }
+      }
+
+      // Sembunyikan tombol "+ Proyek Baru" di tab Proyek untuk non-admin
+      var btnAddProj = document.getElementById('btnAddProj');
+      if (btnAddProj) btnAddProj.style.display = (role === 'superadmin' || role === 'admin') ? '' : 'none';
+    }
+
+    // Di dalam fungsi afterLogin(), panggil applyPermissions()
+    function afterLogin(){
+      console.log('%c[MultiUser] Logged in as ' + Auth.user.username + ' (' + Auth.user.role + ')', 'color:#22c55e;font-weight:bold');
+
+      filterProjectDropdown();
+      applyRoleVisibility();
+      wireTopbarUser();
+      patchProjectSelector();
+
+      // Auto-select project pertama yang bisa diakses
+      if (!Auth.canAccess(STATE.activeProject)){
+        var firstAccessible = DB.projects.find(function(p){ return Auth.canAccess(p.id); });
+        if (firstAccessible){
+          STATE.activeProject = firstAccessible.id;
+          var sel = document.getElementById('activeProject');
+          if (sel) sel.value = STATE.activeProject;
+          if (typeof renderAll === 'function') renderAll();
+        }
+      }
+      
+      // Terapkan izin setelah semua UI dirender
+      setTimeout(applyPermissions, 500);
+    }
+
+    // Panggil applyPermissions setiap kali user ganti proyek di dropdown
+    // Tambahkan ini di dalam fungsi patchProjectSelector()
+    // document.getElementById('activeProject').addEventListener('change', function() {
+    //   setTimeout(applyPermissions, 300);
+    // });
         if (!Auth.user) return; // Belum login
 
         var role = Auth.user.role;
