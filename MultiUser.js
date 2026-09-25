@@ -274,17 +274,33 @@
 
     function wireTopbarUser(){
       var right = document.querySelector('.topbar-right');
-      if (!right || document.getElementById('userBadge')) return;
+      if (!right) return;
+
+      // Jika sudah ada badge, hapus dulu
+      var existingBadge = document.getElementById('userBadge');
+      if (existingBadge) existingBadge.remove();
 
       var badge = document.createElement('div');
       badge.id = 'userBadge';
       badge.className = 'user-badge';
-      badge.innerHTML =
-        '<span class="user-icon">👤</span>' +
-        '<span class="user-name">' + esc(Auth.user.nama || Auth.user.username) + '</span>' +
-        '<span class="user-role">' + esc(Auth.user.role) + '</span>' +
-        '<button class="user-logout" title="Logout">⎋</button>';
-      badge.querySelector('.user-logout').onclick = doLogout;
+
+      if (Auth.user.role === 'guest') {
+        // Tampilan untuk Guest: Tombol Login
+        badge.innerHTML =
+          '<span class="user-icon">👤</span>' +
+          '<span class="user-name">Tamu</span>' +
+          '<button class="btn btn-primary btn-sm" id="btnShowLogin" style="margin-left:8px">🔐 Login</button>';
+        badge.querySelector('#btnShowLogin').onclick = showLogin;
+      } else {
+        // Tampilan untuk User yang sudah login
+        badge.innerHTML =
+          '<span class="user-icon">👤</span>' +
+          '<span class="user-name">' + esc(Auth.user.nama || Auth.user.username) + '</span>' +
+          '<span class="user-role">' + esc(Auth.user.role) + '</span>' +
+          '<button class="user-logout" title="Logout">⎋</button>';
+        badge.querySelector('.user-logout').onclick = doLogout;
+      }
+      
       right.insertBefore(badge, right.firstChild);
     }
 
@@ -522,6 +538,7 @@
        ═══════════════════════════════════════════════════════════ */
     async function init(){
       if (Auth.load()){
+        // Ada token → validate ke server
         try {
           var out = await sheetRequest('getSession', { token: Auth.token });
           if (out.ok && out.user){
@@ -536,7 +553,23 @@
         }
         Auth.clear();
       }
-      showLogin();
+
+      // ═══ MODE GUEST (TANPA LOGIN) ═══
+      console.log('%c[MultiUser] Tidak ada sesi. Masuk Mode Guest (Read-Only).', 'color:#f59e0b;font-weight:bold');
+      
+      // Set user sebagai guest/owner (hanya bisa lihat)
+      Auth.user = { 
+        username: 'guest', 
+        nama: 'Tamu (Read-Only)', 
+        role: 'owner', // Role owner = Read-Only
+        project_ids: ['*'] // Bisa lihat semua proyek
+      };
+      
+      hideLogin(); // Sembunyikan form login
+      afterLogin(); // Terapkan izin (Read-Only)
+      
+      // Tampilkan tombol Login di topbar
+      showLoginButton();
     }
 
     /* ═══════════════════════════════════════════════════════════
