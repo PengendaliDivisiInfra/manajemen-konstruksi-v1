@@ -373,9 +373,8 @@
        USER MANAGEMENT UI (Khusus Superadmin)
        ═══════════════════════════════════════════════════════════ */
     
-    // Fungsi untuk memuat dan menampilkan daftar user
     async function renderUserManagement() {
-      if (!Auth.isSuperadmin()) return; // Hanya superadmin yang boleh melihat
+      if (!Auth.isSuperadmin()) return; 
 
       const tbl = document.getElementById('tblUsers');
       if (!tbl) return;
@@ -411,7 +410,6 @@
 
         tbl.innerHTML = head + `<tbody>${body}</tbody>`;
 
-        // Wire tombol edit & hapus
         tbl.querySelectorAll('[data-edit-user]').forEach(b => b.onclick = () => formUser(b.dataset.editUser, out.users));
         tbl.querySelectorAll('[data-del-user]').forEach(b => b.onclick = async () => {
           if (!confirm(`Hapus user "${b.dataset.delUser}"?`)) return;
@@ -425,7 +423,6 @@
       }
     }
 
-    // Form Modal untuk Tambah/Edit User
     function formUser(username, users) {
       const isEdit = !!username;
       const u = isEdit ? users.find(x => x.username === username) : null;
@@ -457,39 +454,42 @@
         </div>
       `;
 
-      // Kita gunakan openModal dari Schedule.js (karena global)
-      openModal(isEdit ? 'Edit User' : 'Tambah User Baru', body, async () => {
-        const payload = {
-          username: document.getElementById('mu_user').value.trim().toLowerCase(),
-          nama: document.getElementById('mu_nama').value.trim(),
-          email: document.getElementById('mu_email').value.trim(),
-          role: document.getElementById('mu_role').value,
-          project_ids: document.getElementById('mu_proj').value.trim(),
-          aktif: document.getElementById('mu_aktif').value === '1'
-        };
-        
-        const pin = document.getElementById('mu_pin').value.trim();
-        if (pin) payload.pin = pin;
+      openModal(isEdit ? 'Edit User' : 'Tambah User Baru', body, () => {
+        // Gunakan IIFE async agar tidak mengembalikan Promise ke openModal
+        (async () => {
+          const payload = {
+            username: document.getElementById('mu_user').value.trim().toLowerCase(),
+            nama: document.getElementById('mu_nama').value.trim(),
+            email: document.getElementById('mu_email').value.trim(),
+            role: document.getElementById('mu_role').value,
+            project_ids: document.getElementById('mu_proj').value.trim(),
+            aktif: document.getElementById('mu_aktif').value === '1'
+          };
+          
+          const pin = document.getElementById('mu_pin').value.trim();
+          if (pin) payload.pin = pin;
 
-        if (!payload.username || !payload.nama) {
-          toast('Username & Nama wajib diisi', false);
-          return false;
-        }
-        if (!isEdit && !pin) {
-          toast('PIN wajib diisi untuk user baru', false);
-          return false;
-        }
+          if (!payload.username || !payload.nama) {
+            toast('Username & Nama wajib diisi', false);
+            return; // Jangan tutup modal
+          }
+          if (!isEdit && !pin) {
+            toast('PIN wajib diisi untuk user baru', false);
+            return; // Jangan tutup modal
+          }
 
-        const action = isEdit ? 'updateUser' : 'addUser';
-        const res = await sheetRequest(action, { token: Auth.token, user: payload });
+          const action = isEdit ? 'updateUser' : 'addUser';
+          const res = await sheetRequest(action, { token: Auth.token, user: payload });
 
-        if (res.ok) {
-          toast(res.message || 'User disimpan');
-          renderUserManagement();
-        } else {
-          toast(res.message, false);
-          return false; // Jangan tutup modal jika gagal
-        }
+          if (res.ok) {
+            toast(res.message || 'User disimpan');
+            renderUserManagement();
+            closeModal(); // Tutup modal HANYA jika berhasil
+          } else {
+            toast(res.message, false);
+            // Modal tetap terbuka jika gagal
+          }
+        })();
       });
     }
 
@@ -497,7 +497,6 @@
     document.getElementById('btnAddUser')?.addEventListener('click', () => formUser(null, []));
     
     // Panggil renderUserManagement saat tab Pengaturan dibuka
-    // Kita bisa memodifikasi fungsi switchTab, atau menambahkan listener ke tab
     document.querySelector('.tab[data-tab="settings"]')?.addEventListener('click', () => {
         setTimeout(renderUserManagement, 300);
     });
