@@ -569,7 +569,6 @@
       afterLogin(); // Terapkan izin (Read-Only)
       
       // Tampilkan tombol Login di topbar
-      showLoginButton();
     }
 
     /* ═══════════════════════════════════════════════════════════
