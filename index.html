@@ -3150,6 +3150,7 @@ async function sheetRequest(action, payload){
     const res = await fetch(SET.sheetUrl, {
       method: 'POST',
       redirect: 'follow',
+      credentials: 'omit',  // Jangan kirim cookie Google agar tidak diblokir CORS
       headers: {'Content-Type': 'text/plain;charset=utf-8'},
       body: JSON.stringify({action, payload})
     });
