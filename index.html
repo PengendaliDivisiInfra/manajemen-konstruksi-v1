@@ -2639,6 +2639,26 @@ function formProject(id){
     }
   };
 
+  // ── Pasang event listener ke input tanggal & mode ──
+  ['fpj_tm','fpj_ts','fpj_cal','fpj_mode'].forEach(i => {
+    const el = document.getElementById(i);
+    if (el) el.onchange = recompute;
+  });
+  recompute();
+
+  // Kalau user edit durasi manual, biarkan (tidak ditimpa otomatis)
+  const durWEl = document.getElementById('fpj_durw');
+  if (durWEl){
+    durWEl.addEventListener('input', () => {
+      // Hanya angka yang valid
+      const v = parseInt(durWEl.value, 10);
+      if (isNaN(v) || v < 1) durWEl.value = 1;
+    });
+  }
+  
+  AUTOSAVE.attachForm('form_project_' + (id || 'new'));
+}  // ← INI PENUTUP FUNGSI formProject YANG HILANG
+
 /* ---------- RENDER CALENDARS ---------- */
 function renderCalendars(){
   const head = `<thead><tr>
