@@ -399,16 +399,35 @@
 
       try {
         const out = await sheetRequest('listUsers', { token: Auth.token });
-        if (!out.ok) {
-          tbl.innerHTML = `<tbody><tr><td class="empty">Gagal memuat: ${out.message}</td></tr></tbody>`;
+        
+        // ═══ FIX: Cek users ada sebelum .map ═══
+        const users = (out && Array.isArray(out.users)) ? out.users : [];
+        
+        if (!out || !out.ok) {
+          tbl.innerHTML =
+            '<tbody><tr><td class="empty">' +
+              '⚠ Gagal memuat daftar user.<br>' +
+              '<small style="color:#94a3b8;font-size:11px">' +
+                'Kemungkinan: sheet <code>project_users</code> belum dibuat, atau Apps Script 404.<br>' +
+                'Pesan: ' + _esc(out && out.message || 'tidak diketahui') +
+              '</small>' +
+            '</td></tr></tbody>';
           return;
         }
-
-        const head = `<thead><tr>
-          <th>Username</th><th>Nama</th><th>Role</th><th>Proyek</th><th>Status</th><th class="center">Aksi</th>
-        </tr></thead>`;
-
-        const body = out.users.map(u => {
+        
+        if (!users.length){
+          tbl.innerHTML =
+            '<tbody><tr><td class="empty">' +
+              '📭 Belum ada user terdaftar.<br>' +
+              '<small style="color:#94a3b8;font-size:11px">' +
+                'Buka Apps Script Editor → jalankan <code>migrateMultiUserV1()</code> untuk membuat admin default.' +
+              '</small>' +
+            '</td></tr></tbody>';
+          return;
+        }
+        
+        const head = `<thead>...`;
+        const body = users.map(u => {
           const projText = u.project_ids.includes('*') ? 'Semua Proyek' : u.project_ids.join(', ');
           const statusBadge = u.aktif ? '<span class="badge b-ok">AKTIF</span>' : '<span class="badge b-danger">NONAKTIF</span>';
           return `<tr>
