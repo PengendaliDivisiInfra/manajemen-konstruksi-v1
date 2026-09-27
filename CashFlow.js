@@ -282,6 +282,12 @@ async function saveCashFlowToServer(projectId) {
   try {
     toast('Menyimpan Cash Flow...');
 
+    // Update DB lokal dulu
+    if (!DB.cash_flow) DB.cash_flow = [];
+    DB.cash_flow = DB.cash_flow.filter(c => String(c.project_id) !== String(projectId));
+    DB.cash_flow = DB.cash_flow.concat(_cashFlowDataLocal);
+    saveDB();
+
     const token = localStorage.getItem('mk_session_token') || '';
     const res = await sheetRequest('saveCashFlow', {
       token: token,
