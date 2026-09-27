@@ -2516,7 +2516,7 @@ function formProject(id){
     </div>
     <div class="row" style="margin-top:12px">
       <div class="field"><label class="f">Durasi (hari)</label><input id="fpj_durh" readonly style="font-weight:700;color:var(--acc2)" /></div>
-      <div class="field"><label class="f">Durasi (minggu)</label><input id="fpj_durw" readonly style="font-weight:700;color:var(--acc2)" /></div>
+      <div class="field"><label class="f">Durasi (minggu)</label><input id="fpj_durw" type="number" min="1" style="font-weight:700;color:var(--acc2)" /></div>
       <div class="field"><label class="f">Hari Kerja Efektif</label><input id="fpj_wd" readonly style="font-weight:700;color:var(--warn)" /></div>
     </div>
     ${!p ? `<p class="hint" style="margin-top:12px">⚙ Saat disimpan, sistem otomatis mengkloning template AHSP master ke <code>project_ahsp_details</code>.</p>` : ''}
@@ -2551,9 +2551,9 @@ function formProject(id){
           }
           
           dur = {
-            durasi_hari: diffDays,
-            durasi_minggu: diffWeeks,
-            durasi_kerja: workDays
+            durasi_hari: num($('#fpj_durh').value) || dur.durasi_hari,
+            durasi_minggu: num($('#fpj_durw').value) || dur.durasi_minggu,
+            durasi_kerja: num($('#fpj_wd').value) || dur.durasi_kerja,
           };
         }
       }
@@ -3355,16 +3355,21 @@ $('#btnPull').onclick = async () => {
     localStorage.setItem('mk_session_token', STATE.session.token);
   }
 
-  // Recalculate CPM untuk semua proyek
+  // Recalculate CPM untuk semua proyek (HANYA jika durasi kosong/0)
   DB.projects.forEach(p => {
-    const cal = WorkingCalendar.get(p.calendar_id);
-    const dur = hitungDurasiLengkap(p.tgl_mulai, p.tgl_selesai, cal, p.durasi_mode || 'working');
-    p.durasi_hari   = dur.durasi_hari;
-    p.durasi_minggu = dur.durasi_minggu;
-    p.durasi_kerja  = dur.durasi_kerja;
+    // Hanya hitung jika durasi belum ada, jangan timpa nilai yang sudah disimpan user
+    if (!p.durasi_minggu || p.durasi_minggu <= 1) {
+      const d1 = new Date(p.tgl_mulai || new Date());
+      const d2 = new Date(p.tgl_selesai || new Date());
+      const diffMs = d2.getTime() - d1.getTime();
+      const diffDays = Math.max(0, Math.round(diffMs / (1000 * 60 * 60 * 24)));
+      p.durasi_hari = diffDays;
+      p.durasi_minggu = Math.max(1, Math.ceil(diffDays / 7));
+      p.durasi_kerja = Math.round(diffDays * (5/7));
+    }
     runCPM(p.id);
   });
-
+  
   saveDB();
   renderProjectSelector();
   renderAll();
