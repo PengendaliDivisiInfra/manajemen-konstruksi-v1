@@ -316,7 +316,7 @@
     </div>
   </section>
 
-  <!-- ===================== CASH FLOW & ACTUAL COST ===================== -->
+<!-- ===================== CASH FLOW & ACTUAL COST ===================== -->
   <section class="section" id="sec-cashflow">
     <div class="panel">
       <div class="panel-head">
@@ -336,24 +336,7 @@
       <div class="panel-head">
         <div><h2>Grafik Arus Kas (Cumulative Cash In vs Out)</h2><p>Perbandingan rencana dan realisasi keuangan proyek</p></div>
       </div>
-      <canvas id="chartCashFlow" style="max-height:320px"></canvas>
-    </div>
-
-    <!-- Masukkan kode ini di dalam panel tab Cash Flow & Actual Cost pada index.html Anda -->
-    <div id="cfKPI" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 15px; margin-bottom: 20px;">
-      <!-- KPI Cards akan dirender otomatis di sini -->
-    </div>
-    
-    <div class="table-responsive" style="margin-bottom: 20px;">
-      <table id="tblCashFlow" class="table" style="width: 100%; border-collapse: collapse;">
-        <!-- Tabel Cash Flow akan dirender otomatis di sini -->
-      </table>
-    </div>
-    
-    <div style="background: var(--card-bg, #1e293b); padding: 15px; border-radius: 8px;">
-      <h5 style="margin-bottom: 5px; color: #e6edf7;">Grafik Arus Kas (Cumulative Cash In vs Out)</h5>
-      <p style="color: #8fa3c4; font-size: 12px; margin-bottom: 15px;">Perbandingan rencana dan realisasi keuangan proyek</p>
-      <div style="position: relative; height: 350px; width: 100%;">
+      <div style="position: relative; height: 320px; width: 100%;">
         <canvas id="chartCashFlow"></canvas>
       </div>
     </div>
@@ -362,7 +345,9 @@
       <div class="panel-head">
         <div><h2>Tabel Rekonsiliasi Arus Kas Mingguan</h2><p>Edit langsung kolom Realisasi atau Keterangan sesuai kondisi riil</p></div>
       </div>
-      <div class="tw" style="max-height:45vh"><table id="tblCashFlow"></table></div>
+      <div class="tw" style="max-height:45vh">
+        <table id="tblCashFlow" class="table" style="width: 100%; border-collapse: collapse;"></table>
+      </div>
     </div>
   </section>
 
