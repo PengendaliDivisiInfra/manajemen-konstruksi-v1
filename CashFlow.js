@@ -312,10 +312,13 @@ async function saveCashFlowToServer(projectId) {
 }
 
 /* ---------------------------------------------------------------------
-   HOOK KE switchTab
+   HOOK KE switchTab (FIXED: Menunggu script utama selesai dimuat)
    --------------------------------------------------------------------- */
-(function hookSwitchTab() {
-  if (typeof window.switchTab !== 'function') return;
+function applyCashFlowHook() {
+  if (typeof window.switchTab !== 'function') {
+    console.warn('[CashFlow] window.switchTab belum tersedia, pastikan script utama sudah dimuat.');
+    return;
+  }
 
   const _oldSwitchTab = window.switchTab;
   window.switchTab = function (name, ...rest) {
@@ -324,4 +327,12 @@ async function saveCashFlowToServer(projectId) {
       initCashFlowModule();
     }
   };
-})();
+  console.log('[CashFlow] ✅ Hook switchTab berhasil dipasang.');
+}
+
+// Tunggu DOM selesai dimuat sebelum memasang hook
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', applyCashFlowHook);
+} else {
+  applyCashFlowHook();
+}
