@@ -465,14 +465,150 @@
 
       _toast('⏳ Sedang membuat PDF...');
 
-      html2pdf().set(opt).from(temp.firstElementChild || temp).save().then(function(){
-        document.body.removeChild(temp);
-        _toast('✅ PDF berhasil dibuat');
-      }).catch(function(err){
-        document.body.removeChild(temp);
-        console.error(err);
-        _toast('Gagal membuat PDF: ' + err.message, false);
-      });
+      /* Generate blob URL (bukan langsung save) */
+      html2pdf().set(opt).from(temp.firstElementChild || temp)
+        .outputPdf('bloburl')
+        .then(function(blobUrl){
+          document.body.removeChild(temp);
+          openPdfPreview(blobUrl, filename);
+        })
+        .catch(function(err){
+          document.body.removeChild(temp);
+          console.error(err);
+          _toast('Gagal membuat PDF: ' + err.message, false);
+        });
+    }
+
+         /* ═══════════════════════════════════════════════════════════
+       PREVIEW PDF — modal review sebelum download
+       ═══════════════════════════════════════════════════════════ */
+
+    function openPdfPreview(blobUrl, filename){
+      /* Buat modal overlay khusus PDF (lebih besar dari modal biasa) */
+      var overlay = document.createElement('div');
+      overlay.className = 'pdf-preview-overlay';
+      overlay.id = 'pdfPreviewOverlay';
+
+      overlay.innerHTML =
+        '<div class="pdf-preview-modal">' +
+
+          /* Header */
+          '<div class="pdf-preview-head">' +
+            '<div class="pdf-preview-title">' +
+              '<span class="pdf-ico">📄</span>' +
+              '<div>' +
+                '<div class="pdf-name">' + _esc(filename) + '</div>' +
+                '<div class="pdf-hint">Preview laporan — periksa sebelum diunduh</div>' +
+              '</div>' +
+            '</div>' +
+            '<button class="pdf-close" id="pdfCloseBtn" title="Tutup">×</button>' +
+          '</div>' +
+
+          /* Toolbar */
+          '<div class="pdf-preview-toolbar">' +
+            '<div class="pdf-tb-left">' +
+              '<span class="pdf-tb-info">🔍 Format A4 Portrait · Siap cetak</span>' +
+            '</div>' +
+            '<div class="pdf-tb-right">' +
+              '<button class="pdf-btn pdf-btn-secondary" id="pdfPrintBtn">' +
+                '🖨 Print' +
+              '</button>' +
+              '<button class="pdf-btn pdf-btn-secondary" id="pdfBackBtn">' +
+                '← Ubah Tanggal' +
+              '</button>' +
+              '<button class="pdf-btn pdf-btn-primary" id="pdfDownloadBtn">' +
+                '⬇ Download PDF' +
+              '</button>' +
+            '</div>' +
+          '</div>' +
+
+          /* Iframe viewer */
+          '<div class="pdf-preview-body">' +
+            '<iframe class="pdf-preview-frame" src="' + blobUrl + '#toolbar=0&navpanes=0&scrollbar=1&zoom=100"></iframe>' +
+          '</div>' +
+
+        '</div>';
+
+      document.body.appendChild(overlay);
+
+      /* Trigger animasi */
+      setTimeout(function(){ overlay.classList.add('show'); }, 10);
+
+      /* ═══ Wire tombol ═══ */
+
+      /* Close */
+      function closePreview(){
+        overlay.classList.remove('show');
+        setTimeout(function(){
+          document.body.removeChild(overlay);
+          /* Revoke blob URL untuk hemat memory */
+          try { URL.revokeObjectURL(blobUrl); } catch(e){}
+        }, 200);
+      }
+
+      document.getElementById('pdfCloseBtn').onclick = closePreview;
+
+      /* ESC untuk close */
+      var escHandler = function(e){
+        if (e.key === 'Escape') {
+          document.removeEventListener('keydown', escHandler);
+          closePreview();
+        }
+      };
+      document.addEventListener('keydown', escHandler);
+
+      /* Klik backdrop untuk close */
+      overlay.onclick = function(e){
+        if (e.target === overlay) closePreview();
+      };
+
+      /* Download — trigger save As */
+      document.getElementById('pdfDownloadBtn').onclick = function(){
+        var a = document.createElement('a');
+        a.href = blobUrl;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        _toast('✅ PDF diunduh: ' + filename);
+        setTimeout(closePreview, 400);
+      };
+
+      /* Print — buka print dialog lewat hidden iframe */
+      document.getElementById('pdfPrintBtn').onclick = function(){
+        var printFrame = document.createElement('iframe');
+        printFrame.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:none;';
+        printFrame.src = blobUrl;
+        printFrame.onload = function(){
+          setTimeout(function(){
+            try {
+              printFrame.contentWindow.focus();
+              printFrame.contentWindow.print();
+            } catch(e){
+              console.warn('[ReportGenerator] Print error:', e);
+              _toast('⚠ Browser tidak mengizinkan print otomatis. Silakan klik Download lalu print manual.', false);
+            }
+            /* Cleanup */
+            setTimeout(function(){
+              if (printFrame.parentNode) printFrame.parentNode.removeChild(printFrame);
+            }, 3000);
+          }, 500);
+        };
+        document.body.appendChild(printFrame);
+      };
+
+      /* Ubah tanggal — close preview + reopen dialog */
+      document.getElementById('pdfBackBtn').onclick = function(){
+        closePreview();
+        /* Kembali buka dialog pilih tanggal setelah modal tertutup */
+        setTimeout(function(){
+          var pid = (typeof STATE !== 'undefined') ? STATE.activeProject : null;
+          if (pid) openHarianDialog(pid);
+        }, 250);
+      };
+
+      /* Log */
+      console.log('%c[ReportGenerator] PDF preview dibuka', 'color:#06b6d4;font-weight:bold');
     }
 
     /* ═══════════════════════════════════════════════════════════
