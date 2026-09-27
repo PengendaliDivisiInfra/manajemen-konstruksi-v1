@@ -190,7 +190,7 @@ function renderCashFlowTable(rows) {
         <input type="number" data-cf-rk="${idx}" value="${num(r.realisasi_keluar)}"
                style="width:130px;text-align:right;padding:4px" />
       </td>
-      <td class="num ${netM >= 0 ? 'pos' : 'neg'}">${rp(netM)}</td>
+      <td class="num ${netM >= 0 ? 'pos' : 'neg'}" data-cf-net="${idx}">${rp(netM)}</td>
       <td>
         <input type="text" data-cf-ket="${idx}" value="${esc(r.keterangan || '')}"
                style="width:100%;padding:4px" />
@@ -200,18 +200,31 @@ function renderCashFlowTable(rows) {
 
   $('#tblCashFlow').innerHTML = head + `<tbody>${body}</tbody>`;
 
-  // ── TAMBAHKAN EVENT LISTENER REAL-TIME ──
+  // ── EVENT LISTENER REAL-TIME (DIPERBAIKI) ──
   $$('#tblCashFlow tbody input').forEach(inp => {
     inp.oninput = () => {
-      const idx = inp.dataset.cfRm || inp.dataset.cfRk || inp.dataset.cfKet;
+      // Cari index dari atribut data mana pun yang ada
+      const idxStr = inp.getAttribute('data-cf-rm') || inp.getAttribute('data-cf-rk') || inp.getAttribute('data-cf-ket');
+      const idx = parseInt(idxStr, 10);
+      if (isNaN(idx)) return;
+
       const item = _cashFlowDataLocal[idx];
       if (!item) return;
 
-      if (inp.dataset.cfRm) item.realisasi_masuk = num(inp.value);
-      if (inp.dataset.cfRk) item.realisasi_keluar = num(inp.value);
-      if (inp.dataset.cfKet) item.keterangan = inp.value.trim();
+      if (inp.hasAttribute('data-cf-rm')) item.realisasi_masuk = num(inp.value);
+      if (inp.hasAttribute('data-cf-rk')) item.realisasi_keluar = num(inp.value);
+      if (inp.hasAttribute('data-cf-ket')) item.keterangan = inp.value.trim();
 
-      // Update KPI & Chart secara real-time tanpa merender ulang tabel
+      // 1. Update baris Net Kas di tabel secara real-time
+      const tr = inp.closest('tr');
+      const netM = num(item.realisasi_masuk) - num(item.realisasi_keluar);
+      const netCell = tr.querySelector('td[data-cf-net]');
+      if (netCell) {
+        netCell.textContent = rp(netM);
+        netCell.className = 'num ' + (netM >= 0 ? 'pos' : 'neg');
+      }
+
+      // 2. Update KPI & Chart secara real-time
       renderCashFlowKPIs(_cashFlowDataLocal);
       renderCashFlowChart(_cashFlowDataLocal);
     };
