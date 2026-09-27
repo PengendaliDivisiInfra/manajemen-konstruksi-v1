@@ -411,32 +411,65 @@
     };
 
     /* ═══════════════════════════════════════════════════════════
-       INJECT BUTTON KE TAB PROYEK
+       HOOK: Tombol Metadata Per-Baris di Tabel Proyek
        ═══════════════════════════════════════════════════════════ */
 
-    function injectButton(){
-      // Cari tombol "+ Proyek Baru" di tab projects
-      var addBtn = document.getElementById('btnAddProj');
-      if (!addBtn || !addBtn.parentElement) return;
+    function hookRenderProjects(){
+      if (typeof window.renderProjects !== 'function'){
+        setTimeout(hookRenderProjects, 500);
+        return;
+      }
+      if (window._renderProjectsMetaHooked) return;
+      window._renderProjectsMetaHooked = true;
 
-      // Cek kalau sudah ada
-      if (document.getElementById('btnProjectMeta')) return;
+      var _orig = window.renderProjects;
+      window.renderProjects = function(){
+        _orig.apply(this, arguments);
 
-      var btn = document.createElement('button');
-      btn.id = 'btnProjectMeta';
-      btn.className = 'btn';
-      btn.style.cssText = 'background:linear-gradient(135deg,#0891b2,#0e7490);border-color:transparent;color:#fff;margin-left:8px';
-      btn.innerHTML = '⚙ Metadata';
-      btn.title = 'Kelola logo, instansi, dan penandatangan laporan';
-      btn.onclick = function(){
-        var pid = (typeof STATE !== 'undefined') ? STATE.activeProject : null;
-        if (!pid){ _toast('Pilih proyek dulu', false); return; }
-        openEditor(pid);
+        // Setelah render selesai, inject tombol ke setiap row
+        setTimeout(function(){
+          document.querySelectorAll('[data-edit-prj]').forEach(function(btn){
+            var prjId = btn.getAttribute('data-edit-prj');
+            var parent = btn.parentElement;
+            if (!parent) return;
+            if (parent.querySelector('[data-meta-prj="' + prjId + '"]')) return;
+
+            var metaBtn = document.createElement('button');
+            metaBtn.className = 'btn btn-sm';
+            metaBtn.setAttribute('data-meta-prj', prjId);
+            metaBtn.style.cssText = 'background:linear-gradient(135deg,#0891b2,#0e7490);border-color:transparent;color:#fff';
+            metaBtn.title = 'Kelola logo, instansi & penandatangan laporan';
+            metaBtn.innerHTML = '⚙';
+            metaBtn.onclick = function(){
+              openEditor(prjId);
+            };
+
+            parent.insertBefore(metaBtn, btn);
+          });
+
+          // Tombol "Metadata" juga di header (untuk proyek aktif)
+          var addBtn = document.getElementById('btnAddProj');
+          if (addBtn && addBtn.parentElement && !document.getElementById('btnProjectMeta')){
+            var headerBtn = document.createElement('button');
+            headerBtn.id = 'btnProjectMeta';
+            headerBtn.className = 'btn';
+            headerBtn.style.cssText = 'background:linear-gradient(135deg,#0891b2,#0e7490);border-color:transparent;color:#fff;margin-left:8px';
+            headerBtn.innerHTML = '⚙ Metadata';
+            headerBtn.title = 'Kelola metadata proyek aktif';
+            headerBtn.onclick = function(){
+              var pid = (typeof STATE !== 'undefined') ? STATE.activeProject : null;
+              if (!pid){ _toast('Pilih proyek dulu', false); return; }
+              openEditor(pid);
+            };
+            addBtn.parentElement.insertBefore(headerBtn, addBtn);
+          }
+        }, 50);
       };
 
-      // Insert sebelum tombol "+ Proyek Baru" agar muncul di kiri
-      addBtn.parentElement.insertBefore(btn, addBtn);
+      console.log('%c[ProjectMeta.js] Hook renderProjects dipasang', 'color:#0891b2');
     }
+
+    hookRenderProjects();
 
     if (document.readyState === 'loading'){
       document.addEventListener('DOMContentLoaded', injectButton);
