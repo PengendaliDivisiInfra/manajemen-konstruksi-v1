@@ -26,7 +26,48 @@ function initCashFlowModule(){
     };
   }
 
-  const btnSave = \(('#btnSaveCF');      if (btnSave) {          btnSave.onclick = async () => {              collectCashFlowTableInputs();              await saveCashFlowToServer(pid);          };      }  }    function generateDefaultCashFlow(projectId){      const proj = DB.projects.find(p => p.id === projectId);      if (!proj) return;      const durasi = Math.max(1, Math.round(num(proj.durasi_minggu) \vert{}\vert{} 1));      const scurve = Calc.scurve(projectId);      const totals = Calc.totals(projectId);      const nilaiKontrakNetto = num(proj.nilai_kontrak) / (1 + num(SET.ppn)/100) \vert{}\vert{} totals.rab;      const totalRAP = totals.rap \vert{}\vert{} 1;          _cashFlowDataLocal = [];          for (let w = 1; w <= durasi; w++){          let marginalPct = 1 / durasi;          if (scurve && scurve.planned && scurve.planned.length === durasi){              const pCumPct = (scurve.planned[w-1] \vert{}\vert{} 0) / 100;              const pPrevPct = w === 1 ? 0 : (scurve.planned[w-2] \vert{}\vert{} 0) / 100;              marginalPct = Math.max(0, pCumPct - pPrevPct);          }                const rencanaMasuk = nilaiKontrakNetto * marginalPct;          const rencanaKeluar = totalRAP * marginalPct;                _cashFlowDataLocal.push({              id: 'cf_' + projectId + '_m' + w,              project_id: projectId,              periode: 'Minggu ' + w,              minggu: w,              rencana_masuk: Math.round(rencanaMasuk),              realisasi_masuk: Math.round(rencanaMasuk * 0.95),              rencana_keluar: Math.round(rencanaKeluar),              realisasi_keluar: Math.round(rencanaKeluar),              keterangan: w === 1 ? 'Uang muka / Termin awal' : 'Pekerjaan mingguan'          });      }  }    // FIX: Selector input diperbaiki menggunakan querySelector yang tepat berdasarkan partial attribute function collectCashFlowTableInputs(){      \)\$('#tblCashFlow tbody tr').forEach((tr, idx) => {
+  const btnSave = \(('#btnSaveCF');      
+   if (btnSave) {          
+      btnSave.onclick = async () => {              
+         collectCashFlowTableInputs();              
+         await saveCashFlowToServer(pid);          
+      };      
+   }  
+}    
+function generateDefaultCashFlow(projectId){      
+   const proj = DB.projects.find(p => p.id === projectId);      
+   if (!proj) return;      
+   const durasi = Math.max(1, Math.round(num(proj.durasi_minggu) \vert{}\vert{} 1));      
+   const scurve = Calc.scurve(projectId);      
+   const totals = Calc.totals(projectId);      
+   const nilaiKontrakNetto = num(proj.nilai_kontrak) / (1 + num(SET.ppn)/100) \vert{}\vert{} totals.rab;      
+   const totalRAP = totals.rap \vert{}\vert{} 1;          
+   _cashFlowDataLocal = [];          
+   for (let w = 1; w <= durasi; w++){          
+      let marginalPct = 1 / durasi;          
+      if (scurve && scurve.planned && scurve.planned.length === durasi){              
+         const pCumPct = (scurve.planned[w-1] \vert{}\vert{} 0) / 100;              
+            const pPrevPct = w === 1 ? 0 : (scurve.planned[w-2] \vert{}\vert{} 0) / 100;              
+               marginalPct = Math.max(0, pCumPct - pPrevPct);          
+      }                
+      const rencanaMasuk = nilaiKontrakNetto * marginalPct;          
+      const rencanaKeluar = totalRAP * marginalPct;                
+      _cashFlowDataLocal.push({              
+         id: 'cf_' + projectId + '_m' + w,              
+         project_id: projectId,              
+         periode: 'Minggu ' + w,              
+         minggu: w,              
+         rencana_masuk: Math.round(rencanaMasuk),              
+         realisasi_masuk: Math.round(rencanaMasuk * 0.95),              
+         rencana_keluar: Math.round(rencanaKeluar),              
+         realisasi_keluar: Math.round(rencanaKeluar),              
+         keterangan: w === 1 ? 'Uang muka / Termin awal' : 'Pekerjaan mingguan'          
+      });      
+   }  
+}    
+// FIX: Selector input diperbaiki menggunakan querySelector yang tepat berdasarkan partial attribute function collectCashFlowTableInputs(){      
+\)\$('#tblCashFlow tbody tr').
+   forEach((tr, idx) => {
     const item = _cashFlowDataLocal[idx];
     if (!item) return;
     
