@@ -9,24 +9,24 @@ function initCashFlowModule(){
   const pid = STATE.activeProject;
   if (!pid) return;
 
-  // Cek apakah data lokal sudah ada, jika belum generate default dari Kurva S & Totals
   if (!_cashFlowDataLocal.length || _cashFlowDataLocal[0]?.project_id !== pid){
     generateDefaultCashFlow(pid);
   }
 
   renderCashFlowUI();
 
-  // Wiring tombol
   const btnGen = $('#btnAutoCalcCF');
-  if (btnGen) btnGen.onclick = () => {
-    if (confirm('Generate ulang proyeksi otomatis berdasarkan Kurva S & Nilai Kontrak? Data realisasi yang belum tersimpan mungkin akan tertimpa.')){
-      generateDefaultCashFlow(pid);
-      renderCashFlowUI();
-      toast('Proyeksi Cash Flow digenerate ulang');
-    }
-  };
+  if (btnGen) {
+    btnGen.onclick = () => {
+      if (confirm('Generate ulang proyeksi otomatis berdasarkan Kurva S & Nilai Kontrak? Data realisasi yang belum tersimpan mungkin akan tertimpa.')){
+        generateDefaultCashFlow(pid);
+        renderCashFlowUI();
+        toast('Proyeksi Cash Flow digenerate ulang');
+      }
+    };
+  }
 
-  const btnSave = $('#btnSaveCF');   if (btnSave) btnSave.onclick = async () => {     collectCashFlowTableInputs();     await saveCashFlowToServer(pid);   }; }  function generateDefaultCashFlow(projectId){   const proj = DB.projects.find(p => p.id === projectId);   if (!proj) return;   const durasi = Math.max(1, Math.round(num(proj.durasi_minggu) \vert{}\vert{} 1));   const scurve = Calc.scurve(projectId);   const totals = Calc.totals(projectId);   const nilaiKontrakNetto = num(proj.nilai_kontrak) / (1 + num(SET.ppn)/100);   const totalRAP = totals.rap \vert{}\vert{} 1;    _cashFlowDataLocal = [];   let prevPlannedIn = 0;   let prevPlannedOut = 0;    for (let w = 1; w <= durasi; w++){     // Bobot kurva S minggu ini (kumulatif atau marginal)     const pCumPct = (scurve.planned[w-1] \vert{}\vert{} 0) / 100;     const pPrevPct = w === 1 ? 0 : (scurve.planned[w-2] \vert{}\vert{} 0) / 100;     const marginalPct = pCumPct - pPrevPct;      // Asumsi Cash In (Termin masuk) proporsional terhadap progress rencana x nilai kontrak netto     const rencanaMasuk = nilaiKontrakNetto * marginalPct;     // Asumsi Cash Out (Biaya keluar / RAP) proporsional terhadap progress rencana x total RAP     const rencanaKeluar = totalRAP * marginalPct;      _cashFlowDataLocal.push({       id: 'cf_' + projectId + '_m' + w,       project_id: projectId,       periode: 'Minggu ' + w,       minggu: w,       rencana_masuk: Math.round(rencanaMasuk),       realisasi_masuk: Math.round(rencanaMasuk * 0.95), // default estimasi awal       rencana_keluar: Math.round(rencanaKeluar),       realisasi_keluar: Math.round(rencanaKeluar),       keterangan: w === 1 ? 'Uang muka / Termin awal' : 'Pekerjaan bulanan/termin'     });   } }  function collectCashFlowTableInputs(){   $$('#tblCashFlow tbody tr').forEach((tr, idx) => {
+  const btnSave = $('#btnSaveCF');   if (btnSave) {     btnSave.onclick = async () => {       collectCashFlowTableInputs();       await saveCashFlowToServer(pid);     };   } }  function generateDefaultCashFlow(projectId){   const proj = DB.projects.find(p => p.id === projectId);   if (!proj) return;   const durasi = Math.max(1, Math.round(num(proj.durasi_minggu) \vert{}\vert{} 1));   const scurve = Calc.scurve(projectId);   const totals = Calc.totals(projectId);   const nilaiKontrakNetto = num(proj.nilai_kontrak) / (1 + num(SET.ppn)/100) \vert{}\vert{} totals.rab;   const totalRAP = totals.rap \vert{}\vert{} 1;    _cashFlowDataLocal = [];    for (let w = 1; w <= durasi; w++){     let marginalPct = 1 / durasi;     if (scurve && scurve.planned && scurve.planned.length === durasi){       const pCumPct = (scurve.planned[w-1] \vert{}\vert{} 0) / 100;       const pPrevPct = w === 1 ? 0 : (scurve.planned[w-2] \vert{}\vert{} 0) / 100;       marginalPct = Math.max(0, pCumPct - pPrevPct);     }      const rencanaMasuk = nilaiKontrakNetto * marginalPct;     const rencanaKeluar = totalRAP * marginalPct;      _cashFlowDataLocal.push({       id: 'cf_' + projectId + '_m' + w,       project_id: projectId,       periode: 'Minggu ' + w,       minggu: w,       rencana_masuk: Math.round(rencanaMasuk),       realisasi_masuk: Math.round(rencanaMasuk * 0.95),       rencana_keluar: Math.round(rencanaKeluar),       realisasi_keluar: Math.round(rencanaKeluar),       keterangan: w === 1 ? 'Uang muka / Termin awal' : 'Pekerjaan mingguan'     });   } }  function collectCashFlowTableInputs(){   $$('#tblCashFlow tbody tr').forEach((tr, idx) => {
     const item = _cashFlowDataLocal[idx];
     if (!item) return;
     const inpRm = tr.querySelector('[data-cf-rm]');
@@ -53,7 +53,6 @@ function renderCashFlowUI(){
 
   const netCashFlow = totRealIn - totRealOut;
 
-  // Render KPI
   $('#cfKPI').innerHTML = `
     <div class="kpi">
       <div class="lbl">Total Rencana Masuk</div>
@@ -77,7 +76,6 @@ function renderCashFlowUI(){
     </div>
   `;
 
-  // Render Tabel
   const head = `<thead><tr>
     <th>Periode</th>
     <th class="num">Rencana Masuk (In)</th>
@@ -105,7 +103,6 @@ function renderCashFlowUI(){
 
   $('#tblCashFlow').innerHTML = head + `<tbody>${body}</tbody>`;
 
-  // Render Chart
   renderCashFlowChart(rows);
 }
 
@@ -169,7 +166,6 @@ async function saveCashFlowToServer(projectId){
   }
 }
 
-// Hook ke switchTab utama agar saat tab cashflow diklik, modul terinisialisasi
 const _oldSwitchTab = window.switchTab;
 if (typeof switchTab === 'function'){
   window.switchTab = function(name){
