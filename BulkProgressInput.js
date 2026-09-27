@@ -240,11 +240,13 @@
       if (tanggalInput) _state.tanggal = tanggalInput.value;
 
       // Ambil tasks
-      var tasks = DB.project_wbs.filter(function(w){
-        return w.project_id === proj.id && !w.is_group;
-      });
+      var tasks;
       if (_state.filterGrup){
-        tasks = tasks.filter(function(t){ return t.parent_id === _state.filterGrup; });
+        tasks = getTasksForGroup(proj, _state.filterGrup);
+      } else {
+        tasks = DB.project_wbs.filter(function(w){
+          return w.project_id === proj.id && !w.is_group;
+        });
       }
 
       // Pre-compute data
@@ -265,8 +267,22 @@
         tasksWithData = tasksWithData.filter(function(r){ return r.pctBefore < 99.99; });
       }
 
-      if (!tasksWithData.length){
-        wrap.innerHTML = '<div class="bp-empty">✅ Semua task sudah 100% selesai — tidak ada yang perlu diinput.</div>';
+     if (!tasksWithData.length){
+        var msg;
+        if (tasks.length === 0){
+          if (_state.filterGrup){
+            msg = '⚠ Tidak ada task yang cocok dengan filter grup yang dipilih.<br>' +
+                  '<small style="color:#94a3b8">Kemungkinan task di grup ini belum punya relasi parent_id, ' +
+                  'atau grup tidak memiliki task anak. Coba pilih "— Semua Grup —".</small>';
+          } else {
+            msg = '⚠ Belum ada task non-grup di proyek ini.<br>' +
+                  '<small style="color:#94a3b8">Tambahkan item WBS terlebih dahulu.</small>';
+          }
+          wrap.innerHTML = '<div class="bp-empty">' + msg + '</div>';
+        } else {
+          // tasks ada tapi semuanya sudah 100%
+          wrap.innerHTML = '<div class="bp-empty">✅ Semua ' + tasks.length + ' task sudah 100% selesai — tidak ada yang perlu diinput.</div>';
+        }
         updateSummary();
         return;
       }
@@ -372,11 +388,13 @@
       var proj = getProj();
       if (!proj) return;
 
-      var tasks = DB.project_wbs.filter(function(w){
-        return w.project_id === proj.id && !w.is_group;
-      });
+      var tasks;
       if (_state.filterGrup){
-        tasks = tasks.filter(function(t){ return t.parent_id === _state.filterGrup; });
+        tasks = getTasksForGroup(proj, _state.filterGrup);
+      } else {
+        tasks = DB.project_wbs.filter(function(w){
+          return w.project_id === proj.id && !w.is_group;
+        });
       }
       if (_state.showOnlyRemaining){
         tasks = tasks.filter(function(t){
@@ -563,12 +581,14 @@
       var visibleCount = 0;
       try {
         if (proj){
-          var tasks = DB.project_wbs.filter(function(w){
-            return w.project_id === proj.id && !w.is_group;
-          });
-          if (_state.filterGrup){
-            tasks = tasks.filter(function(t){ return t.parent_id === _state.filterGrup; });
-          }
+          var tasks;
+            if (_state.filterGrup){
+              tasks = getTasksForGroup(proj, _state.filterGrup);
+            } else {
+              tasks = DB.project_wbs.filter(function(w){
+                return w.project_id === proj.id && !w.is_group;
+              });
+            }
           if (_state.showOnlyRemaining){
             tasks = tasks.filter(function(t){
               var volBefore = getVolKumulatif(proj.id, t.id, _state.minggu - 1);
