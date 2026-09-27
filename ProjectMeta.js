@@ -110,7 +110,8 @@
        UI: MODAL EDIT META
        ═══════════════════════════════════════════════════════════ */
 
-    function openEditor(projectId){
+    function openEditor(projectId, opts){
+      opts = opts || {};
       projectId = projectId || (typeof STATE !== 'undefined' ? STATE.activeProject : null);
       if (!projectId){ _toast('Pilih proyek dulu', false); return; }
 
@@ -118,31 +119,48 @@
       if (!proj){ _toast('Proyek tidak ditemukan', false); return; }
 
       var meta = getMeta(projectId);
-      var html = buildEditorHTML(proj, meta);
+      var html = buildEditorHTML(proj, meta, opts);
 
-      openModal('⚙ Metadata Proyek & Laporan', html, function(){ return false; });
+      var title = opts.isNewProject
+        ? '🆕 Proyek Baru — Lengkapi Metadata Laporan'
+        : '⚙ Metadata Proyek & Laporan';
+
+      openModal(title, html, function(){ return false; });
 
       setTimeout(function(){
         var submitBtn = document.getElementById('mSubmit');
         if (submitBtn){
-          submitBtn.textContent = '💾 Simpan Metadata';
+          submitBtn.textContent = opts.isNewProject
+            ? '✅ Selesai & Tutup'
+            : '💾 Simpan Metadata';
           submitBtn.style.display = '';
-          submitBtn.onclick = function(){ handleSave(projectId); };
+          submitBtn.onclick = function(){
+            handleSave(projectId);
+            if (opts.isNewProject){
+              _toast('✅ Proyek & metadata siap digunakan');
+            }
+          };
         }
         var cancelBtn = document.getElementById('mCancel');
-        if (cancelBtn) cancelBtn.textContent = 'Batal';
+        if (cancelBtn){
+          cancelBtn.textContent = opts.isNewProject ? 'Lewati' : 'Batal';
+        }
         wireEditorEvents(projectId);
       }, 10);
     }
 
-    function buildEditorHTML(proj, meta){
-      return '' +
-        '<div class="pm-tabs">' +
-          '<button class="pm-tab is-active" data-tab="identitas">🏛 Identitas</button>' +
-          '<button class="pm-tab" data-tab="logo">🖼 Logo</button>' +
-          '<button class="pm-tab" data-tab="lokasi">📍 Lokasi</button>' +
-          '<button class="pm-tab" data-tab="ttd">✍ Penandatangan</button>' +
-        '</div>' +
+    function buildEditorHTML(proj, meta, opts){
+      opts = opts || {};
+      var banner = opts.isNewProject
+        ? '<div class="pm-wizard-banner">' +
+            '<div class="pm-wb-icon">🎉</div>' +
+            '<div class="pm-wb-text">' +
+              '<b>Proyek "' + _esc(proj.kode) + '" berhasil dibuat!</b><br>' +
+              '<span>Lengkapi data di bawah agar laporan PDF (harian/mingguan/bulanan) ' +
+              'sudah siap header, logo, dan tanda tangan. Bisa dilewati dan diisi nanti.</span>' +
+            '</div>' +
+          '</div>'
+        : '';
 
         /* ═══ TAB 1: IDENTITAS ═══ */
         '<div class="pm-tab-content is-active" data-tab="identitas">' +
@@ -446,23 +464,6 @@
 
             parent.insertBefore(metaBtn, btn);
           });
-
-          // Tombol "Metadata" juga di header (untuk proyek aktif)
-          var addBtn = document.getElementById('btnAddProj');
-          if (addBtn && addBtn.parentElement && !document.getElementById('btnProjectMeta')){
-            var headerBtn = document.createElement('button');
-            headerBtn.id = 'btnProjectMeta';
-            headerBtn.className = 'btn';
-            headerBtn.style.cssText = 'background:linear-gradient(135deg,#0891b2,#0e7490);border-color:transparent;color:#fff;margin-left:8px';
-            headerBtn.innerHTML = '⚙ Metadata';
-            headerBtn.title = 'Kelola metadata proyek aktif';
-            headerBtn.onclick = function(){
-              var pid = (typeof STATE !== 'undefined') ? STATE.activeProject : null;
-              if (!pid){ _toast('Pilih proyek dulu', false); return; }
-              openEditor(pid);
-            };
-            addBtn.parentElement.insertBefore(headerBtn, addBtn);
-          }
         }, 50);
       };
 
@@ -474,6 +475,64 @@
     console.log('%c[ProjectMeta.js] ✅ Project Metadata module installed',
       'color:#0891b2;font-weight:bold;font-size:13px');
     }
+
+       hookRenderProjects();
+
+    /* ═══════════════════════════════════════════════════════════
+       HOOK: Auto-Open Metadata Setelah Proyek Baru Dibuat
+       ═══════════════════════════════════════════════════════════ */
+
+    function hookFormProject(){
+      if (typeof window.formProject !== 'function'){
+        setTimeout(hookFormProject, 500);
+        return;
+      }
+      if (window._formProjectMetaHooked) return;
+      window._formProjectMetaHooked = true;
+
+      var _origFormProject = window.formProject;
+      window.formProject = function(id, forceGroup){
+        var isNew = !id;
+        var beforeCount = DB.projects.length;
+
+        // Panggil form asli
+        _origFormProject.apply(this, arguments);
+
+        // Kalau ini form proyek baru, tunggu sampai project bertambah di DB
+        if (isNew){
+          var tries = 0;
+          var timer = setInterval(function(){
+            tries++;
+
+            // Berhasil disimpan
+            if (DB.projects.length > beforeCount){
+              clearInterval(timer);
+              setTimeout(function(){
+                var newest = DB.projects[DB.projects.length - 1];
+                if (newest){
+                  console.log('%c[ProjectMeta] Proyek baru dibuat → membuka Metadata',
+                    'color:#0891b2;font-weight:bold');
+                  _toast('Langkah 2: Lengkapi Metadata Laporan');
+
+                  // Buka editor meta dengan mode "wizard"
+                  openEditor(newest.id, { isNewProject: true });
+                }
+              }, 400);
+              return;
+            }
+
+            // Timeout setelah 3 menit (user mungkin batal)
+            if (tries > 900){
+              clearInterval(timer);
+            }
+          }, 200);
+        }
+      };
+
+      console.log('%c[ProjectMeta.js] Hook formProject dipasang', 'color:#0891b2');
+    }
+
+    hookFormProject();
 
   if (document.readyState === 'loading'){
     document.addEventListener('DOMContentLoaded', function(){ bootstrap(0); });
