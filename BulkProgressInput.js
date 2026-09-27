@@ -226,129 +226,184 @@
     /* ═══════════════════════════════════════════════════════════
        RENDER TABLE
        ═══════════════════════════════════════════════════════════ */
-    function renderTable(proj){
-      var wrap = document.getElementById('bpTableWrap');
-      if (!wrap) return;
+function renderTable(proj){
+  var wrap = document.getElementById('bpTableWrap');
+  if (!wrap) return;
 
-      // Sync state dari DOM
-      var mingguInput = document.getElementById('bpMinggu');
-      if (mingguInput){
-        var mv = parseInt(mingguInput.value, 10);
-        if (!isNaN(mv) && mv >= 1) _state.minggu = mv;
-      }
-      var tanggalInput = document.getElementById('bpTanggal');
-      if (tanggalInput) _state.tanggal = tanggalInput.value;
+  // Sync state dari DOM
+  var mingguInput = document.getElementById('bpMinggu');
+  if (mingguInput){
+    var mv = parseInt(mingguInput.value, 10);
+    if (!isNaN(mv) && mv >= 1) _state.minggu = mv;
+  }
+  var tanggalInput = document.getElementById('bpTanggal');
+  if (tanggalInput) _state.tanggal = tanggalInput.value;
 
-      // Ambil tasks
-      var tasks;
-      if (_state.filterGrup){
-        tasks = getTasksForGroup(proj, _state.filterGrup);
+  // ── Ambil SEMUA task (non-grup) ──
+  var allTasks = DB.project_wbs.filter(function(w){
+    return w.project_id === proj.id && !w.is_group;
+  });
+
+  // ── Filter by grup — DENGAN FALLBACK ──
+  var tasks = allTasks;
+  var filterDiagnostic = null;
+
+  if (_state.filterGrup){
+    var group = DB.project_wbs.find(function(w){ return w.id === _state.filterGrup; });
+    if (!group){
+      filterDiagnostic = 'Grup tidak ditemukan di database.';
+      tasks = [];
+    } else {
+      // Metode 1: cocokkan parent_id
+      var byParentId = allTasks.filter(function(t){
+        return t.parent_id === _state.filterGrup;
+      });
+      // Metode 2 (fallback): cocokkan prefix kode_wbs
+      var prefix = String(group.kode_wbs || '').trim();
+      var byKodePrefix = prefix
+        ? allTasks.filter(function(t){
+            var kode = String(t.kode_wbs || '').trim();
+            return kode !== prefix && kode.indexOf(prefix + '.') === 0;
+          })
+        : [];
+      // Metode 3 (fallback): cocokkan kode_wbs dengan titik apapun setelah prefix
+      //   mis. "I" cocok dengan "I.1", "I.1.2", dst.
+      
+      if (byParentId.length > 0){
+        tasks = byParentId;
+      } else if (byKodePrefix.length > 0){
+        tasks = byKodePrefix;
+        console.log('[BulkInput] Grup "' + group.kode_wbs + '" di-resolve via kode_wbs prefix (' + tasks.length + ' task).');
       } else {
-        tasks = DB.project_wbs.filter(function(w){
-          return w.project_id === proj.id && !w.is_group;
-        });
+        tasks = [];
+        filterDiagnostic = 'Grup "' + group.kode_wbs + ' — ' + group.uraian + '" tidak punya task anak. ' +
+                           'Cek apakah WBS anak sudah di-set parent-nya.';
       }
-
-      // Pre-compute data
-      var tasksWithData = tasks.map(function(t){
-        var volRAB = _num(t.volume_rab);
-        var volBefore = getVolKumulatif(proj.id, t.id, _state.minggu - 1);
-        var sisa = Math.max(0, volRAB - volBefore);
-        return {
-          wbs: t,
-          volRAB: volRAB,
-          volBefore: volBefore,
-          sisa: sisa,
-          pctBefore: volRAB > 0 ? Math.min(100, volBefore / volRAB * 100) : 0
-        };
-      });
-
-      if (_state.showOnlyRemaining){
-        tasksWithData = tasksWithData.filter(function(r){ return r.pctBefore < 99.99; });
-      }
-
-     if (!tasksWithData.length){
-        var msg;
-        if (tasks.length === 0){
-          if (_state.filterGrup){
-            msg = '⚠ Tidak ada task yang cocok dengan filter grup yang dipilih.<br>' +
-                  '<small style="color:#94a3b8">Kemungkinan task di grup ini belum punya relasi parent_id, ' +
-                  'atau grup tidak memiliki task anak. Coba pilih "— Semua Grup —".</small>';
-          } else {
-            msg = '⚠ Belum ada task non-grup di proyek ini.<br>' +
-                  '<small style="color:#94a3b8">Tambahkan item WBS terlebih dahulu.</small>';
-          }
-          wrap.innerHTML = '<div class="bp-empty">' + msg + '</div>';
-        } else {
-          // tasks ada tapi semuanya sudah 100%
-          wrap.innerHTML = '<div class="bp-empty">✅ Semua ' + tasks.length + ' task sudah 100% selesai — tidak ada yang perlu diinput.</div>';
-        }
-        updateSummary();
-        return;
-      }
-
-      // Table header
-      var head = '<thead><tr>' +
-        '<th class="bp-th-check"><input type="checkbox" id="bpSelectAll"></th>' +
-        '<th class="bp-th-kode">Kode</th>' +
-        '<th class="bp-th-uraian">Uraian</th>' +
-        '<th class="bp-th-sat">Sat</th>' +
-        '<th class="bp-th-vol num">Vol RAB</th>' +
-        '<th class="bp-th-cum num">Kumulatif</th>' +
-        '<th class="bp-th-sisa num">Sisa</th>' +
-        '<th class="bp-th-input num">Input Aktual</th>' +
-        '<th class="bp-th-total num">Kum. Baru</th>' +
-        '<th class="bp-th-pct num">%</th>' +
-        '</tr></thead>';
-
-      var body = tasksWithData.map(function(r){
-        var t = r.wbs;
-        var draftVal = _state.draft[t.id];
-        var inputVal = (draftVal === undefined || draftVal === null) ? '' : draftVal;
-        var volInput = _num(inputVal);
-        var kumulatifBaru = r.volBefore + volInput;
-        var pctNew = r.volRAB > 0 ? Math.min(100, kumulatifBaru / r.volRAB * 100) : 0;
-        var pctCls = pctNew >= 100 ? 'ok' : pctNew > 0 ? 'warn' : '';
-        var overCls = kumulatifBaru > r.volRAB + 0.01 ? 'over' : '';
-
-        return '<tr data-bp-row="' + _esc(t.id) + '" class="' + overCls + '">' +
-          '<td class="bp-td-check"><input type="checkbox" class="bp-chk-row" data-wbs="' + _esc(t.id) + '"></td>' +
-          '<td class="bp-td-kode">' + _esc(t.kode_wbs) + '</td>' +
-          '<td class="bp-td-uraian" title="' + _esc(t.uraian) + '">' + _esc(t.uraian) + '</td>' +
-          '<td class="bp-td-sat">' + _esc(t.satuan || '-') + '</td>' +
-          '<td class="bp-td-vol num">' + _fmt(r.volRAB, 2) + '</td>' +
-          '<td class="bp-td-cum num">' + _fmt(r.volBefore, 2) + '</td>' +
-          '<td class="bp-td-sisa num">' + _fmt(r.sisa, 2) + '</td>' +
-          '<td class="bp-td-input">' +
-            '<input type="number" step="0.01" min="0" class="bp-input" ' +
-              'data-wbs="' + _esc(t.id) + '" ' +
-              'value="' + _esc(inputVal) + '" ' +
-              'placeholder="—" />' +
-          '</td>' +
-          '<td class="bp-td-total num" data-new-cum="' + _esc(t.id) + '">' + _fmt(kumulatifBaru, 2) + '</td>' +
-          '<td class="bp-td-pct ' + pctCls + '" data-new-pct="' + _esc(t.id) + '">' + _fmt(pctNew, 1) + '%</td>' +
-        '</tr>';
-      }).join('');
-
-      wrap.innerHTML = '<table class="bp-table">' + head + '<tbody>' + body + '</tbody></table>';
-
-      // Wire events
-      wrap.querySelectorAll('.bp-input').forEach(function(inp){
-        inp.addEventListener('input', onCellInput);
-        inp.addEventListener('change', onCellInput);
-      });
-
-      var selAll = document.getElementById('bpSelectAll');
-      if (selAll){
-        selAll.onclick = function(){
-          wrap.querySelectorAll('.bp-chk-row').forEach(function(chk){
-            chk.checked = selAll.checked;
-          });
-        };
-      }
-
-      updateSummary();
     }
+  }
+
+  // ── Pre-compute data (termasuk task Vol RAB = 0) ──
+  var tasksWithData = tasks.map(function(t){
+    var volRAB = _num(t.volume_rab);
+    var volBefore = getVolKumulatif(proj.id, t.id, _state.minggu - 1);
+    var sisa = volRAB > 0 ? Math.max(0, volRAB - volBefore) : 0;
+    var pctBefore = volRAB > 0 ? Math.min(100, volBefore / volRAB * 100) : 100; // Vol=0 → anggap 100%
+    return {
+      wbs: t,
+      volRAB: volRAB,
+      volBefore: volBefore,
+      sisa: sisa,
+      pctBefore: pctBefore
+    };
+  });
+
+  // ── Filter "Hanya belum 100%" ──
+  if (_state.showOnlyRemaining){
+    tasksWithData = tasksWithData.filter(function(r){
+      if (r.volRAB <= 0) return false;   // Task tanpa volume → bukan progress real
+      return r.pctBefore < 99.99;
+    });
+  }
+
+  // ── Empty state dengan diagnostik AKURAT ──
+  if (!tasksWithData.length){
+    var msg;
+    if (tasks.length === 0){
+      if (_state.filterGrup){
+        msg = '⚠ <b>Tidak ada task yang cocok dengan filter grup.</b><br>' +
+              '<small style="color:#94a3b8">' + _esc(filterDiagnostic || 'Cek struktur parent_id WBS Anda.') + '<br>' +
+              'Sementara: pilih <b>"— Semua Grup —"</b> untuk melihat seluruh WBS.</small>';
+      } else {
+        msg = '⚠ <b>Belum ada task non-grup di proyek ini.</b><br>' +
+              '<small style="color:#94a3b8">Tambahkan item WBS di tab WBS/BQ terlebih dahulu.</small>';
+      }
+    } else {
+      // Task ada tapi semua sudah 100% atau Vol RAB=0
+      var doneCount = tasksWithData.length === 0 && tasks.length > 0 && _state.showOnlyRemaining;
+      var zeroVolCount = tasks.filter(function(t){ return _num(t.volume_rab) <= 0; }).length;
+      var fullDoneCount = tasks.length - zeroVolCount;
+
+      if (doneCount && fullDoneCount > 0 && zeroVolCount > 0){
+        msg = '✅ <b>' + fullDoneCount + ' task sudah 100% selesai.</b><br>' +
+              '<small style="color:#94a3b8">' + zeroVolCount + ' task tidak dihitung karena Volume RAB = 0 ' +
+              '(mungkin placeholder). Uncheck "Hanya yang belum 100%" untuk melihat semuanya.</small>';
+      } else if (doneCount && fullDoneCount > 0){
+        msg = '✅ <b>Semua ' + fullDoneCount + ' task sudah 100% selesai di Minggu ke-' + _state.minggu + '.</b>';
+      } else {
+        msg = '⚠ <b>Tidak ada task yang perlu diinput.</b><br>' +
+              '<small style="color:#94a3b8">Coba uncheck "Hanya yang belum 100%" atau ganti minggu.</small>';
+      }
+    }
+    wrap.innerHTML = '<div class="bp-empty">' + msg + '</div>';
+    updateSummary();
+    return;
+  }
+
+  // ── Render tabel ──
+  var head = '<thead><tr>' +
+    '<th class="bp-th-check"><input type="checkbox" id="bpSelectAll"></th>' +
+    '<th class="bp-th-kode">Kode</th>' +
+    '<th class="bp-th-uraian">Uraian</th>' +
+    '<th class="bp-th-sat">Sat</th>' +
+    '<th class="bp-th-vol num">Vol RAB</th>' +
+    '<th class="bp-th-cum num">Kumulatif</th>' +
+    '<th class="bp-th-sisa num">Sisa</th>' +
+    '<th class="bp-th-input num">Input Aktual</th>' +
+    '<th class="bp-th-total num">Kum. Baru</th>' +
+    '<th class="bp-th-pct num">%</th>' +
+    '</tr></thead>';
+
+  var body = tasksWithData.map(function(r){
+    var t = r.wbs;
+    var draftVal = _state.draft[t.id];
+    var inputVal = (draftVal === undefined || draftVal === null) ? '' : draftVal;
+    var volInput = _num(inputVal);
+    var kumulatifBaru = r.volBefore + volInput;
+    var pctNew = r.volRAB > 0 ? Math.min(100, kumulatifBaru / r.volRAB * 100) : 0;
+    var pctCls = pctNew >= 100 ? 'ok' : pctNew > 0 ? 'warn' : '';
+    var overCls = kumulatifBaru > r.volRAB + 0.01 ? 'over' : '';
+
+    return '<tr data-bp-row="' + _esc(t.id) + '" class="' + overCls + '">' +
+      '<td class="bp-td-check"><input type="checkbox" class="bp-chk-row" data-wbs="' + _esc(t.id) + '"></td>' +
+      '<td class="bp-td-kode">' + _esc(t.kode_wbs) + '</td>' +
+      '<td class="bp-td-uraian" title="' + _esc(t.uraian) + '">' + _esc(t.uraian) + '</td>' +
+      '<td class="bp-td-sat">' + _esc(t.satuan || '-') + '</td>' +
+      '<td class="bp-td-vol num">' + _fmt(r.volRAB, 2) + '</td>' +
+      '<td class="bp-td-cum num">' + _fmt(r.volBefore, 2) + '</td>' +
+      '<td class="bp-td-sisa num">' + _fmt(r.sisa, 2) + '</td>' +
+      '<td class="bp-td-input">' +
+        '<input type="number" step="0.01" min="0" class="bp-input" ' +
+          'data-wbs="' + _esc(t.id) + '" ' +
+          'value="' + _esc(inputVal) + '" ' +
+          'placeholder="—" />' +
+      '</td>' +
+      '<td class="bp-td-total num" data-new-cum="' + _esc(t.id) + '">' + _fmt(kumulatifBaru, 2) + '</td>' +
+      '<td class="bp-td-pct ' + pctCls + '" data-new-pct="' + _esc(t.id) + '">' + _fmt(pctNew, 1) + '%</td>' +
+    '</tr>';
+  }).join('');
+
+  wrap.innerHTML = '<table class="bp-table">' + head + '<tbody>' + body + '</tbody></table>';
+
+  wrap.querySelectorAll('.bp-input').forEach(function(inp){
+    inp.addEventListener('input', onCellInput);
+    inp.addEventListener('change', onCellInput);
+  });
+
+  var selAll = document.getElementById('bpSelectAll');
+  if (selAll){
+    selAll.onclick = function(){
+      wrap.querySelectorAll('.bp-chk-row').forEach(function(chk){
+        chk.checked = selAll.checked;
+      });
+    };
+  }
+
+  // Log diagnostik
+  console.log('[BulkInput] Render: ' + tasksWithData.length + ' task ditampilkan dari ' +
+              tasks.length + ' kandidat (filter grup: ' + (_state.filterGrup || 'tidak ada') + ')');
+
+  updateSummary();
+}
 
     function onCellInput(e){
       var inp = e.target;
@@ -388,18 +443,32 @@
       var proj = getProj();
       if (!proj) return;
 
-      var tasks;
+      var allTasks = DB.project_wbs.filter(function(w){
+        return w.project_id === proj.id && !w.is_group;
+      });
+      
+      var tasks = allTasks;
       if (_state.filterGrup){
-        tasks = getTasksForGroup(proj, _state.filterGrup);
-      } else {
-        tasks = DB.project_wbs.filter(function(w){
-          return w.project_id === proj.id && !w.is_group;
-        });
+        var group = DB.project_wbs.find(function(w){ return w.id === _state.filterGrup; });
+        var byParentId = allTasks.filter(function(t){ return t.parent_id === _state.filterGrup; });
+        if (byParentId.length > 0){
+          tasks = byParentId;
+        } else if (group){
+          var prefix = String(group.kode_wbs || '').trim();
+          tasks = prefix ? allTasks.filter(function(t){
+            var kode = String(t.kode_wbs || '').trim();
+            return kode !== prefix && kode.indexOf(prefix + '.') === 0;
+          }) : [];
+        } else {
+          tasks = [];
+        }
       }
       if (_state.showOnlyRemaining){
         tasks = tasks.filter(function(t){
+          var volRAB = _num(t.volume_rab);
+          if (volRAB <= 0) return false;
           var volBefore = getVolKumulatif(proj.id, t.id, _state.minggu - 1);
-          return _num(t.volume_rab) > 0 && volBefore / _num(t.volume_rab) < 0.9999;
+          return (volBefore / volRAB) < 0.9999;
         });
       }
 
@@ -573,40 +642,53 @@
     /* ═══════════════════════════════════════════════════════════
        SUMMARY
        ═══════════════════════════════════════════════════════════ */
-    function updateSummary(){
-      var el = document.getElementById('bpSummary');
-      if (!el) return;
+function updateSummary(){
+  var el = document.getElementById('bpSummary');
+  if (!el) return;
 
-      var proj = getProj();
-      var visibleCount = 0;
-      try {
-        if (proj){
-          var tasks;
-            if (_state.filterGrup){
-              tasks = getTasksForGroup(proj, _state.filterGrup);
-            } else {
-              tasks = DB.project_wbs.filter(function(w){
-                return w.project_id === proj.id && !w.is_group;
-              });
-            }
-          if (_state.showOnlyRemaining){
-            tasks = tasks.filter(function(t){
-              var volBefore = getVolKumulatif(proj.id, t.id, _state.minggu - 1);
-              return _num(t.volume_rab) > 0 && volBefore / _num(t.volume_rab) < 0.9999;
-            });
-          }
-          visibleCount = tasks.length;
+  var proj = getProj();
+  var visibleCount = 0;
+  try {
+    if (proj){
+      var allTasks = DB.project_wbs.filter(function(w){
+        return w.project_id === proj.id && !w.is_group;
+      });
+      var tasks = allTasks;
+      if (_state.filterGrup){
+        var group = DB.project_wbs.find(function(w){ return w.id === _state.filterGrup; });
+        var byParentId = allTasks.filter(function(t){ return t.parent_id === _state.filterGrup; });
+        if (byParentId.length > 0){
+          tasks = byParentId;
+        } else if (group){
+          var prefix = String(group.kode_wbs || '').trim();
+          tasks = prefix ? allTasks.filter(function(t){
+            var kode = String(t.kode_wbs || '').trim();
+            return kode !== prefix && kode.indexOf(prefix + '.') === 0;
+          }) : [];
+        } else {
+          tasks = [];
         }
-      } catch(e){}
-
-      var draftedCount = Object.keys(_state.draft).length;
-      var totalVal = 0;
-      Object.keys(_state.draft).forEach(function(k){ totalVal += _num(_state.draft[k]); });
-
-      el.innerHTML = '<b>' + visibleCount + '</b> task · ' +
-                     '<b>' + draftedCount + '</b> terisi · ' +
-                     'vol <b>' + _fmt(totalVal, 2) + '</b>';
+      }
+      if (_state.showOnlyRemaining){
+        tasks = tasks.filter(function(t){
+          var volRAB = _num(t.volume_rab);
+          if (volRAB <= 0) return false;
+          var volBefore = getVolKumulatif(proj.id, t.id, _state.minggu - 1);
+          return (volBefore / volRAB) < 0.9999;
+        });
+      }
+      visibleCount = tasks.length;
     }
+  } catch(e){}
+
+  var draftedCount = Object.keys(_state.draft).length;
+  var totalVal = 0;
+  Object.keys(_state.draft).forEach(function(k){ totalVal += _num(_state.draft[k]); });
+
+  el.innerHTML = '<b>' + visibleCount + '</b> task · ' +
+                 '<b>' + draftedCount + '</b> terisi · ' +
+                 'vol <b>' + _fmt(totalVal, 2) + '</b>';
+}
 
     /* ═══════════════════════════════════════════════════════════
        WIRE CONTROLS
