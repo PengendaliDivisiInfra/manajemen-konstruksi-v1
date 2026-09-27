@@ -68,6 +68,15 @@
       return hari[d.getDay()] + ', ' + formatTglIndo(iso);
     }
 
+    function hitungMinggu(proj, tglISO){
+      if (!proj || !proj.tgl_mulai || !tglISO) return 1;
+      var d1 = new Date(proj.tgl_mulai + 'T00:00:00');
+      var d2 = new Date(tglISO + 'T00:00:00');
+      if (isNaN(d1.getTime()) || isNaN(d2.getTime())) return 1;
+      var diffDays = Math.round((d2 - d1) / 86400000);
+      return Math.max(1, Math.floor(diffDays / 7) + 1);
+    }
+
     /* ═══════════════════════════════════════════════════════════
        OPEN DIALOG: PILIH TANGGAL
        ═══════════════════════════════════════════════════════════ */
@@ -294,11 +303,6 @@
 
       var pctHariIni = rowsData.reduce(function(s, r){ return s + r.pctBobotHari; }, 0);
       var deviasi = totalKumulatif - totalRencanaPct;
-
-      // Foto
-      var photos = DB.photos.filter(function(p){
-        return p.project_id === proj.id && (p.tanggal || '').split('T')[0] === tanggal;
-      }).sort(function(a,b){ return (a.urutan||0)-(b.urutan||0); });
 
       // Header / Footer
       var logoPupr = meta.logo_pupr ? '<img src="' + meta.logo_pupr + '" class="rg-logo" />' : '<div class="rg-logo-ph"></div>';
