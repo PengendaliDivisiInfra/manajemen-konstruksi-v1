@@ -3113,35 +3113,21 @@ function renderSettings(){
     return;
   }
 
-  l.textContent = '⏳ Mengecek…';
+  l.textContent = '—';
   l.style.color = 'var(--muted)';
 
-  SyncManager.status().then(s => {
-    if (!s || !s.ok){
-      let msg = '⚠ Tidak dapat terhubung ke server';
-      let color = 'var(--warn)';
+  // ═══ JANGAN cek status saat init — biarkan user klik sendiri ═══
+  // Cek hanya kalau tab Pengaturan aktif (bukan dari init)
+  var isSettingsTab = document.querySelector('.tab.active[data-tab="settings"]');
+  if (!isSettingsTab){
+    l.textContent = '— (klik tombol di bawah)';
+    return;
+  }
 
-      if (s && s.code === 'DEAD_ENDPOINT'){
-        msg = '❌ Deployment tidak ditemukan (404) — cek URL & redeploy';
-        color = 'var(--danger)';
-      } else if (s && s.code === 'CIRCUIT_OPEN'){
-        msg = '⚠ Endpoint offline — ' + (s.hint || 'cek koneksi/deployment');
-        color = 'var(--warn)';
-      } else if (s && s.code === 'NO_URL'){
-        msg = '— URL belum diisi';
-        color = 'var(--muted)';
-      }
-      l.textContent = msg;
-      l.style.color = color;
-      return;
-    }
-    if (s.blind){
-      l.textContent = '⚠ Mode blind (server tidak merespons)';
-      l.style.color = 'var(--warn)';
-      return;
-    }
-    l.textContent = s.locked ? ('🔒 dipegang ' + s.holder) : '🟢 bebas';
-    l.style.color = s.locked ? 'var(--warn)' : 'var(--ok)';
+  // Baru cek kalau user benar-benar buka tab settings
+  l.textContent = '⏳ Mengecek…';
+  SyncManager.status().then(s => {
+    // ... (kode existing)
   }).catch(() => {
     l.textContent = '⚠ Gagal cek status';
     l.style.color = 'var(--warn)';
