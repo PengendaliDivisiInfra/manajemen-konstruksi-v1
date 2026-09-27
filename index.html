@@ -634,13 +634,20 @@
      Non-invasive: Schedule.js tidak disentuh
      ═══════════════════════════════════════════════════════════ -->
 <script>
-(function fase1COverride(){
-  function apply(){
-    if (typeof GanttView === 'undefined' || typeof CPM === 'undefined'){
-      console.warn('[1C] GanttView/CPM belum siap, retry in 200ms...');
-      setTimeout(apply, 200);
+let _retryCount1C = 0;
+function apply(){
+  if (typeof GanttView === 'undefined' || typeof CPM === 'undefined'){
+    _retryCount1C++;
+    if (_retryCount1C > 25){   // ← 25 × 200ms = 5 detik max
+      console.warn('[1C] Menyerah setelah ' + _retryCount1C + ' percobaan. Schedule.js tidak load.');
       return;
     }
+    if (_retryCount1C <= 3 || _retryCount1C % 5 === 0){
+      console.warn('[1C] Retry #' + _retryCount1C + ' — GanttView/CPM belum siap');
+    }
+    setTimeout(apply, 200);
+    return;
+  }
 
     GanttView.drawDependencies = function(ctx, state, posMap, rowH){
       const {nodes} = state;
