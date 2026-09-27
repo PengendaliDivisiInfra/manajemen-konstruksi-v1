@@ -360,28 +360,17 @@
           /* Tabel pekerjaan */
           '<div class="rg-section-title">A. Pekerjaan yang Dilaksanakan</div>' +
           '<table class="rg-table">' +
-            '<thead>' +
-              '<tr>' +
-                ''<thead>' +
-                 '<tr>' +
-                   '<th style="width:35px">No</th>' +
-                   '<th style="width:65px">Kode</th>' +
-                   '<th>Uraian Pekerjaan</th>' +
-                   '<th style="width:45px">Sat</th>' +
-                   '<th style="width:90px" class="rg-num">Vol Hari Ini</th>' +
-                   '<th style="width:75px" class="rg-num">% Item</th>' +
-                   '<th style="width:80px" class="rg-num">Bobot %</th>' +
-                 '</tr>' +
-               '</thead>' +
-                '<th style="width:65px">Kode</th>' +
-                '<th>Uraian Pekerjaan</th>' +
-                '<th style="width:45px">Sat</th>' +
-                '<th style="width:75px" class="rg-num">Vol Hari Ini</th>' +
-                '<th style="width:65px" class="rg-num">% Item</th>' +
-                '<th style="width:70px" class="rg-num">Bobot %</th>' +
-                '<th style="width:40px" class="rg-center">Foto</th>' +
-              '</tr>' +
-            '</thead>' +
+             '<thead>' +
+               '<tr>' +
+                 '<th style="width:35px">No</th>' +
+                 '<th style="width:65px">Kode</th>' +
+                 '<th>Uraian Pekerjaan</th>' +
+                 '<th style="width:45px">Sat</th>' +
+                 '<th style="width:90px" class="rg-num">Vol Hari Ini</th>' +
+                 '<th style="width:75px" class="rg-num">% Item</th>' +
+                 '<th style="width:80px" class="rg-num">Bobot %</th>' +
+               '</tr>' +
+             '</thead>' +
             '<tbody>' +
               (rowsData.length
                 ? rowsData.map(function(r, i){
