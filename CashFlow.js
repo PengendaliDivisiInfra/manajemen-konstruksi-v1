@@ -1,0 +1,181 @@
+/* =====================================================================
+   MODUL CASH FLOW & ACTUAL COST — Manajemen Arus Kas Proyek
+   ===================================================================== */
+
+let _chartCashFlowInstance = null;
+let _cashFlowDataLocal = [];
+
+function initCashFlowModule(){
+  const pid = STATE.activeProject;
+  if (!pid) return;
+
+  // Cek apakah data lokal sudah ada, jika belum generate default dari Kurva S & Totals
+  if (!_cashFlowDataLocal.length || _cashFlowDataLocal[0]?.project_id !== pid){
+    generateDefaultCashFlow(pid);
+  }
+
+  renderCashFlowUI();
+
+  // Wiring tombol
+  const btnGen = $('#btnAutoCalcCF');
+  if (btnGen) btnGen.onclick = () => {
+    if (confirm('Generate ulang proyeksi otomatis berdasarkan Kurva S & Nilai Kontrak? Data realisasi yang belum tersimpan mungkin akan tertimpa.')){
+      generateDefaultCashFlow(pid);
+      renderCashFlowUI();
+      toast('Proyeksi Cash Flow digenerate ulang');
+    }
+  };
+
+  const btnSave = $('#btnSaveCF');   if (btnSave) btnSave.onclick = async () => {     collectCashFlowTableInputs();     await saveCashFlowToServer(pid);   }; }  function generateDefaultCashFlow(projectId){   const proj = DB.projects.find(p => p.id === projectId);   if (!proj) return;   const durasi = Math.max(1, Math.round(num(proj.durasi_minggu) \vert{}\vert{} 1));   const scurve = Calc.scurve(projectId);   const totals = Calc.totals(projectId);   const nilaiKontrakNetto = num(proj.nilai_kontrak) / (1 + num(SET.ppn)/100);   const totalRAP = totals.rap \vert{}\vert{} 1;    _cashFlowDataLocal = [];   let prevPlannedIn = 0;   let prevPlannedOut = 0;    for (let w = 1; w <= durasi; w++){     // Bobot kurva S minggu ini (kumulatif atau marginal)     const pCumPct = (scurve.planned[w-1] \vert{}\vert{} 0) / 100;     const pPrevPct = w === 1 ? 0 : (scurve.planned[w-2] \vert{}\vert{} 0) / 100;     const marginalPct = pCumPct - pPrevPct;      // Asumsi Cash In (Termin masuk) proporsional terhadap progress rencana x nilai kontrak netto     const rencanaMasuk = nilaiKontrakNetto * marginalPct;     // Asumsi Cash Out (Biaya keluar / RAP) proporsional terhadap progress rencana x total RAP     const rencanaKeluar = totalRAP * marginalPct;      _cashFlowDataLocal.push({       id: 'cf_' + projectId + '_m' + w,       project_id: projectId,       periode: 'Minggu ' + w,       minggu: w,       rencana_masuk: Math.round(rencanaMasuk),       realisasi_masuk: Math.round(rencanaMasuk * 0.95), // default estimasi awal       rencana_keluar: Math.round(rencanaKeluar),       realisasi_keluar: Math.round(rencanaKeluar),       keterangan: w === 1 ? 'Uang muka / Termin awal' : 'Pekerjaan bulanan/termin'     });   } }  function collectCashFlowTableInputs(){   $$('#tblCashFlow tbody tr').forEach((tr, idx) => {
+    const item = _cashFlowDataLocal[idx];
+    if (!item) return;
+    const inpRm = tr.querySelector('[data-cf-rm]');
+    const inpRk = tr.querySelector('[data-cf-rk]');
+    const inpKet = tr.querySelector('[data-cf-ket]');
+    if (inpRm) item.realisasi_masuk = num(inpRm.value);
+    if (inpRk) item.realisasi_keluar = num(inpRk.value);
+    if (inpKet) item.keterangan = inpKet.value.trim();
+  });
+}
+
+function renderCashFlowUI(){
+  const pid = STATE.activeProject;
+  const rows = _cashFlowDataLocal;
+  if (!rows.length) return;
+
+  let totPlanIn = 0, totRealIn = 0, totPlanOut = 0, totRealOut = 0;
+  rows.forEach(r => {
+    totPlanIn += num(r.rencana_masuk);
+    totRealIn += num(r.realisasi_masuk);
+    totPlanOut += num(r.rencana_keluar);
+    totRealOut += num(r.realisasi_keluar);
+  });
+
+  const netCashFlow = totRealIn - totRealOut;
+
+  // Render KPI
+  $('#cfKPI').innerHTML = `
+    <div class="kpi">
+      <div class="lbl">Total Rencana Masuk</div>
+      <div class="val" style="color:var(--ok)">${rp(totPlanIn)}</div>
+      <div class="sub">Akumulasi termin kontrak</div>
+    </div>
+    <div class="kpi">
+      <div class="lbl">Total Realisasi Masuk</div>
+      <div class="val" style="color:var(--ok)">${rp(totRealIn)}</div>
+      <div class="sub">Penerimaan kas riil</div>
+    </div>
+    <div class="kpi">
+      <div class="lbl">Total Realisasi Keluar</div>
+      <div class="val" style="color:var(--danger)">${rp(totRealOut)}</div>
+      <div class="sub">Pengeluaran riil (Actual Cost)</div>
+    </div>
+    <div class="kpi ${netCashFlow >= 0 ? 'k5' : 'k4'}">
+      <div class="lbl">Net Cash Flow</div>
+      <div class="val ${netCashFlow >= 0 ? 'pos' : 'neg'}">${rp(netCashFlow)}</div>
+      <div class="sub">${netCashFlow >= 0 ? '✅ Surplus Kas' : '⚠ Defisit Kas'}</div>
+    </div>
+  `;
+
+  // Render Tabel
+  const head = `<thead><tr>
+    <th>Periode</th>
+    <th class="num">Rencana Masuk (In)</th>
+    <th class="num">Realisasi Masuk</th>
+    <th class="num">Rencana Keluar (Out)</th>
+    <th class="num">Realisasi Keluar (Actual)</th>
+    <th class="num">Net Kas (Riil)</th>
+    <th>Keterangan</th>
+  </tr></thead>`;
+
+  let cumNet = 0;
+  const body = rows.map((r, idx) => {
+    const netM = num(r.realisasi_masuk) - num(r.realisasi_keluar);
+    cumNet += netM;
+    return `<tr>
+      <td><b>${esc(r.periode)}</b></td>
+      <td class="num">${rp(r.rencana_masuk)}</td>
+      <td class="num"><input type="number" data-cf-rm="${idx}" value="${num(r.realisasi_masuk)}" style="width:130px;text-align:right;padding:4px" /></td>
+      <td class="num">${rp(r.rencana_keluar)}</td>
+      <td class="num"><input type="number" data-cf-rk="${idx}" value="${num(r.realisasi_keluar)}" style="width:130px;text-align:right;padding:4px" /></td>
+      <td class="num ${netM >= 0 ? 'pos' : 'neg'}">${rp(netM)}</td>
+      <td><input type="text" data-cf-ket="${idx}" value="${esc(r.keterangan || '')}" style="width:100%;padding:4px" /></td>
+    </tr>`;
+  }).join('');
+
+  $('#tblCashFlow').innerHTML = head + `<tbody>${body}</tbody>`;
+
+  // Render Chart
+  renderCashFlowChart(rows);
+}
+
+function renderCashFlowChart(rows){
+  const labels = rows.map(r => r.periode);
+  const planIn = [], realIn = [], planOut = [], realOut = [];
+  let cPi = 0, cRi = 0, cPo = 0, cRo = 0;
+
+  rows.forEach(r => {
+    cPi += num(r.rencana_masuk);
+    cRi += num(r.realisasi_masuk);
+    cPo += num(r.rencana_keluar);
+    cRo += num(r.realisasi_keluar);
+    planIn.push(cPi);
+    realIn.push(cRi);
+    planOut.push(cPo);
+    realOut.push(cRo);
+  });
+
+  if (_chartCashFlowInstance) _chartCashFlowInstance.destroy();
+  const ctx = $('#chartCashFlow').getContext('2d');
+  _chartCashFlowInstance = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: labels,
+      datasets: [
+        { label: 'Kumulatif Rencana Masuk', data: planIn, borderColor: '#1abc9c', backgroundColor: 'transparent', tension: 0.3, borderWidth: 2 },
+        { label: 'Kumulatif Realisasi Masuk', data: realIn, borderColor: '#2ecc71', backgroundColor: 'rgba(46,204,113,.1)', fill: true, tension: 0.3, borderWidth: 2 },
+        { label: 'Kumulatif Rencana Keluar', data: planOut, borderColor: '#e67e22', backgroundColor: 'transparent', tension: 0.3, borderWidth: 2 },
+        { label: 'Kumulatif Realisasi Keluar (Actual Cost)', data: realOut, borderColor: '#e74c3c', backgroundColor: 'rgba(231,76,60,.1)', fill: true, tension: 0.3, borderWidth: 2 }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { labels: { color: '#e6edf7', font: { size: 11 } } } },
+      scales: {
+        x: { ticks: { color: '#8fa3c4' }, grid: { color: 'rgba(36,54,92,.5)' } },
+        y: { ticks: { color: '#8fa3c4', callback: v => 'Rp ' + (v / 1e6).toFixed(0) + 'jt' }, grid: { color: 'rgba(36,54,92,.5)' } }
+      }
+    }
+  });
+}
+
+async function saveCashFlowToServer(projectId){
+  try {
+    toast('Menyimpan Cash Flow...');
+    const token = localStorage.getItem('mk_session_token') || '';
+    const res = await sheetRequest('saveCashFlow', {
+      token: token,
+      projectId: projectId,
+      rows: _cashFlowDataLocal
+    });
+    if (res && res.ok){
+      toast('✅ Cash Flow berhasil disimpan ke Sheet');
+    } else {
+      toast('Gagal menyimpan: ' + (res?.message || 'unknown'), false);
+    }
+  } catch(err){
+    toast('Error koneksi: ' + err.message, false);
+  }
+}
+
+// Hook ke switchTab utama agar saat tab cashflow diklik, modul terinisialisasi
+const _oldSwitchTab = window.switchTab;
+if (typeof switchTab === 'function'){
+  window.switchTab = function(name){
+    _oldSwitchTab(name);
+    if (name === 'cashflow'){
+      initCashFlowModule();
+    }
+  };
+}
