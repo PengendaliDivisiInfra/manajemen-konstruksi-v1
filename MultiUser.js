@@ -100,7 +100,10 @@
               '</div>' +
               '<div id="loginError" class="login-error"></div>' +
               '<button id="loginSubmit" class="login-btn">🔐 Masuk</button>' +
-              '<div class="login-hint">Default admin: <b>admin</b> / PIN <b>123456</b></div>' +
+              '<div class="login-hint">' +
+                'Belum memiliki akun? <br>' +
+                'Silakan hubungi <b>Administrator Sistem</b> untuk mendapatkan akses.' +
+              '</div>' +
             '</div>' +
           '</div>';
         document.body.appendChild(ov);
