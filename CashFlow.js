@@ -1,5 +1,5 @@
 /* =====================================================================
-   MODUL CASH FLOW & ACTUAL COST — Manajemen Arus Kas Proyek
+   MODUL CASH FLOW & ACTUAL COST — Manajemen Arus Kas Proyek (OPTIMIZED)
    ===================================================================== */
 
 let _chartCashFlowInstance = null;
@@ -15,7 +15,7 @@ function initCashFlowModule(){
 
   renderCashFlowUI();
 
-  const btnGen = $('#btnAutoCalcCF');
+  const btnGen = \$('#btnAutoCalcCF');
   if (btnGen) {
     btnGen.onclick = () => {
       if (confirm('Generate ulang proyeksi otomatis berdasarkan Kurva S & Nilai Kontrak? Data realisasi yang belum tersimpan mungkin akan tertimpa.')){
@@ -26,12 +26,14 @@ function initCashFlowModule(){
     };
   }
 
-  const btnSave = $('#btnSaveCF');   if (btnSave) {     btnSave.onclick = async () => {       collectCashFlowTableInputs();       await saveCashFlowToServer(pid);     };   } }  function generateDefaultCashFlow(projectId){   const proj = DB.projects.find(p => p.id === projectId);   if (!proj) return;   const durasi = Math.max(1, Math.round(num(proj.durasi_minggu) \vert{}\vert{} 1));   const scurve = Calc.scurve(projectId);   const totals = Calc.totals(projectId);   const nilaiKontrakNetto = num(proj.nilai_kontrak) / (1 + num(SET.ppn)/100) \vert{}\vert{} totals.rab;   const totalRAP = totals.rap \vert{}\vert{} 1;    _cashFlowDataLocal = [];    for (let w = 1; w <= durasi; w++){     let marginalPct = 1 / durasi;     if (scurve && scurve.planned && scurve.planned.length === durasi){       const pCumPct = (scurve.planned[w-1] \vert{}\vert{} 0) / 100;       const pPrevPct = w === 1 ? 0 : (scurve.planned[w-2] \vert{}\vert{} 0) / 100;       marginalPct = Math.max(0, pCumPct - pPrevPct);     }      const rencanaMasuk = nilaiKontrakNetto * marginalPct;     const rencanaKeluar = totalRAP * marginalPct;      _cashFlowDataLocal.push({       id: 'cf_' + projectId + '_m' + w,       project_id: projectId,       periode: 'Minggu ' + w,       minggu: w,       rencana_masuk: Math.round(rencanaMasuk),       realisasi_masuk: Math.round(rencanaMasuk * 0.95),       rencana_keluar: Math.round(rencanaKeluar),       realisasi_keluar: Math.round(rencanaKeluar),       keterangan: w === 1 ? 'Uang muka / Termin awal' : 'Pekerjaan mingguan'     });   } }  function collectCashFlowTableInputs(){   $$('#tblCashFlow tbody tr').forEach((tr, idx) => {
+  const btnSave = \(('#btnSaveCF');      if (btnSave) {          btnSave.onclick = async () => {              collectCashFlowTableInputs();              await saveCashFlowToServer(pid);          };      }  }    function generateDefaultCashFlow(projectId){      const proj = DB.projects.find(p => p.id === projectId);      if (!proj) return;      const durasi = Math.max(1, Math.round(num(proj.durasi_minggu) \vert{}\vert{} 1));      const scurve = Calc.scurve(projectId);      const totals = Calc.totals(projectId);      const nilaiKontrakNetto = num(proj.nilai_kontrak) / (1 + num(SET.ppn)/100) \vert{}\vert{} totals.rab;      const totalRAP = totals.rap \vert{}\vert{} 1;          _cashFlowDataLocal = [];          for (let w = 1; w <= durasi; w++){          let marginalPct = 1 / durasi;          if (scurve && scurve.planned && scurve.planned.length === durasi){              const pCumPct = (scurve.planned[w-1] \vert{}\vert{} 0) / 100;              const pPrevPct = w === 1 ? 0 : (scurve.planned[w-2] \vert{}\vert{} 0) / 100;              marginalPct = Math.max(0, pCumPct - pPrevPct);          }                const rencanaMasuk = nilaiKontrakNetto * marginalPct;          const rencanaKeluar = totalRAP * marginalPct;                _cashFlowDataLocal.push({              id: 'cf_' + projectId + '_m' + w,              project_id: projectId,              periode: 'Minggu ' + w,              minggu: w,              rencana_masuk: Math.round(rencanaMasuk),              realisasi_masuk: Math.round(rencanaMasuk * 0.95),              rencana_keluar: Math.round(rencanaKeluar),              realisasi_keluar: Math.round(rencanaKeluar),              keterangan: w === 1 ? 'Uang muka / Termin awal' : 'Pekerjaan mingguan'          });      }  }    // FIX: Selector input diperbaiki menggunakan querySelector yang tepat berdasarkan partial attribute function collectCashFlowTableInputs(){      \)\$('#tblCashFlow tbody tr').forEach((tr, idx) => {
     const item = _cashFlowDataLocal[idx];
     if (!item) return;
-    const inpRm = tr.querySelector('[data-cf-rm]');
-    const inpRk = tr.querySelector('[data-cf-rk]');
-    const inpKet = tr.querySelector('[data-cf-ket]');
+    
+    const inpRm = tr.querySelector(`[data-cf-rm="${idx}"]`);
+    const inpRk = tr.querySelector(`[data-cf-rk="${idx}"]`);
+    const inpKet = tr.querySelector(`[data-cf-ket="${idx}"]`);
+    
     if (inpRm) item.realisasi_masuk = num(inpRm.value);
     if (inpRk) item.realisasi_keluar = num(inpRk.value);
     if (inpKet) item.keterangan = inpKet.value.trim();
@@ -53,7 +55,7 @@ function renderCashFlowUI(){
 
   const netCashFlow = totRealIn - totRealOut;
 
-  $('#cfKPI').innerHTML = `
+  \$('#cfKPI').innerHTML = `
     <div class="kpi">
       <div class="lbl">Total Rencana Masuk</div>
       <div class="val" style="color:var(--ok)">${rp(totPlanIn)}</div>
@@ -101,14 +103,14 @@ function renderCashFlowUI(){
     </tr>`;
   }).join('');
 
-  $('#tblCashFlow').innerHTML = head + `<tbody>${body}</tbody>`;
+  \$('#tblCashFlow').innerHTML = head + `<tbody>${body}</tbody>`;
 
   renderCashFlowChart(rows);
 }
 
 function renderCashFlowChart(rows){
   const labels = rows.map(r => r.periode);
-  const planIn = [], realIn = [], planOut = [], realOut = [];
+  const planIn = [], realIn = [], planOut = [], realOut = [], cumulativeNet = [];
   let cPi = 0, cRi = 0, cPo = 0, cRo = 0;
 
   rows.forEach(r => {
@@ -120,19 +122,21 @@ function renderCashFlowChart(rows){
     realIn.push(cRi);
     planOut.push(cPo);
     realOut.push(cRo);
+    cumulativeNet.push(cRi - cRo); // Tambahan analisis tren saldo bersih
   });
 
   if (_chartCashFlowInstance) _chartCashFlowInstance.destroy();
-  const ctx = $('#chartCashFlow').getContext('2d');
+  const ctx = \$('#chartCashFlow').getContext('2d');
   _chartCashFlowInstance = new Chart(ctx, {
     type: 'line',
     data: {
       labels: labels,
       datasets: [
-        { label: 'Kumulatif Rencana Masuk', data: planIn, borderColor: '#1abc9c', backgroundColor: 'transparent', tension: 0.3, borderWidth: 2 },
-        { label: 'Kumulatif Realisasi Masuk', data: realIn, borderColor: '#2ecc71', backgroundColor: 'rgba(46,204,113,.1)', fill: true, tension: 0.3, borderWidth: 2 },
-        { label: 'Kumulatif Rencana Keluar', data: planOut, borderColor: '#e67e22', backgroundColor: 'transparent', tension: 0.3, borderWidth: 2 },
-        { label: 'Kumulatif Realisasi Keluar (Actual Cost)', data: realOut, borderColor: '#e74c3c', backgroundColor: 'rgba(231,76,60,.1)', fill: true, tension: 0.3, borderWidth: 2 }
+        { label: 'Kumulatif Rencana Masuk', data: planIn, borderColor: '#1abc9c', backgroundColor: 'transparent', tension: 0.2, borderWidth: 2 },
+        { label: 'Kumulatif Realisasi Masuk', data: realIn, borderColor: '#2ecc71', backgroundColor: 'rgba(46,204,113,.05)', fill: true, tension: 0.2, borderWidth: 2 },
+        { label: 'Kumulatif Rencana Keluar', data: planOut, borderColor: '#e67e22', backgroundColor: 'transparent', tension: 0.2, borderWidth: 2 },
+        { label: 'Kumulatif Realisasi Keluar', data: realOut, borderColor: '#e74c3c', backgroundColor: 'rgba(231,76,60,.05)', fill: true, tension: 0.2, borderWidth: 2 },
+        { label: 'Saldo Kas Kumulatif (Net)', data: cumulativeNet, borderColor: '#3498db', borderDash:, backgroundColor: 'transparent', tension: 0.2, borderWidth: 2 }
       ]
     },
     options: {
@@ -140,8 +144,8 @@ function renderCashFlowChart(rows){
       maintainAspectRatio: false,
       plugins: { legend: { labels: { color: '#e6edf7', font: { size: 11 } } } },
       scales: {
-        x: { ticks: { color: '#8fa3c4' }, grid: { color: 'rgba(36,54,92,.5)' } },
-        y: { ticks: { color: '#8fa3c4', callback: v => 'Rp ' + (v / 1e6).toFixed(0) + 'jt' }, grid: { color: 'rgba(36,54,92,.5)' } }
+        x: { ticks: { color: '#8fa3c4' }, grid: { color: 'rgba(36,54,92,.2)' } },
+        y: { ticks: { color: '#8fa3c4', callback: v => 'Rp ' + (v / 1e6).toFixed(0) + 'jt' }, grid: { color: 'rgba(36,54,92,.2)' } }
       }
     }
   });
