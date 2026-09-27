@@ -2580,9 +2580,15 @@ function formProject(id){
       status: $('#fpj_st').value,
       tgl_mulai: tm,
       tgl_selesai: ts,
+      manual_dates: true,
       ppn: num(SET.ppn),
       overhead: num(SET.overhead)
     };
+
+    // Setelah save, skip CPM overwrite kalau manual_dates
+    if (!obj.manual_dates) {
+      runCPM(obj.id);
+    }
 
     if (p) Object.assign(p, obj);
     else {
@@ -3409,21 +3415,6 @@ $('#btnPull').onclick = async () => {
   if (STATE.session && STATE.session.token) {
     localStorage.setItem('mk_session_token', STATE.session.token);
   }
-
-  // Recalculate CPM untuk semua proyek (HANYA jika durasi kosong/0)
-  DB.projects.forEach(p => {
-    // Hanya hitung jika durasi belum ada, jangan timpa nilai yang sudah disimpan user
-    if (!p.durasi_minggu || p.durasi_minggu <= 1) {
-      const d1 = new Date(p.tgl_mulai || new Date());
-      const d2 = new Date(p.tgl_selesai || new Date());
-      const diffMs = d2.getTime() - d1.getTime();
-      const diffDays = Math.max(0, Math.round(diffMs / (1000 * 60 * 60 * 24)));
-      p.durasi_hari = diffDays;
-      p.durasi_minggu = Math.max(1, Math.ceil(diffDays / 7));
-      p.durasi_kerja = Math.round(diffDays * (5/7));
-    }
-    runCPM(p.id);
-  });
   
   saveDB();
   renderProjectSelector();
