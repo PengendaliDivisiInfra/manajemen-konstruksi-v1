@@ -82,10 +82,10 @@ function generateDefaultCashFlow(projectId) {
       project_id:       projectId,
       periode:          'Minggu ' + w,
       minggu:           w,
-      rencana_masuk:    Math.round(rencanaMasuk),
-      realisasi_masuk:  Math.round(rencanaMasuk * 0.95),
-      rencana_keluar:   Math.round(rencanaKeluar),
-      realisasi_keluar: Math.round(rencanaKeluar),
+      rencana_masuk: Math.round(rencanaMasuk),
+      realisasi_masuk: 0, // Ubah dari Math.round(rencanaMasuk * 0.95) menjadi 0
+      rencana_keluar: Math.round(rencanaKeluar),
+      realisasi_keluar: 0, // Ubah dari Math.round(rencanaKeluar) menjadi 0
       keterangan:       w === 1 ? 'Uang muka / Termin awal' : 'Pekerjaan mingguan'
     });
   }
