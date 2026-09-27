@@ -622,6 +622,7 @@
 <script src="KeyboardShortcuts.js"></script>
 <script src="MultiUser.js"></script>
 <script src="CashFlow.js"></script>
+<script src="ProgressManager.js"></script>
 
 <!-- ═══════════════════════════════════════════════════════════
      FASE 1C OVERRIDE — MS Project Style Dependency Arrows
@@ -1484,7 +1485,11 @@ function switchTab(name){
   if (name === 'calendar')  renderCalendars();
   if (name === 'holidays')  renderHolidays();
   if (name === 'analysis')  renderAnalysis();
-  if (name === 'progress')  renderProgress();
+  if (name === 'progress')  if (typeof ProgressManager !== 'undefined') {
+    ProgressManager.renderTable();
+    ProgressManager.renderScurve(STATE.activeProject);
+    ProgressManager.renderVariance(STATE.activeProject);
+  }
   if (name === 'projects')  renderProjects();
   if (name === 'settings')  renderSettings();
   if (name === 'recon')     { if (!DB.bj_material) seedReconMasterData(); renderReconRekap(); }
