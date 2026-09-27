@@ -64,6 +64,29 @@
       return DB.projects.find(function(p){ return p.id === STATE.activeProject; }) || null;
     }
 
+        /* ─── Helper: Ambil tasks untuk grup (parent_id ATAU kode_wbs prefix) ─── */
+   function getTasksForGroup(proj, groupId){
+     var group = DB.project_wbs.find(function(w){ return w.id === groupId; });
+     if (!group) return [];
+   
+     // Prioritas 1: filter by parent_id
+     var tasks = DB.project_wbs.filter(function(t){
+       return t.project_id === proj.id && !t.is_group && t.parent_id === groupId;
+     });
+   
+     // Fallback: kalau kosong, cocokkan berdasarkan prefix kode_wbs
+     if (!tasks.length && group.kode_wbs){
+       var prefix = String(group.kode_wbs).trim();
+       tasks = DB.project_wbs.filter(function(t){
+         if (t.project_id !== proj.id || t.is_group) return false;
+         var kode = String(t.kode_wbs || '').trim();
+         return kode.startsWith(prefix + '.') && kode !== prefix;
+       });
+     }
+   
+     return tasks;
+   }
+
     function maxMinggu(proj){
       return Math.max(1, Math.round(_num(proj && proj.durasi_minggu) || 1));
     }
