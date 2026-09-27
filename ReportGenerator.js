@@ -463,93 +463,140 @@
         '</div>';
       document.body.appendChild(overlay);
 
-      /* ═══ 2. Buat iframe terisolasi (KUNCI UTAMA) ═══
-         iframe punya document terpisah → CSS app TIDAK menjalar masuk.
-         html2canvas bisa snapshot body iframe dengan bersih. */
+      /* ═══ 2. Siapkan CSS string (validasi dulu) ═══ */
+      var cssString = '';
+      try {
+        cssString = getPDFStyles();
+      } catch(e){
+        console.error('[ReportGenerator] getPDFStyles error:', e);
+        cssString = 'body{font-family:Arial,sans-serif;font-size:10.5px;color:#111;background:#fff;}';
+      }
+      console.log('%c[PDF Debug] CSS length: ' + cssString.length + ' chars',
+        'color:#06b6d4;font-weight:bold');
+
+      /* ═══ 3. Buat iframe dan set srcdoc ═══ */
       var iframe = document.createElement('iframe');
       iframe.id = 'pdfRenderIframe';
       iframe.style.cssText =
-        'position:fixed;left:0;top:0;width:794px;height:1123px;' +
-        'border:0;z-index:99997;background:#ffffff;';
+        'position:fixed;left:-9999px;top:0;' +
+        'width:794px;height:1123px;border:0;' +
+        'background:#ffffff;';
       document.body.appendChild(iframe);
 
-      /* ═══ 3. Tulis HTML + CSS ke dalam iframe ═══ */
-      var idoc = iframe.contentDocument || iframe.contentWindow.document;
-      idoc.open();
-      idoc.write(
+      /* ═══ 4. Build full HTML document ═══ */
+      var fullHTML =
         '<!DOCTYPE html>' +
-        '<html><head><meta charset="UTF-8">' +
-        '<style>' + getPDFStyles() + '</style>' +
-        '</head><body style="margin:0;padding:0;background:#ffffff;color:#111;">' +
-        html +
-        '</body></html>'
-      );
-      idoc.close();
+        '<html><head>' +
+        '<meta charset="UTF-8">' +
+        '<title>' + filename + '</title>' +
+        '<style>' + cssString + '</style>' +
+        '<style>' +
+          /* ← SAFETY NET: inline reset yang TIDAK bisa di-override */
+          'html,body{margin:0;padding:0;background:#ffffff;}' +
+          'body{color:#111111;font-family:Arial,Helvetica,sans-serif;font-size:10.5px;line-height:1.4;}' +
+          'img{max-width:100%;height:auto;}' +
+        '</style>' +
+        '</head>' +
+        '<body>' + html + '</body>' +
+        '</html>';
 
-      /* ═══ 4. Tunggu semua gambar (logo) dimuat di iframe ═══ */
-      var images = idoc.querySelectorAll('img');
-      var imgPromises = Array.prototype.map.call(images, function(img){
-        if (img.complete && img.naturalWidth > 0) return Promise.resolve();
-        return new Promise(function(resolve){
-          img.onload = resolve;
-          img.onerror = resolve;
-          setTimeout(resolve, 3000);
-        });
-      });
+      console.log('%c[PDF Debug] HTML length: ' + fullHTML.length + ' chars',
+        'color:#06b6d4;font-weight:bold');
 
-      _toast('⏳ Sedang membuat PDF...');
+      /* ═══ 5. Set via srcdoc (browser parse sendiri) ═══ */
+      iframe.srcdoc = fullHTML;
 
-      Promise.all(imgPromises).then(function(){
-        /* Extra delay agar layout iframe settle */
+      /* ═══ 6. Setelah load, tunggu gambar lalu render ═══ */
+      iframe.addEventListener('load', function onLoad(){
+        iframe.removeEventListener('load', onLoad);
+
+        /* Delay ekstra agar CSS & layout settle */
         setTimeout(function(){
-
-          /* ═══ 5. Debug — log dimensi aktual iframe body ═══ */
+          var idoc = iframe.contentDocument || iframe.contentWindow.document;
           var bodyEl = idoc.body;
-          console.log('%c[ReportGenerator] Iframe body dimensions:', 'color:#06b6d4;font-weight:bold');
-          console.log('  scrollWidth :', bodyEl.scrollWidth);
-          console.log('  scrollHeight:', bodyEl.scrollHeight);
-          console.log('  childCount  :', bodyEl.children.length);
-          console.log('  firstChild  :', bodyEl.firstElementChild ? bodyEl.firstElementChild.className : 'NONE');
-          console.log('  textContent :', (bodyEl.textContent || '').substring(0, 200));
 
-          var opt = {
-            margin:       [10, 10, 10, 10],
-            filename:     filename,
-            image:        { type: 'jpeg', quality: 0.95 },
-            html2canvas:  {
-              scale: 2,
-              useCORS: true,
-              backgroundColor: '#ffffff',
-              logging: false,
-              scrollX: 0,
-              scrollY: 0,
-              windowWidth: 794
-            },
-            jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' },
-            pagebreak:    { mode: ['css', 'legacy'] }
-          };
+          /* ── DEBUG: verifikasi CSS ter-apply ── */
+          console.log('%c[PDF Debug] === Verifikasi CSS ===', 'color:#06b6d4;font-weight:bold');
+          console.log('Body children:', bodyEl.children.length);
+          console.log('Body scrollHeight:', bodyEl.scrollHeight);
+          console.log('Body color:', getComputedStyle(bodyEl).color);
+          console.log('Body font:', getComputedStyle(bodyEl).fontFamily);
 
-          /* ═══ 6. Render body iframe (bukan temp element di parent) ═══ */
-          html2pdf().set(opt).from(bodyEl)
-            .outputPdf('bloburl')
-            .then(function(blobUrl){
-              /* Cleanup */
-              try {
-                if (iframe.parentNode) iframe.parentNode.removeChild(iframe);
-                if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
-              } catch(e){}
+          var headerEl = idoc.querySelector('.rg-header');
+          if (headerEl){
+            var hcs = getComputedStyle(headerEl);
+            console.log('Header display:', hcs.display);      // harus "flex"
+            console.log('Header flexDirection:', hcs.flexDirection);
+          } else {
+            console.warn('⚠ .rg-header TIDAK DITEMUKAN di DOM');
+          }
 
-              openPdfPreview(blobUrl, filename);
-            })
-            .catch(function(err){
-              try {
-                if (iframe.parentNode) iframe.parentNode.removeChild(iframe);
-                if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
-              } catch(e){}
-              console.error('[ReportGenerator] PDF error:', err);
-              _toast('Gagal membuat PDF: ' + err.message, false);
+          var logoEl = idoc.querySelector('.rg-logo');
+          if (logoEl){
+            console.log('Logo maxWidth:', getComputedStyle(logoEl).maxWidth);  // harus "75px"
+          } else {
+            console.warn('⚠ .rg-logo TIDAK DITEMUKAN (mungkin tidak ada logo atau img kosong)');
+          }
+
+          var tableEl = idoc.querySelector('.rg-table');
+          if (tableEl){
+            console.log('Table border-collapse:', getComputedStyle(tableEl).borderCollapse); // "collapse"
+          }
+
+          /* ── Tunggu semua gambar dimuat ── */
+          var images = idoc.querySelectorAll('img');
+          var imgPromises = Array.prototype.map.call(images, function(img){
+            if (img.complete && img.naturalWidth > 0) return Promise.resolve();
+            return new Promise(function(resolve){
+              img.onload = resolve;
+              img.onerror = resolve;
+              setTimeout(resolve, 3000);
             });
-        }, 800);
+          });
+
+          Promise.all(imgPromises).then(function(){
+            /* Extra delay untuk rendering final */
+            setTimeout(function(){
+              var opt = {
+                margin:       [10, 10, 10, 10],
+                filename:     filename,
+                image:        { type: 'jpeg', quality: 0.95 },
+                html2canvas:  {
+                  scale: 2,
+                  useCORS: true,
+                  backgroundColor: '#ffffff',
+                  logging: false,
+                  scrollX: 0,
+                  scrollY: 0,
+                  windowWidth: 794,
+                  width: 794
+                },
+                jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' },
+                pagebreak:    { mode: ['css', 'legacy'] }
+              };
+
+              html2pdf().set(opt).from(bodyEl)
+                .outputPdf('bloburl')
+                .then(function(blobUrl){
+                  cleanup();
+                  console.log('%c[PDF Debug] ✅ PDF selesai dibuat', 'color:#22c55e;font-weight:bold');
+                  openPdfPreview(blobUrl, filename);
+                })
+                .catch(function(err){
+                  cleanup();
+                  console.error('[ReportGenerator] PDF error:', err);
+                  _toast('Gagal membuat PDF: ' + err.message, false);
+                });
+
+              function cleanup(){
+                try {
+                  if (iframe.parentNode) iframe.parentNode.removeChild(iframe);
+                  if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+                } catch(e){}
+              }
+            }, 500);
+          });
+        }, 300);
       });
     }
 
