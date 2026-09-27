@@ -81,13 +81,23 @@
 
       var today = new Date().toISOString().slice(0,10);
 
+      /* Pakai Date Widget aplikasi kalau tersedia */
+      var dateWidget = (typeof _dateWidgetHTML === 'function')
+        ? _dateWidgetHTML('rg_tgl', today, { placeholder: 'Pilih tanggal' })
+        : '<input type="date" id="rg_tgl" value="' + _esc(today) + '" />';
+
       var html = '' +
         '<div class="rg-intro">' +
           'Cetak <b>Laporan Harian</b> untuk proyek <b style="color:#7cb3ff">' + _esc(proj.kode) + '</b>.' +
         '</div>' +
         '<div class="rg-field">' +
           '<label>Tanggal Laporan</label>' +
-          '<input type="date" id="rg_tgl" value="' + _esc(today) + '" />' +
+          dateWidget +
+        '</div>' +
+        '<div class="rg-quick">' +
+          '<button type="button" class="rg-quick-btn" data-offset="0">Hari Ini</button>' +
+          '<button type="button" class="rg-quick-btn" data-offset="-1">Kemarin</button>' +
+          '<button type="button" class="rg-quick-btn" data-offset="-7">7 Hari Lalu</button>' +
         '</div>' +
         '<div class="rg-info" id="rg_info">' +
           '<div class="rg-info-row"><span>Memuat data…</span></div>' +
@@ -97,6 +107,11 @@
       openModal('🖨 Cetak Laporan Harian', html, function(){ return false; });
 
       setTimeout(function(){
+        /* Init date widget supaya popup kalender bekerja */
+        if (typeof _initDateWidgets === 'function'){
+          _initDateWidgets(document.getElementById('mBody'));
+        }
+
         var submitBtn = document.getElementById('mSubmit');
         if (submitBtn){
           submitBtn.textContent = '📄 Generate PDF';
@@ -112,8 +127,33 @@
 
         var tglEl = document.getElementById('rg_tgl');
         if (tglEl){
-          tglEl.onchange = function(){ updateInfo(projectId, tglEl.value); };
+          tglEl.addEventListener('change', function(){
+            updateInfo(projectId, tglEl.value);
+          });
+          tglEl.addEventListener('input', function(){
+            updateInfo(projectId, tglEl.value);
+          });
         }
+
+        /* Quick date buttons */
+        document.querySelectorAll('.rg-quick-btn').forEach(function(btn){
+          btn.onclick = function(){
+            var offset = parseInt(btn.getAttribute('data-offset'), 10) || 0;
+            var d = new Date();
+            d.setDate(d.getDate() + offset);
+            var iso = d.toISOString().slice(0,10);
+            var tglNative = document.getElementById('rg_tgl');
+            if (tglNative){
+              tglNative.value = iso;
+              /* Trigger sync face widget */
+              if (typeof _syncDateWidgetFace === 'function'){
+                _syncDateWidgetFace(tglNative);
+              }
+              updateInfo(projectId, iso);
+            }
+          };
+        });
+
         updateInfo(projectId, today);
       }, 10);
     }
@@ -122,23 +162,35 @@
       var info = document.getElementById('rg_info');
       if (!info) return;
 
-      var proj = DB.projects.find(function(p){ return p.id === projectId; });
       var progress = DB.progress.filter(function(p){
         return p.project_id === projectId && (p.tanggal || '').split('T')[0] === tanggal;
       });
 
       var wbsDone = {};
       progress.forEach(function(p){ wbsDone[p.wbs_id] = true; });
-      var wbsCount = Object.keys(wbsDone).length;
+      var progressCount = Object.keys(wbsDone).length;
 
       var photos = DB.photos.filter(function(p){
         return p.project_id === projectId && (p.tanggal || '').split('T')[0] === tanggal;
       });
 
-      info.innerHTML =
-        '<div class="rg-info-row"><span>📊 Item WBS dikerjakan:</span><b>' + wbsCount + ' item</b></div>' +
-        '<div class="rg-info-row"><span>📷 Foto dokumentasi:</span><b>' + photos.length + ' foto</b></div>' +
-        '<div class="rg-info-row"><span>📅 Tanggal:</span><b>' + formatHariTgl(tanggal) + '</b></div>';
+      /* Kalau ada foto tapi tidak ada progress, tampilkan info foto saja */
+      var totalItems = progressCount;
+      var hasPhotoOnly = totalItems === 0 && photos.length > 0;
+
+      var html = '';
+      html += '<div class="rg-info-row"><span>📊 Item progress:</span><b>' + progressCount + ' item</b></div>';
+      html += '<div class="rg-info-row"><span>📷 Foto dokumentasi:</span><b>' + photos.length + ' foto</b></div>';
+      html += '<div class="rg-info-row"><span>📅 Tanggal:</span><b>' + formatHariTgl(tanggal) + '</b></div>';
+
+      /* Warning kalau kosong total */
+      if (totalItems === 0 && photos.length === 0){
+        html += '<div class="rg-info-warn">⚠ Belum ada progress atau foto pada tanggal ini. Laporan tetap bisa dicetak, namun tabel &amp; foto akan kosong.</div>';
+      } else if (hasPhotoOnly){
+        html += '<div class="rg-info-note">ℹ️ Ada foto tapi belum ada input progress pada tanggal ini. Foto akan tetap dimuat ke laporan.</div>';
+      }
+
+      info.innerHTML = html;
     }
 
     /* ═══════════════════════════════════════════════════════════
@@ -158,24 +210,37 @@
     }
 
     function buildHarianHTML(proj, meta, tanggal){
-      // Ambil progress hari ini
+
+      /* ═══ Ambil data foto lebih dulu ═══ */
+      var photos = DB.photos.filter(function(p){
+        return p.project_id === proj.id && (p.tanggal || '').split('T')[0] === tanggal;
+      }).sort(function(a,b){ return (a.urutan||0)-(b.urutan||0); });
+
+      /* ═══ Ambil progress ═══ */
       var progress = DB.progress.filter(function(p){
         return p.project_id === proj.id && (p.tanggal || '').split('T')[0] === tanggal;
       });
 
-      // Group by WBS
+      /* Group progress by WBS */
       var byWbs = {};
       progress.forEach(function(p){
         if (!byWbs[p.wbs_id]) byWbs[p.wbs_id] = 0;
         byWbs[p.wbs_id] += _num(p.volume);
       });
 
-      // Hitung total proyek
+      /* Kalau tidak ada progress tapi ada foto, ambil WBS unik dari foto */
+      if (Object.keys(byWbs).length === 0 && photos.length > 0){
+        photos.forEach(function(p){
+          if (!byWbs[p.wbs_id]) byWbs[p.wbs_id] = 0;
+        });
+      }
+
+      /* Hitung total proyek */
       var wbsRows = (typeof Calc !== 'undefined' && Calc.wbsRows) ? Calc.wbsRows(proj.id) : [];
       var totalRAB = wbsRows.filter(function(r){ return !r.isGroup; })
         .reduce(function(s, r){ return s + _num(r.total_rab); }, 0) || 1;
 
-      // Baris tabel
+      /* Baris tabel */
       var rowsData = [];
       Object.keys(byWbs).forEach(function(wbsId){
         var w = DB.project_wbs.find(function(x){ return x.id === wbsId; });
@@ -183,10 +248,13 @@
         var r = wbsRows.find(function(x){ return x.id === wbsId; });
         var totalRab = r ? _num(r.total_rab) : 0;
         var bobot = totalRab / totalRAB * 100;
-        var volHari = byWbs[wbsId];
+        var volHari = byWbs[wbsId] || 0;
         var volRAB = _num(w.volume_rab);
         var pctHari = volRAB > 0 ? (volHari / volRAB * 100) : 0;
         var pctBobotHari = bobot * (pctHari / 100);
+
+        /* Count foto untuk WBS ini */
+        var photoCount = photos.filter(function(ph){ return ph.wbs_id === wbsId; }).length;
 
         rowsData.push({
           kode: w.kode_wbs,
@@ -196,7 +264,8 @@
           volRAB: volRAB,
           pctHari: pctHari,
           bobot: bobot,
-          pctBobotHari: pctBobotHari
+          pctBobotHari: pctBobotHari,
+          photoCount: photoCount
         });
       });
 
@@ -281,13 +350,14 @@
           '<table class="rg-table">' +
             '<thead>' +
               '<tr>' +
-                '<th style="width:40px">No</th>' +
-                '<th style="width:70px">Kode</th>' +
+                '<th style="width:35px">No</th>' +
+                '<th style="width:65px">Kode</th>' +
                 '<th>Uraian Pekerjaan</th>' +
-                '<th style="width:60px">Sat</th>' +
-                '<th style="width:90px" class="rg-num">Vol Hari Ini</th>' +
-                '<th style="width:80px" class="rg-num">% Item</th>' +
-                '<th style="width:80px" class="rg-num">Bobot %</th>' +
+                '<th style="width:45px">Sat</th>' +
+                '<th style="width:75px" class="rg-num">Vol Hari Ini</th>' +
+                '<th style="width:65px" class="rg-num">% Item</th>' +
+                '<th style="width:70px" class="rg-num">Bobot %</th>' +
+                '<th style="width:40px" class="rg-center">Foto</th>' +
               '</tr>' +
             '</thead>' +
             '<tbody>' +
@@ -301,13 +371,14 @@
                       '<td class="rg-num">' + _fmt(r.volHari, 2) + '</td>' +
                       '<td class="rg-num">' + _fmt(r.pctHari, 2) + '%</td>' +
                       '<td class="rg-num"><b>' + _fmt(r.pctBobotHari, 3) + '%</b></td>' +
+                      '<td class="rg-center">' + (r.photoCount > 0 ? '📷 ' + r.photoCount : '—') + '</td>' +
                     '</tr>';
                   }).join('')
-                : '<tr><td colspan="7" class="rg-empty">Tidak ada pekerjaan yang dilaporkan pada tanggal ini</td></tr>') +
+                : '<tr><td colspan="8" class="rg-empty">Tidak ada pekerjaan yang dilaporkan pada tanggal ini</td></tr>') +
             '</tbody>' +
             '<tfoot>' +
               '<tr>' +
-                '<td colspan="6" class="rg-num rg-bold">Progres Hari Ini</td>' +
+                '<td colspan="7" class="rg-num rg-bold">Progres Hari Ini</td>' +
                 '<td class="rg-num rg-bold">' + _fmt(pctHariIni, 3) + '%</td>' +
               '</tr>' +
             '</tfoot>' +
@@ -335,7 +406,7 @@
 
           /* Foto */
           (photos.length
-            ? '<div class="rg-section-title">C. Dokumentasi Foto</div>' +
+            ? '<div class="rg-section-title">C. Dokumentasi Foto (' + photos.length + ')</div>' +
               '<div class="rg-photo-grid">' +
                 photos.map(function(p){
                   var w = DB.project_wbs.find(function(x){ return x.id === p.wbs_id; });
