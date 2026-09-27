@@ -41,7 +41,7 @@ function generateDefaultCashFlow(projectId) {
   const totals = Calc.totals(projectId);
 
   const nilaiKontrakNetto = num(proj.nilai_kontrak) / (1 + num(SET.ppn) / 100) || totals.rab;
-  const totalRAP = totals.rap || 1;
+  const totalRAP = totals.rap; // ← HAPUS `|| 1` agar tidak menjadi Rp 1
 
   _cashFlowDataLocal = [];
 
