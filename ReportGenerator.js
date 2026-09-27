@@ -447,36 +447,72 @@
        ═══════════════════════════════════════════════════════════ */
 
     function renderToPDF(html, filename){
-      // Container sementara di body (invisible, ukuran A4)
+      /* ═══ Buat container sementara di body (invisible, ukuran A4) ═══ */
       var temp = document.createElement('div');
-      temp.style.cssText = 'position:fixed;left:-9999px;top:0;width:794px;background:#fff;';
-      temp.innerHTML = '<style>' + getPDFStyles() + '</style>' + html;
+      temp.id = 'pdfRenderTemp';
+      temp.style.cssText = 'position:fixed;left:-9999px;top:0;width:794px;background:#ffffff;overflow:visible;';
+      temp.innerHTML = html;   /* ← KONTEN SAJA, tanpa <style> tag */
+
+      /* ═══ Inject CSS ke document.head (agar html2canvas baca dengan benar) ═══ */
+      var styleEl = document.createElement('style');
+      styleEl.id = 'pdfRenderStyles';
+      styleEl.textContent = getPDFStyles();
+      document.head.appendChild(styleEl);
+
       document.body.appendChild(temp);
 
-      // Konfigurasi html2pdf
-      var opt = {
-        margin:       [10, 10, 10, 10],
-        filename:     filename,
-        image:        { type: 'jpeg', quality: 0.95 },
-        html2canvas:  { scale: 2, useCORS: true, backgroundColor: '#ffffff' },
-        jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' },
-        pagebreak:    { mode: ['avoid-all', 'css', 'legacy'] }
-      };
+      /* ═══ Tunggu semua gambar (logo) selesai dimuat ═══ */
+      var images = temp.querySelectorAll('img');
+      var imgPromises = Array.prototype.map.call(images, function(img){
+        if (img.complete) return Promise.resolve();
+        return new Promise(function(resolve){
+          img.onload = resolve;
+          img.onerror = resolve;   /* tetap lanjut walau gagal */
+          /* Timeout 3 detik per gambar */
+          setTimeout(resolve, 3000);
+        });
+      });
 
       _toast('⏳ Sedang membuat PDF...');
 
-      /* Generate blob URL (bukan langsung save) */
-      html2pdf().set(opt).from(temp.firstElementChild || temp)
-        .outputPdf('bloburl')
-        .then(function(blobUrl){
-          document.body.removeChild(temp);
-          openPdfPreview(blobUrl, filename);
-        })
-        .catch(function(err){
-          document.body.removeChild(temp);
-          console.error(err);
-          _toast('Gagal membuat PDF: ' + err.message, false);
-        });
+      Promise.all(imgPromises).then(function(){
+        /* Beri waktu ekstra untuk render DOM */
+        setTimeout(function(){
+          var opt = {
+            margin:       [10, 10, 10, 10],
+            filename:     filename,
+            image:        { type: 'jpeg', quality: 0.95 },
+            html2canvas:  {
+              scale: 2,
+              useCORS: true,
+              backgroundColor: '#ffffff',
+              logging: false,
+              scrollX: 0,
+              scrollY: 0,
+              windowWidth: 794
+            },
+            jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' },
+            pagebreak:    { mode: ['avoid-all', 'css', 'legacy'] }
+          };
+
+          /* ═══ FIX UTAMA: render temp (BUKAN firstElementChild) ═══ */
+          html2pdf().set(opt).from(temp)
+            .outputPdf('bloburl')
+            .then(function(blobUrl){
+              /* Cleanup */
+              if (temp.parentNode) temp.parentNode.removeChild(temp);
+              if (styleEl.parentNode) styleEl.parentNode.removeChild(styleEl);
+
+              openPdfPreview(blobUrl, filename);
+            })
+            .catch(function(err){
+              if (temp.parentNode) temp.parentNode.removeChild(temp);
+              if (styleEl.parentNode) styleEl.parentNode.removeChild(styleEl);
+              console.error('[ReportGenerator] PDF error:', err);
+              _toast('Gagal membuat PDF: ' + err.message, false);
+            });
+        }, 300);
+      });
     }
 
          /* ═══════════════════════════════════════════════════════════
