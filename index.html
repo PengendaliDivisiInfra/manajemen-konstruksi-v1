@@ -2515,9 +2515,9 @@ function formProject(id){
       </div>
     </div>
     <div class="row" style="margin-top:12px">
-      <div class="field"><label class="f">Durasi (hari)</label><input id="fpj_durh" readonly style="font-weight:700;color:var(--acc2)" /></div>
-      <div class="field"><label class="f">Durasi (minggu)</label><input id="fpj_durw" type="number" min="1" style="font-weight:700;color:var(--acc2)" /></div>
-      <div class="field"><label class="f">Hari Kerja Efektif</label><input id="fpj_wd" readonly style="font-weight:700;color:var(--warn)" /></div>
+      <div class="field"><label class="f">Durasi (hari kalender)</label><input id="fpj_durh" type="number" readonly style="font-weight:700;color:var(--acc2)" /></div>
+      <div class="field"><label class="f">Durasi (minggu) — bisa diedit manual</label><input id="fpj_durw" type="number" min="1" step="1" style="font-weight:700;color:var(--acc2)" /></div>
+      <div class="field"><label class="f">Hari Kerja Efektif</label><input id="fpj_wd" type="number" readonly style="font-weight:700;color:var(--warn)" /></div>
     </div>
     ${!p ? `<p class="hint" style="margin-top:12px">⚙ Saat disimpan, sistem otomatis mengkloning template AHSP master ke <code>project_ahsp_details</code>.</p>` : ''}
   `;
@@ -2591,16 +2591,26 @@ function formProject(id){
     const cal = WorkingCalendar.get($('#fpj_cal').value);
     const mode = $('#fpj_mode').value;
     const d = hitungDurasiLengkap($('#fpj_tm').value, $('#fpj_ts').value, cal, mode);
-    $('#fpj_durh').value = d.durasi_hari + ' hari';
-    $('#fpj_durw').value = d.durasi_minggu + ' minggu';
-    $('#fpj_wd').value   = d.durasi_kerja + ' hari kerja efektif';
+    // Hanya isi angka murni ke input (tanpa satuan "hari"/"minggu") agar HTML5 validation lolos
+    $('#fpj_durh').value = d.durasi_hari;
+    $('#fpj_durw').value = d.durasi_minggu;
+    $('#fpj_wd').value   = d.durasi_kerja;
   };
   ['fpj_tm','fpj_ts','fpj_cal','fpj_mode'].forEach(i => {
     const el = document.getElementById(i);
     if (el) el.onchange = recompute;
   });
   recompute();
-
+    // Kalau user edit durasi manual, biarkan (tidak ditimpa otomatis)
+  const durWEl = document.getElementById('fpj_durw');
+  if (durWEl){
+    durWEl.addEventListener('input', () => {
+      // Hanya angka yang valid
+      const v = parseInt(durWEl.value, 10);
+      if (isNaN(v) || v < 1) durWEl.value = 1;
+    });
+  }
+  
   AUTOSAVE.attachForm('form_project_' + (id || 'new'));
 }
 
