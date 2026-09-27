@@ -447,36 +447,62 @@
        ═══════════════════════════════════════════════════════════ */
 
     function renderToPDF(html, filename){
-      /* ═══ Buat container sementara di body (invisible, ukuran A4) ═══ */
+      /* ═══ 1. Loading overlay (tutupi user, biar tidak lihat konten di bawah) ═══ */
+      var overlay = document.createElement('div');
+      overlay.id = 'pdfRenderOverlay';
+      overlay.style.cssText =
+        'position:fixed;inset:0;background:rgba(4,9,18,.92);' +
+        'backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);' +
+        'z-index:99998;display:flex;align-items:center;justify-content:center;' +
+        'color:#e6edf7;font-family:Segoe UI,Arial,sans-serif;';
+      overlay.innerHTML =
+        '<div style="text-align:center">' +
+          '<div style="font-size:36px;margin-bottom:14px">⏳</div>' +
+          '<div style="font-size:15px;font-weight:700;margin-bottom:6px">Sedang membuat PDF...</div>' +
+          '<div style="font-size:11.5px;color:#8fa3c4">Mohon tunggu beberapa saat</div>' +
+        '</div>';
+      document.body.appendChild(overlay);
+
+      /* ═══ 2. Temp element dengan BASE STYLE EKSPLISIT ═══
+         Ini KUNCI utama: color, font-family, font-size, line-height
+         di-set langsung di element agar TIDAK mewarisi dark theme app. */
       var temp = document.createElement('div');
       temp.id = 'pdfRenderTemp';
-      temp.style.cssText = 'position:fixed;left:-9999px;top:0;width:794px;background:#ffffff;overflow:visible;';
-      temp.innerHTML = html;   /* ← KONTEN SAJA, tanpa <style> tag */
+      temp.style.cssText =
+        'position:absolute;top:0;left:0;' +
+        'width:794px;' +
+        'background:#ffffff !important;' +
+        'color:#111111 !important;' +                    /* ← FIX 1: text hitam */
+        'font-family:Arial,Helvetica,sans-serif !important;' +  /* ← FIX 2: font PDF */
+        'font-size:10.5px !important;' +
+        'line-height:1.4 !important;' +
+        'z-index:99997;' +
+        'padding:0;' +
+        'margin:0;';
+      temp.innerHTML = html;
+      document.body.appendChild(temp);
 
-      /* ═══ Inject CSS ke document.head (agar html2canvas baca dengan benar) ═══ */
+      /* ═══ 3. Inject styles ke document.head (scoped ke .rg-page) ═══ */
       var styleEl = document.createElement('style');
       styleEl.id = 'pdfRenderStyles';
       styleEl.textContent = getPDFStyles();
       document.head.appendChild(styleEl);
 
-      document.body.appendChild(temp);
-
-      /* ═══ Tunggu semua gambar (logo) selesai dimuat ═══ */
+      /* ═══ 4. Tunggu semua gambar (logo) selesai dimuat ═══ */
       var images = temp.querySelectorAll('img');
-      var imgPromises = Array.prototype.map.call(images, function(img){
-        if (img.complete) return Promise.resolve();
+      var waitImages = Array.prototype.map.call(images, function(img){
+        if (img.complete && img.naturalWidth > 0) return Promise.resolve();
         return new Promise(function(resolve){
           img.onload = resolve;
-          img.onerror = resolve;   /* tetap lanjut walau gagal */
-          /* Timeout 3 detik per gambar */
+          img.onerror = resolve;
           setTimeout(resolve, 3000);
         });
       });
 
       _toast('⏳ Sedang membuat PDF...');
 
-      Promise.all(imgPromises).then(function(){
-        /* Beri waktu ekstra untuk render DOM */
+      Promise.all(waitImages).then(function(){
+        /* Beri DOM waktu render sebelum html2canvas snapshot */
         setTimeout(function(){
           var opt = {
             margin:       [10, 10, 10, 10],
@@ -492,26 +518,27 @@
               windowWidth: 794
             },
             jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' },
-            pagebreak:    { mode: ['avoid-all', 'css', 'legacy'] }
+            pagebreak:    { mode: ['css', 'legacy'] }
           };
 
-          /* ═══ FIX UTAMA: render temp (BUKAN firstElementChild) ═══ */
           html2pdf().set(opt).from(temp)
             .outputPdf('bloburl')
             .then(function(blobUrl){
-              /* Cleanup */
-              if (temp.parentNode) temp.parentNode.removeChild(temp);
-              if (styleEl.parentNode) styleEl.parentNode.removeChild(styleEl);
-
+              cleanup();
               openPdfPreview(blobUrl, filename);
             })
             .catch(function(err){
-              if (temp.parentNode) temp.parentNode.removeChild(temp);
-              if (styleEl.parentNode) styleEl.parentNode.removeChild(styleEl);
+              cleanup();
               console.error('[ReportGenerator] PDF error:', err);
               _toast('Gagal membuat PDF: ' + err.message, false);
             });
-        }, 300);
+
+          function cleanup(){
+            if (temp.parentNode) temp.parentNode.removeChild(temp);
+            if (styleEl.parentNode) styleEl.parentNode.removeChild(styleEl);
+            if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+          }
+        }, 500);
       });
     }
 
@@ -654,7 +681,8 @@
     function getPDFStyles(){
       return '' +
         '* { box-sizing: border-box; }' +
-        'body { margin: 0; padding: 0; font-family: Arial, sans-serif; color: #111; font-size: 10.5px; line-height: 1.4; }' +
+        '.rg-page, .rg-page * { color: #111 !important; }' +          /* ← FIX 3 */
+        '.rg-page { margin: 0; padding: 0; background: #ffffff; font-family: Arial, sans-serif; font-size: 10.5px; line-height: 1.4; }' +
         '.rg-page { padding: 0; background: #fff; }' +
 
         /* Header */
