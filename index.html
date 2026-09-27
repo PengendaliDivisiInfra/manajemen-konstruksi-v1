@@ -2531,7 +2531,18 @@ function formProject(id){
     const calId = $('#fpj_cal').value;
     const mode = $('#fpj_mode').value;
     const cal = WorkingCalendar.get(calId);
-    const dur = hitungDurasiLengkap(tm, ts, cal, mode);
+    let dur;
+    if (typeof hitungDurasiLengkap === 'function') {
+      dur = hitungDurasiLengkap(tm, ts, cal, mode);
+    } else {
+      // Fallback aman jika fungsi dari Schedule.js tidak termuat
+      const d1 = new Date(tm);
+      const d2 = new Date(ts);
+      const diffMs = d2.getTime() - d1.getTime();
+      const diffDays = Math.max(0, Math.round(diffMs / (1000*60*60*24)));
+      const diffWeeks = Math.max(1, Math.ceil(diffDays / 7));
+      dur = { durasi_hari: diffDays, durasi_minggu: diffWeeks, durasi_kerja: Math.round(diffDays * (5/7)) };
+    }
 
     const obj = {
       id: p?.id || uid('prj'),
