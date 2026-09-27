@@ -310,12 +310,20 @@
 
       // TTD
       function ttdBlock(data){
+        var nikStr = String(data.nik || '').trim();
+        var nikHTML = nikStr !== ''
+          ? '<div class="rg-ttd-nik">NIP/NIK: ' + _esc(nikStr) + '</div>'
+          : '';
+        var namaStr = String(data.nama || '').trim();
+        var namaHTML = namaStr !== ''
+          ? '<b>' + _esc(namaStr) + '</b>'
+          : '<b style="letter-spacing:1px">................................</b>';
         return '' +
           '<div class="rg-ttd">' +
             '<div class="rg-ttd-jabatan">' + _esc(data.jabatan || '') + '</div>' +
             '<div class="rg-ttd-space"></div>' +
-            '<div class="rg-ttd-nama"><b>' + _esc(data.nama || '................................') + '</b></div>' +
-            (data.nik ? '<div class="rg-ttd-nik">NIP/NIK: ' + _esc(data.nik) + '</div>' : '') +
+            '<div class="rg-ttd-nama">' + namaHTML + '</div>' +
+            nikHTML +
           '</div>';
       }
 
@@ -354,7 +362,17 @@
           '<table class="rg-table">' +
             '<thead>' +
               '<tr>' +
-                '<th style="width:35px">No</th>' +
+                ''<thead>' +
+                 '<tr>' +
+                   '<th style="width:35px">No</th>' +
+                   '<th style="width:65px">Kode</th>' +
+                   '<th>Uraian Pekerjaan</th>' +
+                   '<th style="width:45px">Sat</th>' +
+                   '<th style="width:90px" class="rg-num">Vol Hari Ini</th>' +
+                   '<th style="width:75px" class="rg-num">% Item</th>' +
+                   '<th style="width:80px" class="rg-num">Bobot %</th>' +
+                 '</tr>' +
+               '</thead>' +
                 '<th style="width:65px">Kode</th>' +
                 '<th>Uraian Pekerjaan</th>' +
                 '<th style="width:45px">Sat</th>' +
@@ -375,14 +393,13 @@
                       '<td class="rg-num">' + _fmt(r.volHari, 2) + '</td>' +
                       '<td class="rg-num">' + _fmt(r.pctHari, 2) + '%</td>' +
                       '<td class="rg-num"><b>' + _fmt(r.pctBobotHari, 3) + '%</b></td>' +
-                      '<td class="rg-center">' + (r.photoCount > 0 ? '📷 ' + r.photoCount : '—') + '</td>' +
                     '</tr>';
                   }).join('')
                 : '<tr><td colspan="8" class="rg-empty">Tidak ada pekerjaan yang dilaporkan pada tanggal ini</td></tr>') +
             '</tbody>' +
             '<tfoot>' +
               '<tr>' +
-                '<td colspan="7" class="rg-num rg-bold">Progres Hari Ini</td>' +
+                '<td colspan="6" class="rg-num rg-bold">Progres Hari Ini</td>' +
                 '<td class="rg-num rg-bold">' + _fmt(pctHariIni, 3) + '%</td>' +
               '</tr>' +
             '</tfoot>' +
@@ -408,37 +425,38 @@
             '</tr>' +
           '</table>' +
 
-          /* Foto */
-          (photos.length
-            ? '<div class="rg-section-title">C. Dokumentasi Foto (' + photos.length + ')</div>' +
-              '<div class="rg-photo-grid">' +
-                photos.map(function(p){
-                  var w = DB.project_wbs.find(function(x){ return x.id === p.wbs_id; });
-                  var cap = p.caption || (w ? (w.kode_wbs + ' — ' + w.uraian) : '');
-                  return '<div class="rg-photo-item">' +
-                    '<img src="' + p.file_data + '" />' +
-                    '<div class="rg-photo-cap">' + _esc(cap) + '</div>' +
-                  '</div>';
-                }).join('') +
-              '</div>'
-            : '') +
-
-          /* TTD */
-          '<div class="rg-section-title">D. Tanda Tangan</div>' +
-          '<div class="rg-ttd-wrap">' +
-            '<div class="rg-ttd-col">' + ttdBlock(meta.ttd_project_manager || {}) + '</div>' +
-            '<div class="rg-ttd-col">' + ttdBlock(meta.ttd_team_leader || {}) + '</div>' +
-          '</div>' +
-          '<div class="rg-ttd-wrap" style="margin-top:10px">' +
-            '<div class="rg-ttd-col">' + ttdBlock(meta.ttd_direksi || {}) + '</div>' +
-            '<div class="rg-ttd-col">' + ttdBlock(meta.ttd_ppk || {}) + '</div>' +
-          '</div>' +
-
-          '<div class="rg-footer">' +
-            'Dicetak: ' + new Date().toLocaleString('id-ID') +
-            ' · Manajemen Konstruksi v1' +
-          '</div>' +
-
+            /* ═══ C. LAMPIRAN FOTO & TANDA TANGAN ═══ */
+            '<div class="rg-section-title">C. LAMPIRAN FOTO &amp; TANDA TANGAN</div>' +
+            
+            /* Sub-bagian foto (kalau ada) */
+            (photos.length
+              ? '<div class="rg-subsection-label">C.1 Dokumentasi Foto (' + photos.length + ')</div>' +
+                '<div class="rg-photo-grid">' +
+                  photos.map(function(p){
+                    var w = DB.project_wbs.find(function(x){ return x.id === p.wbs_id; });
+                    var cap = p.caption || (w ? (w.kode_wbs + ' — ' + w.uraian) : '');
+                    return '<div class="rg-photo-item">' +
+                      '<img src="' + p.file_data + '" />' +
+                      '<div class="rg-photo-cap">' + _esc(cap) + '</div>' +
+                    '</div>';
+                  }).join('') +
+                '</div>'
+              : '<div class="rg-empty-note">Tidak ada foto dokumentasi pada tanggal ini.</div>'
+            ) +
+            
+            /* Divider */
+            '<div class="rg-subsection-divider"></div>' +
+            
+            /* Sub-bagian TTD */
+            '<div class="rg-subsection-label">C.2 Tanda Tangan</div>' +
+            '<div class="rg-ttd-wrap">' +
+              '<div class="rg-ttd-col">' + ttdBlock(meta.ttd_project_manager || {}) + '</div>' +
+              '<div class="rg-ttd-col">' + ttdBlock(meta.ttd_team_leader || {}) + '</div>' +
+            '</div>' +
+            '<div class="rg-ttd-wrap" style="margin-top:10px">' +
+              '<div class="rg-ttd-col">' + ttdBlock(meta.ttd_direksi || {}) + '</div>' +
+              '<div class="rg-ttd-col">' + ttdBlock(meta.ttd_ppk || {}) + '</div>' +
+            '</div>' +
         '</div>';
     }
 
@@ -797,8 +815,43 @@
         /* Footer */
         '.rg-footer { margin-top: 16px; padding-top: 6px; border-top: 1px dashed #999; font-size: 8.5px; color: #666; text-align: right; }' +
 
+                 /* ═══ PROFESSIONAL SPACING ═══ */
+        '.rg-section-title { margin: 18px 0 10px 0; padding: 6px 12px; font-size: 11px; }' +
+        '.rg-header { padding-bottom: 10px; margin-bottom: 4px; }' +
+        '.rg-hr { margin: 6px 0 16px 0; height: 3px; }' +
+        '.rg-info-table { margin-bottom: 20px; padding: 0 6px; line-height: 1.7; }' +
+        '.rg-info-table td { padding: 3px 4px; }' +
+        '.rg-table { margin-bottom: 18px; }' +
+        '.rg-table th, .rg-table td { padding: 6px 8px; }' +
+        '.rg-summary { margin-bottom: 20px; }' +
+        '.rg-summary td { padding: 8px 10px; }' +
+
+        /* ═══ SUB-SECTION (Lampiran) ═══ */
+        '.rg-subsection-label { font-size: 10.5px; font-weight: 700; color: #1f4e79; ' +
+          'margin: 14px 0 8px 0; padding-left: 8px; border-left: 3px solid #4a90d9; ' +
+          'text-transform: uppercase; letter-spacing: .4px; }' +
+        '.rg-subsection-divider { height: 1px; background: #d0d8e4; margin: 18px 0 14px 0; }' +
+        '.rg-empty-note { font-size: 10px; font-style: italic; color: #777; ' +
+          'text-align: center; padding: 14px; background: #f8f9fb; border-radius: 4px; margin-bottom: 14px; }' +
+
+        /* ═══ PHOTO GRID IMPROVED ═══ */
+        '.rg-photo-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 16px; }' +
+        '.rg-photo-item { border: 1px solid #ccc; padding: 5px; background: #fff; border-radius: 4px; page-break-inside: avoid; }' +
+        '.rg-photo-item img { width: 100%; height: 140px; object-fit: cover; display: block; border-radius: 2px; }' +
+        '.rg-photo-cap { font-size: 9.5px; color: #333; margin-top: 4px; line-height: 1.35; min-height: 24px; font-weight: 500; }' +
+
+        /* ═══ TTD IMPROVED ═══ */
+        '.rg-ttd-wrap { display: flex; justify-content: space-between; gap: 24px; margin-top: 14px; page-break-inside: avoid; }' +
+        '.rg-ttd-col { flex: 1; text-align: center; font-size: 10.5px; }' +
+        '.rg-ttd { padding: 8px 4px; }' +
+        '.rg-ttd-jabatan { font-weight: 700; text-transform: uppercase; font-size: 10px; margin-bottom: 4px; }' +
+        '.rg-ttd-space { height: 60px; }' +
+        '.rg-ttd-nama { border-top: 1px solid #333; padding-top: 4px; font-size: 10.5px; margin-top: 4px; }' +
+        '.rg-ttd-nik { font-size: 9px; color: #555; margin-top: 2px; }' +
+
         '.rg-page { page-break-after: always; }' +
-        '.rg-page:last-child { page-break-after: auto; }';
+         '.rg-page:last-child { page-break-after: auto; }' +
+         '@page { size: A4 portrait; margin: 18mm 15mm 18mm 15mm; }';
     }
 
     /* ═══════════════════════════════════════════════════════════
