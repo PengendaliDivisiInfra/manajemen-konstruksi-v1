@@ -447,7 +447,7 @@
        ═══════════════════════════════════════════════════════════ */
 
     function renderToPDF(html, filename){
-      /* ═══ 1. Loading overlay (tutupi user, biar tidak lihat konten di bawah) ═══ */
+      /* ═══ 1. Loading overlay ═══ */
       var overlay = document.createElement('div');
       overlay.id = 'pdfRenderOverlay';
       overlay.style.cssText =
@@ -463,34 +463,32 @@
         '</div>';
       document.body.appendChild(overlay);
 
-      /* ═══ 2. Temp element dengan BASE STYLE EKSPLISIT ═══
-         Ini KUNCI utama: color, font-family, font-size, line-height
-         di-set langsung di element agar TIDAK mewarisi dark theme app. */
-      var temp = document.createElement('div');
-      temp.id = 'pdfRenderTemp';
-      temp.style.cssText =
-        'position:absolute;top:0;left:0;' +
-        'width:794px;' +
-        'background:#ffffff !important;' +
-        'color:#111111 !important;' +                    /* ← FIX 1: text hitam */
-        'font-family:Arial,Helvetica,sans-serif !important;' +  /* ← FIX 2: font PDF */
-        'font-size:10.5px !important;' +
-        'line-height:1.4 !important;' +
-        'z-index:99997;' +
-        'padding:0;' +
-        'margin:0;';
-      temp.innerHTML = html;
-      document.body.appendChild(temp);
+      /* ═══ 2. Buat iframe terisolasi (KUNCI UTAMA) ═══
+         iframe punya document terpisah → CSS app TIDAK menjalar masuk.
+         html2canvas bisa snapshot body iframe dengan bersih. */
+      var iframe = document.createElement('iframe');
+      iframe.id = 'pdfRenderIframe';
+      iframe.style.cssText =
+        'position:fixed;left:0;top:0;width:794px;height:1123px;' +
+        'border:0;z-index:99997;background:#ffffff;';
+      document.body.appendChild(iframe);
 
-      /* ═══ 3. Inject styles ke document.head (scoped ke .rg-page) ═══ */
-      var styleEl = document.createElement('style');
-      styleEl.id = 'pdfRenderStyles';
-      styleEl.textContent = getPDFStyles();
-      document.head.appendChild(styleEl);
+      /* ═══ 3. Tulis HTML + CSS ke dalam iframe ═══ */
+      var idoc = iframe.contentDocument || iframe.contentWindow.document;
+      idoc.open();
+      idoc.write(
+        '<!DOCTYPE html>' +
+        '<html><head><meta charset="UTF-8">' +
+        '<style>' + getPDFStyles() + '</style>' +
+        '</head><body style="margin:0;padding:0;background:#ffffff;color:#111;">' +
+        html +
+        '</body></html>'
+      );
+      idoc.close();
 
-      /* ═══ 4. Tunggu semua gambar (logo) selesai dimuat ═══ */
-      var images = temp.querySelectorAll('img');
-      var waitImages = Array.prototype.map.call(images, function(img){
+      /* ═══ 4. Tunggu semua gambar (logo) dimuat di iframe ═══ */
+      var images = idoc.querySelectorAll('img');
+      var imgPromises = Array.prototype.map.call(images, function(img){
         if (img.complete && img.naturalWidth > 0) return Promise.resolve();
         return new Promise(function(resolve){
           img.onload = resolve;
@@ -501,9 +499,19 @@
 
       _toast('⏳ Sedang membuat PDF...');
 
-      Promise.all(waitImages).then(function(){
-        /* Beri DOM waktu render sebelum html2canvas snapshot */
+      Promise.all(imgPromises).then(function(){
+        /* Extra delay agar layout iframe settle */
         setTimeout(function(){
+
+          /* ═══ 5. Debug — log dimensi aktual iframe body ═══ */
+          var bodyEl = idoc.body;
+          console.log('%c[ReportGenerator] Iframe body dimensions:', 'color:#06b6d4;font-weight:bold');
+          console.log('  scrollWidth :', bodyEl.scrollWidth);
+          console.log('  scrollHeight:', bodyEl.scrollHeight);
+          console.log('  childCount  :', bodyEl.children.length);
+          console.log('  firstChild  :', bodyEl.firstElementChild ? bodyEl.firstElementChild.className : 'NONE');
+          console.log('  textContent :', (bodyEl.textContent || '').substring(0, 200));
+
           var opt = {
             margin:       [10, 10, 10, 10],
             filename:     filename,
@@ -521,24 +529,27 @@
             pagebreak:    { mode: ['css', 'legacy'] }
           };
 
-          html2pdf().set(opt).from(temp)
+          /* ═══ 6. Render body iframe (bukan temp element di parent) ═══ */
+          html2pdf().set(opt).from(bodyEl)
             .outputPdf('bloburl')
             .then(function(blobUrl){
-              cleanup();
+              /* Cleanup */
+              try {
+                if (iframe.parentNode) iframe.parentNode.removeChild(iframe);
+                if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+              } catch(e){}
+
               openPdfPreview(blobUrl, filename);
             })
             .catch(function(err){
-              cleanup();
+              try {
+                if (iframe.parentNode) iframe.parentNode.removeChild(iframe);
+                if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+              } catch(e){}
               console.error('[ReportGenerator] PDF error:', err);
               _toast('Gagal membuat PDF: ' + err.message, false);
             });
-
-          function cleanup(){
-            if (temp.parentNode) temp.parentNode.removeChild(temp);
-            if (styleEl.parentNode) styleEl.parentNode.removeChild(styleEl);
-            if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
-          }
-        }, 500);
+        }, 800);
       });
     }
 
