@@ -12,33 +12,21 @@ function initCashFlowModule() {
   const pid = STATE.activeProject;
   if (!pid) return;
 
-  // Regenerate data lokal jika beda proyek atau belum ada
+  // 1. Coba muat dari DB lokal (hasil pull dari server)
+  if (DB.cash_flow && DB.cash_flow.length) {
+    const fromDB = DB.cash_flow.filter(c => String(c.project_id) === String(pid));
+    if (fromDB.length) {
+      _cashFlowDataLocal = fromDB;
+    }
+  }
+
+  // 2. Jika tetap kosong, generate default
   if (!_cashFlowDataLocal.length || _cashFlowDataLocal[0]?.project_id !== pid) {
     generateDefaultCashFlow(pid);
   }
 
   renderCashFlowUI();
-
-  // Tombol generate ulang
-  const btnGen = $('#btnAutoCalcCF');
-  if (btnGen) {
-    btnGen.onclick = () => {
-      if (confirm('Generate ulang proyeksi otomatis berdasarkan Kurva S & Nilai Kontrak? Data realisasi yang belum tersimpan mungkin akan tertimpa.')) {
-        generateDefaultCashFlow(pid);
-        renderCashFlowUI();
-        toast('Proyeksi Cash Flow digenerate ulang');
-      }
-    };
-  }
-
-  // Tombol simpan
-  const btnSave = $('#btnSaveCF');
-  if (btnSave) {
-    btnSave.onclick = async () => {
-      collectCashFlowTableInputs();
-      await saveCashFlowToServer(pid);
-    };
-  }
+  // ... sisa kode hook tombol ...
 }
 
 /* ---------------------------------------------------------------------
