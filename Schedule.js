@@ -577,7 +577,8 @@ const CPM = {
    
    // Guard: hanya update jika WBS menghasilkan schedule valid
    const hasValidSchedule = items.length > 0 &&
-                            newFinishISO > projStartISO;
+                            newFinishISO > projStartISO &&
+                            !proj.manual_dates;
    
    if (hasValidSchedule && newFinishISO !== proj.tgl_selesai){
      proj.tgl_selesai = newFinishISO;
