@@ -26,7 +26,27 @@ function initCashFlowModule() {
   }
 
   renderCashFlowUI();
-  // ... sisa kode hook tombol ...
+
+  // Tombol generate ulang
+  const btnGen = $('#btnAutoCalcCF');
+  if (btnGen) {
+    btnGen.onclick = () => {
+      if (confirm('Generate ulang proyeksi otomatis berdasarkan Kurva S & Nilai Kontrak? Data realisasi yang belum tersimpan mungkin akan tertimpa.')) {
+        generateDefaultCashFlow(pid);
+        renderCashFlowUI();
+        toast('Proyeksi Cash Flow digenerate ulang');
+      }
+    };
+  }
+
+  // Tombol simpan
+  const btnSave = $('#btnSaveCF');
+  if (btnSave) {
+    btnSave.onclick = async () => {
+      collectCashFlowTableInputs();
+      await saveCashFlowToServer(pid);
+    };
+  }
 }
 
 /* ---------------------------------------------------------------------
@@ -41,7 +61,7 @@ function generateDefaultCashFlow(projectId) {
   const totals = Calc.totals(projectId);
 
   const nilaiKontrakNetto = num(proj.nilai_kontrak) / (1 + num(SET.ppn) / 100) || totals.rab;
-  const totalRAP = totals.rap; // ← HAPUS `|| 1` agar tidak menjadi Rp 1
+  const totalRAP = totals.rap; // HAPUS `|| 1` agar tidak menjadi Rp 1 jika RAP kosong
 
   _cashFlowDataLocal = [];
 
@@ -72,7 +92,7 @@ function generateDefaultCashFlow(projectId) {
 }
 
 /* ---------------------------------------------------------------------
-   COLLECT INPUT DARI TABEL
+   COLLECT INPUT DARI TABEL (Untuk tombol Simpan)
    --------------------------------------------------------------------- */
 function collectCashFlowTableInputs() {
   $$('#tblCashFlow tbody tr').forEach((tr, idx) => {
@@ -90,12 +110,21 @@ function collectCashFlowTableInputs() {
 }
 
 /* ---------------------------------------------------------------------
-   RENDER UI (KPI + TABEL)
+   RENDER UI UTAMA
    --------------------------------------------------------------------- */
 function renderCashFlowUI() {
   const rows = _cashFlowDataLocal;
   if (!rows.length) return;
 
+  renderCashFlowKPIs(rows);
+  renderCashFlowTable(rows);
+  renderCashFlowChart(rows);
+}
+
+/* ---------------------------------------------------------------------
+   RENDER KPI
+   --------------------------------------------------------------------- */
+function renderCashFlowKPIs(rows) {
   let totPlanIn = 0, totRealIn = 0, totPlanOut = 0, totRealOut = 0;
   rows.forEach(r => {
     totPlanIn  += num(r.rencana_masuk);
@@ -106,7 +135,6 @@ function renderCashFlowUI() {
 
   const netCashFlow = totRealIn - totRealOut;
 
-  // KPI
   $('#cfKPI').innerHTML = `
     <div class="kpi">
       <div class="lbl">Total Rencana Masuk</div>
@@ -129,8 +157,12 @@ function renderCashFlowUI() {
       <div class="sub">${netCashFlow >= 0 ? '✅ Surplus Kas' : '⚠ Defisit Kas'}</div>
     </div>
   `;
+}
 
-  // Header tabel
+/* ---------------------------------------------------------------------
+   RENDER TABEL
+   --------------------------------------------------------------------- */
+function renderCashFlowTable(rows) {
   const head = `<thead><tr>
     <th>Periode</th>
     <th class="num">Rencana Masuk (In)</th>
@@ -141,7 +173,6 @@ function renderCashFlowUI() {
     <th>Keterangan</th>
   </tr></thead>`;
 
-  // Body tabel
   let cumNet = 0;
   const body = rows.map((r, idx) => {
     const netM = num(r.realisasi_masuk) - num(r.realisasi_keluar);
@@ -169,8 +200,22 @@ function renderCashFlowUI() {
 
   $('#tblCashFlow').innerHTML = head + `<tbody>${body}</tbody>`;
 
-  // Chart
-  renderCashFlowChart(rows);
+  // ── TAMBAHKAN EVENT LISTENER REAL-TIME ──
+  $$('#tblCashFlow tbody input').forEach(inp => {
+    inp.oninput = () => {
+      const idx = inp.dataset.cfRm || inp.dataset.cfRk || inp.dataset.cfKet;
+      const item = _cashFlowDataLocal[idx];
+      if (!item) return;
+
+      if (inp.dataset.cfRm) item.realisasi_masuk = num(inp.value);
+      if (inp.dataset.cfRk) item.realisasi_keluar = num(inp.value);
+      if (inp.dataset.cfKet) item.keterangan = inp.value.trim();
+
+      // Update KPI & Chart secara real-time tanpa merender ulang tabel
+      renderCashFlowKPIs(_cashFlowDataLocal);
+      renderCashFlowChart(_cashFlowDataLocal);
+    };
+  });
 }
 
 /* ---------------------------------------------------------------------
@@ -310,7 +355,7 @@ async function saveCashFlowToServer(projectId) {
    --------------------------------------------------------------------- */
 function applyCashFlowHook() {
   if (typeof window.switchTab !== 'function') {
-    console.warn('[CashFlow] window.switchTab belum tersedia, pastikan script utama sudah dimuat.');
+    console.warn('[CashFlow] window.switchTab belum tersedia.');
     return;
   }
 
@@ -324,7 +369,6 @@ function applyCashFlowHook() {
   console.log('[CashFlow] ✅ Hook switchTab berhasil dipasang.');
 }
 
-// Tunggu DOM selesai dimuat sebelum memasang hook
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', applyCashFlowHook);
 } else {
