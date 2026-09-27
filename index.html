@@ -3335,6 +3335,10 @@ $('#btnPull').onclick = async () => {
     seedCalendarDefaults();
   }
   STATE.activeProject = DB.projects[0]?.id || '';
+    // Patch: Pastikan token tersimpan jika user sudah login
+  if (STATE.session && STATE.session.token) {
+    localStorage.setItem('mk_session_token', STATE.session.token);
+  }
 
   // Recalculate CPM untuk semua proyek
   DB.projects.forEach(p => {
