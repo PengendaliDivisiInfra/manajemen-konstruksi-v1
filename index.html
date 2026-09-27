@@ -3349,7 +3349,7 @@ const ENDPOINT_HEALTH = {
   deadUntil: 0,
   consecutiveFails: 0,
   lastError: null,
-  DEAD_TTL_MS: 5 * 60 * 1000,   // 5 menit
+  DEAD_TTL_MS: 30 * 1000, 
   FAIL_THRESHOLD: 3
 };
 
@@ -3392,13 +3392,27 @@ async function sheetRequest(action, payload){
         hint: 'Cek Apps Script → Deploy → Manage deployments. Pastikan Web App aktif, ' +
               'Execute as "Me", Who has access "Anyone". Copy URL /exec yang baru.'
       });
+    // ═══ RETRY OTOMATIS untuk 404 (redirect token expired) ═══
+    const is404 = err.message && err.message.includes('404');
+    const retryCount = (payload && payload._retryCount) || 0;
+
+    if (is404 && retryCount < 2){
+      console.warn('[sheetRequest] 404 → retry #' + (retryCount + 1) + ' setelah 2 detik...');
+      await new Promise(function(r){ setTimeout(r, 2000); });
+
+      // Retry dengan flag
+      var newPayload = Object.assign({}, payload, { _retryCount: retryCount + 1 });
+      return sheetRequest(action, newPayload);
+    }
+
+    ENDPOINT_HEALTH.consecutiveFails++;
+    if (ENDPOINT_HEALTH.consecutiveFails >= ENDPOINT_HEALTH.FAIL_THRESHOLD){
       ENDPOINT_HEALTH.dead = true;
       ENDPOINT_HEALTH.deadUntil = Date.now() + ENDPOINT_HEALTH.DEAD_TTL_MS;
-      ENDPOINT_HEALTH.consecutiveFails++;
-      ENDPOINT_HEALTH.lastError = e;
-      // JANGAN fallback blind untuk 404 — ini bug config, bukan CORS
-      console.warn('[sheetRequest] 404 → circuit opened for 5 min');
-      throw e;
+    }
+    ENDPOINT_HEALTH.lastError = err;
+    console.warn('[sheetRequest] gagal:', err.message);
+    throw err;
     }
 
     // ── 5xx / 403 / 405 → coba fallback blind (kemungkinan CORS) ──
