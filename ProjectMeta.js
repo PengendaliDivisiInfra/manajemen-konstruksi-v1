@@ -151,6 +151,7 @@
 
     function buildEditorHTML(proj, meta, opts){
       opts = opts || {};
+
       var banner = opts.isNewProject
         ? '<div class="pm-wizard-banner">' +
             '<div class="pm-wb-icon">🎉</div>' +
@@ -161,6 +162,14 @@
             '</div>' +
           '</div>'
         : '';
+
+      return banner +
+        '<div class="pm-tabs">' +
+          '<button class="pm-tab is-active" data-tab="identitas">🏛 Identitas</button>' +
+          '<button class="pm-tab" data-tab="logo">🖼 Logo</button>' +
+          '<button class="pm-tab" data-tab="lokasi">📍 Lokasi</button>' +
+          '<button class="pm-tab" data-tab="ttd">✍ Penandatangan</button>' +
+        '</div>' +
 
         /* ═══ TAB 1: IDENTITAS ═══ */
         '<div class="pm-tab-content is-active" data-tab="identitas">' +
@@ -444,7 +453,6 @@
       window.renderProjects = function(){
         _orig.apply(this, arguments);
 
-        // Setelah render selesai, inject tombol ke setiap row
         setTimeout(function(){
           document.querySelectorAll('[data-edit-prj]').forEach(function(btn){
             var prjId = btn.getAttribute('data-edit-prj');
@@ -468,15 +476,7 @@
       };
 
       console.log('%c[ProjectMeta.js] Hook renderProjects dipasang', 'color:#0891b2');
-       }
-
-    hookRenderProjects();
-
-    console.log('%c[ProjectMeta.js] ✅ Project Metadata module installed',
-      'color:#0891b2;font-weight:bold;font-size:13px');
     }
-
-       hookRenderProjects();
 
     /* ═══════════════════════════════════════════════════════════
        HOOK: Auto-Open Metadata Setelah Proyek Baru Dibuat
@@ -495,16 +495,13 @@
         var isNew = !id;
         var beforeCount = DB.projects.length;
 
-        // Panggil form asli
         _origFormProject.apply(this, arguments);
 
-        // Kalau ini form proyek baru, tunggu sampai project bertambah di DB
         if (isNew){
           var tries = 0;
           var timer = setInterval(function(){
             tries++;
 
-            // Berhasil disimpan
             if (DB.projects.length > beforeCount){
               clearInterval(timer);
               setTimeout(function(){
@@ -513,15 +510,12 @@
                   console.log('%c[ProjectMeta] Proyek baru dibuat → membuka Metadata',
                     'color:#0891b2;font-weight:bold');
                   _toast('Langkah 2: Lengkapi Metadata Laporan');
-
-                  // Buka editor meta dengan mode "wizard"
                   openEditor(newest.id, { isNewProject: true });
                 }
               }, 400);
               return;
             }
 
-            // Timeout setelah 3 menit (user mungkin batal)
             if (tries > 900){
               clearInterval(timer);
             }
@@ -532,7 +526,21 @@
       console.log('%c[ProjectMeta.js] Hook formProject dipasang', 'color:#0891b2');
     }
 
+    /* ═══════════════════════════════════════════════════════════
+       CALL BOTH HOOKS — HARUS DI DALAM install()
+       ═══════════════════════════════════════════════════════════ */
+
+    hookRenderProjects();
     hookFormProject();
+
+    console.log('%c[ProjectMeta.js] ✅ Project Metadata module installed',
+      'color:#0891b2;font-weight:bold;font-size:13px');
+
+  }   /* ← PENUTUP install() — HANYA SATU KURUNG */
+
+  /* ═══════════════════════════════════════════════════════════
+     BOOTSTRAP (module level)
+     ═══════════════════════════════════════════════════════════ */
 
   if (document.readyState === 'loading'){
     document.addEventListener('DOMContentLoaded', function(){ bootstrap(0); });
