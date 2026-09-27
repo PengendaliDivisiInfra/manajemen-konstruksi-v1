@@ -51,6 +51,7 @@
   <div class="tab" data-tab="ahsp">📐 AHSP &amp; Koefisien</div>
   <div class="tab" data-tab="wbs">🗂 WBS / BQ</div>
   <div class="tab" data-tab="schedule">📅 Master Schedule</div>
+  <div class="tab" data-tab="cashflow">💵 Cash Flow &amp; Actual Cost</div>
   <div class="tab" data-tab="calendar">🗓 Kalender Kerja</div>
   <div class="tab" data-tab="holidays">🎉 Hari Libur</div>
   <div class="tab" data-tab="analysis">🔍 Analisis Deviasi</div>
@@ -312,6 +313,37 @@
         <button class="btn btn-sm" id="btnConflictRefresh">🔄 Refresh</button>
       </div>
       <div id="conflictWrap"></div>
+    </div>
+  </section>
+
+  <!-- ===================== CASH FLOW & ACTUAL COST ===================== -->
+  <section class="section" id="sec-cashflow">
+    <div class="panel">
+      <div class="panel-head">
+        <div>
+          <h2>💵 Cash Flow &amp; Actual Cost</h2>
+          <p>Proyeksi Arus Kas Masuk (Termin) vs Keluar (RAP/Actual) per Periode Mingguan</p>
+        </div>
+        <div class="row">
+          <button class="btn" id="btnAutoCalcCF">⚡ Generate Otomatis dari Kurva S</button>
+          <button class="btn btn-ok" id="btnSaveCF">💾 Simpan Cash Flow</button>
+        </div>
+      </div>
+      <div class="grid g4" id="cfKPI"></div>
+    </div>
+
+    <div class="panel" style="margin-top:18px">
+      <div class="panel-head">
+        <div><h2>Grafik Arus Kas (Cumulative Cash In vs Out)</h2><p>Perbandingan rencana dan realisasi keuangan proyek</p></div>
+      </div>
+      <canvas id="chartCashFlow" style="max-height:320px"></canvas>
+    </div>
+
+    <div class="panel" style="margin-top:18px">
+      <div class="panel-head">
+        <div><h2>Tabel Rekonsiliasi Arus Kas Mingguan</h2><p>Edit langsung kolom Realisasi atau Keterangan sesuai kondisi riil</p></div>
+      </div>
+      <div class="tw" style="max-height:45vh"><table id="tblCashFlow"></table></div>
     </div>
   </section>
 
