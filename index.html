@@ -930,7 +930,8 @@ function emptyDB(){
     bekisting_breakdown: [],
     reconciliation: [],
     working_calendars: [],
-    holidays: []
+    holidays: [],
+    users: []
   };
 }
 
@@ -954,6 +955,8 @@ function loadDB(){
        'working_calendars','holidays'].forEach(k => {
         if (!DB[k]) DB[k] = [];
       });
+      
+      if (!DB.users) DB.users = []; 
       return true;
     }
   } catch(e){ console.error(e); }
