@@ -7055,6 +7055,31 @@ const LiveSync = {
         return;
       }
 
+         async status(){
+       if (!SET.sheetUrl || !SET.sheetUrl.trim()) {
+         return { ok: false, code: 'NO_URL', message: 'URL belum diatur' };
+       }
+       try {
+         const out = await sheetRequest('softStatus', {});
+         if (out && out.blind) {
+           return { ok: false, code: 'BLIND', blind: true, message: out.message };
+         }
+         return out;
+       } catch(e){
+         // ═══ Fallback offline mode ═══
+         if (e.message && e.message.includes('404')){
+           return {
+             ok: false,
+             code: 'OFFLINE_FALLBACK',
+             offline: true,
+             message: 'Mode Offline — Data tersimpan lokal',
+             hint: 'Koneksi ke Google Sheets tidak tersedia. Semua perubahan tetap tersimpan di browser. Coba "Push" manual saat koneksi pulih.'
+           };
+         }
+         // ... (kode existing)
+       }
+     }
+
       // Endpoint sehat → reset backoff
       this._resetBackoff();
 
