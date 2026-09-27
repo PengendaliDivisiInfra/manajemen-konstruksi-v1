@@ -5887,3 +5887,182 @@ canvas:not(.gantt-axis):not(.gantt-bars){
   color: #22d3ee;
   line-height: 1.5;
 }
+
+/* ═══════════════════════════════════════════════════════════
+   PDF PREVIEW MODAL
+   ═══════════════════════════════════════════════════════════ */
+.pdf-preview-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(4, 9, 18, .88);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  z-index: 9000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  opacity: 0;
+  transition: opacity .2s ease;
+}
+.pdf-preview-overlay.show {
+  opacity: 1;
+}
+
+.pdf-preview-modal {
+  background: linear-gradient(180deg, #13203a, #0e1830);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  width: 100%;
+  max-width: 1100px;
+  height: 92vh;
+  max-height: 900px;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 30px 80px rgba(0,0,0,.7);
+  transform: scale(.96);
+  transition: transform .25s cubic-bezier(.4, 0, .2, 1);
+  overflow: hidden;
+}
+.pdf-preview-overlay.show .pdf-preview-modal {
+  transform: scale(1);
+}
+
+/* ── Header ── */
+.pdf-preview-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 20px;
+  background: linear-gradient(180deg, #1a2b4a, #0f1a30);
+  border-bottom: 2px solid #2f81f7;
+  flex-shrink: 0;
+}
+.pdf-preview-title {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+}
+.pdf-preview-title .pdf-ico {
+  font-size: 26px;
+  flex-shrink: 0;
+}
+.pdf-preview-title .pdf-name {
+  font-size: 14px;
+  font-weight: 800;
+  color: #e6edf7;
+  letter-spacing: .2px;
+  font-family: 'Consolas', 'Courier New', monospace;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 600px;
+}
+.pdf-preview-title .pdf-hint {
+  font-size: 11px;
+  color: #8fa3c4;
+  margin-top: 2px;
+}
+
+.pdf-close {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: transparent;
+  border: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+  transition: .15s;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+.pdf-close:hover {
+  background: rgba(239, 68, 68, .15);
+  border-color: var(--danger);
+  color: #fca5a5;
+}
+
+/* ── Toolbar ── */
+.pdf-preview-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 20px;
+  background: #0b1220;
+  border-bottom: 1px solid var(--line);
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
+.pdf-tb-left { display: flex; align-items: center; gap: 12px; }
+.pdf-tb-info {
+  font-size: 11px;
+  color: #7cb3ff;
+  font-weight: 600;
+  letter-spacing: .2px;
+}
+.pdf-tb-right { display: flex; gap: 8px; align-items: center; }
+
+.pdf-btn {
+  padding: 8px 16px;
+  border-radius: 7px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: .15s;
+  font-family: inherit;
+  border: 1px solid var(--line);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+.pdf-btn-primary {
+  background: linear-gradient(135deg, #16a34a, #0f8a3f);
+  border-color: transparent;
+  color: #fff;
+  box-shadow: 0 4px 12px rgba(22, 163, 74, .3);
+}
+.pdf-btn-primary:hover { filter: brightness(1.1); transform: translateY(-1px); }
+.pdf-btn-secondary {
+  background: #16233f;
+  color: var(--txt);
+}
+.pdf-btn-secondary:hover {
+  background: #1d2f52;
+  border-color: #33507f;
+}
+
+/* ── Body / iframe ── */
+.pdf-preview-body {
+  flex: 1;
+  background: #1a1a1a;
+  overflow: hidden;
+  position: relative;
+}
+.pdf-preview-frame {
+  width: 100%;
+  height: 100%;
+  border: none;
+  display: block;
+  background: #fff;
+}
+
+/* ── Responsive ── */
+@media (max-width: 900px) {
+  .pdf-preview-overlay { padding: 0; }
+  .pdf-preview-modal {
+    max-width: 100vw;
+    height: 100vh;
+    max-height: 100vh;
+    border-radius: 0;
+  }
+  .pdf-preview-title .pdf-name { max-width: 200px; font-size: 12px; }
+  .pdf-preview-head { padding: 10px 14px; }
+  .pdf-preview-toolbar { padding: 8px 12px; }
+  .pdf-btn { padding: 6px 12px; font-size: 11px; }
+}
