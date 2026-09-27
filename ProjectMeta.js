@@ -473,17 +473,7 @@
 
     console.log('%c[ProjectMeta.js] ✅ Project Metadata module installed',
       'color:#0891b2;font-weight:bold;font-size:13px');
-     }
-
-    if (document.readyState === 'loading'){
-      document.addEventListener('DOMContentLoaded', injectButton);
-    } else {
-      injectButton();
     }
-    setTimeout(injectButton, 1000);
-    setTimeout(injectButton, 3000);
-
-  }
 
   if (document.readyState === 'loading'){
     document.addEventListener('DOMContentLoaded', function(){ bootstrap(0); });
