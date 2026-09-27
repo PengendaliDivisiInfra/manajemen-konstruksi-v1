@@ -2522,97 +2522,122 @@ function formProject(id){
     ${!p ? `<p class="hint" style="margin-top:12px">⚙ Saat disimpan, sistem otomatis mengkloning template AHSP master ke <code>project_ahsp_details</code>.</p>` : ''}
   `;
 
-  openModal(id?'Edit Proyek':'Proyek Baru', body, () => {
+  openModal(id?'Edit Proyek':'Proyek Baru', body, async () => {
     const kode = $('#fpj_kode').value.trim();
     const nama = $('#fpj_nama').value.trim();
     if (!kode || !nama){ toast('Kode & nama wajib diisi', false); return false; }
-      const tm = $('#fpj_tm').value;
-      const ts = $('#fpj_ts').value;
-      const calId = $('#fpj_cal').value;
-      const mode = $('#fpj_mode').value;
+    
+    const tm = $('#fpj_tm').value;
+    const ts = $('#fpj_ts').value;
+    const calId = $('#fpj_cal').value;
+    const mode = $('#fpj_mode').value;
 
-      // ── PERBAIKAN: Hitung durasi langsung tanpa bergantung pada WorkingCalendar ──
-      let dur = { durasi_hari: 0, durasi_minggu: 0, durasi_kerja: 0 };
-      if (tm && ts) {
-        const d1 = new Date(tm);
-        const d2 = new Date(ts);
-        if (!isNaN(d1.getTime()) && !isNaN(d2.getTime())) {
-          const diffMs = d2.getTime() - d1.getTime();
-          const diffDays = Math.max(0, Math.round(diffMs / (1000 * 60 * 60 * 24)));
-          const diffWeeks = Math.max(1, Math.ceil(diffDays / 7));
-          
-          // Hitung hari kerja efektif (Senin - Jumat)
-          let workDays = 0;
-          const tempDate = new Date(d1);
-          while (tempDate < d2) {
-            const dow = tempDate.getDay();
-            if (dow >= 1 && dow <= 5) workDays++;
-            tempDate.setDate(tempDate.getDate() + 1);
-          }
-          
-          dur = {
-            durasi_hari: num($('#fpj_durh').value) || dur.durasi_hari,
-            durasi_minggu: num($('#fpj_durw').value) || dur.durasi_minggu,
-            durasi_kerja: num($('#fpj_wd').value) || dur.durasi_kerja,
-          };
+    // ── PERBAIKAN: Hitung durasi langsung tanpa bergantung pada WorkingCalendar ──
+    let dur = { durasi_hari: 0, durasi_minggu: 0, durasi_kerja: 0 };
+    if (tm && ts) {
+      const d1 = new Date(tm);
+      const d2 = new Date(ts);
+      if (!isNaN(d1.getTime()) && !isNaN(d2.getTime())) {
+        const diffMs = d2.getTime() - d1.getTime();
+        const diffDays = Math.max(0, Math.round(diffMs / (1000 * 60 * 60 * 24)));
+        const diffWeeks = Math.max(1, Math.ceil(diffDays / 7));
+        
+        // Hitung hari kerja efektif (Senin - Jumat)
+        let workDays = 0;
+        const tempDate = new Date(d1);
+        while (tempDate < d2) {
+          const dow = tempDate.getDay();
+          if (dow >= 1 && dow <= 5) workDays++;
+          tempDate.setDate(tempDate.getDate() + 1);
         }
+        
+        dur = {
+          durasi_hari: diffDays,
+          durasi_minggu: diffWeeks,
+          durasi_kerja: workDays
+        };
       }
-      // ─────────────────────────────────────────────────────────────
+    }
 
-      const obj = {
-        id: p?.id || uid('prj'),
-        kode, nama,
-        lokasi: $('#fpj_lok').value.trim(),
-        owner: $('#fpj_own').value.trim(),
-        nilai_kontrak: num($('#fpj_nk').value),
-        calendar_id: calId,
-        durasi_mode: mode,
-        durasi_hari: dur.durasi_hari,
-        durasi_minggu: dur.durasi_minggu,
-        durasi_kerja: dur.durasi_kerja,
-        status: $('#fpj_st').value,
-        tgl_mulai: tm,
-        tgl_selesai: ts,
-        ppn: num(SET.ppn),
-        overhead: num(SET.overhead)
-      };
+    // Cek jika user mengedit manual field minggu
+    const manualWeeks = num($('#fpj_durw').value);
+    if (manualWeeks > 0) {
+      dur.durasi_minggu = manualWeeks;
+    }
+    // ─────────────────────────────────────────────────────────────
+
+    const obj = {
+      id: p?.id || uid('prj'),
+      kode, nama,
+      lokasi: $('#fpj_lok').value.trim(),
+      owner: $('#fpj_own').value.trim(),
+      nilai_kontrak: num($('#fpj_nk').value),
+      calendar_id: calId,
+      durasi_mode: mode,
+      durasi_hari: dur.durasi_hari,
+      durasi_minggu: dur.durasi_minggu,
+      durasi_kerja: dur.durasi_kerja,
+      status: $('#fpj_st').value,
+      tgl_mulai: tm,
+      tgl_selesai: ts,
+      ppn: num(SET.ppn),
+      overhead: num(SET.overhead)
+    };
+
     if (p) Object.assign(p, obj);
     else {
       DB.projects.push(obj);
       cloneAhspToProject(obj.id);
       STATE.activeProject = obj.id;
     }
+    
     runCPM(obj.id);
     AUTOSAVE.clear('form_project_' + (id || 'new'));
-    saveDB(); renderAll(); toast('Proyek disimpan');
+    saveDB(); 
+    renderAll(); 
+    toast('Proyek disimpan secara lokal');
+
+    // ── AUTO PUSH KE SERVER ──
+    if (SET.sheetUrl && Auth.token) {
+      toast('Menyinkronkan ke Google Sheets...');
+      try {
+        const res = await SyncManager.pushProject(obj.id, DB);
+        if (res.ok) {
+          toast('✅ Berhasil disinkronkan ke Google Sheets');
+        } else {
+          toast('⚠ Gagal sinkron: ' + res.message, false);
+        }
+      } catch(e) {
+        toast('⚠ Error koneksi ke server', false);
+      }
+    }
   });
 
   const recompute = () => {
-    const cal = WorkingCalendar.get($('#fpj_cal').value);
-    const mode = $('#fpj_mode').value;
-    const d = hitungDurasiLengkap($('#fpj_tm').value, $('#fpj_ts').value, cal, mode);
-    // Hanya isi angka murni ke input (tanpa satuan "hari"/"minggu") agar HTML5 validation lolos
-    $('#fpj_durh').value = d.durasi_hari;
-    $('#fpj_durw').value = d.durasi_minggu;
-    $('#fpj_wd').value   = d.durasi_kerja;
+    const tm = $('#fpj_tm').value;
+    const ts = $('#fpj_ts').value;
+    if (tm && ts) {
+      const d1 = new Date(tm);
+      const d2 = new Date(ts);
+      if (!isNaN(d1.getTime()) && !isNaN(d2.getTime())) {
+        const diffMs = d2.getTime() - d1.getTime();
+        const diffDays = Math.max(0, Math.round(diffMs / (1000 * 60 * 60 * 24)));
+        const diffWeeks = Math.max(1, Math.ceil(diffDays / 7));
+        
+        let workDays = 0;
+        const tempDate = new Date(d1);
+        while (tempDate < d2) {
+          const dow = tempDate.getDay();
+          if (dow >= 1 && dow <= 5) workDays++;
+          tempDate.setDate(tempDate.getDate() + 1);
+        }
+        
+        $('#fpj_durh').value = diffDays;
+        $('#fpj_durw').value = diffWeeks;
+        $('#fpj_wd').value   = workDays;
+      }
+    }
   };
-  ['fpj_tm','fpj_ts','fpj_cal','fpj_mode'].forEach(i => {
-    const el = document.getElementById(i);
-    if (el) el.onchange = recompute;
-  });
-  recompute();
-    // Kalau user edit durasi manual, biarkan (tidak ditimpa otomatis)
-  const durWEl = document.getElementById('fpj_durw');
-  if (durWEl){
-    durWEl.addEventListener('input', () => {
-      // Hanya angka yang valid
-      const v = parseInt(durWEl.value, 10);
-      if (isNaN(v) || v < 1) durWEl.value = 1;
-    });
-  }
-  
-  AUTOSAVE.attachForm('form_project_' + (id || 'new'));
-}
 
 /* ---------- RENDER CALENDARS ---------- */
 function renderCalendars(){
