@@ -458,32 +458,21 @@
       overlay.innerHTML =
         '<div style="text-align:center">' +
           '<div style="font-size:36px;margin-bottom:14px">⏳</div>' +
-          '<div style="font-size:15px;font-weight:700;margin-bottom:6px">Sedang membuat PDF...</div>' +
-          '<div style="font-size:11.5px;color:#8fa3c4">Mohon tunggu beberapa saat</div>' +
+          '<div style="font-size:15px;font-weight:700;margin-bottom:6px">Menyiapkan Preview...</div>' +
+          '<div style="font-size:11.5px;color:#8fa3c4">Mohon tunggu</div>' +
         '</div>';
       document.body.appendChild(overlay);
 
-      /* ═══ 2. Siapkan CSS string (validasi dulu) ═══ */
+      /* ═══ 2. Ambil CSS PDF ═══ */
       var cssString = '';
       try {
         cssString = getPDFStyles();
       } catch(e){
         console.error('[ReportGenerator] getPDFStyles error:', e);
-        cssString = 'body{font-family:Arial,sans-serif;font-size:10.5px;color:#111;background:#fff;}';
+        cssString = '';
       }
-      console.log('%c[PDF Debug] CSS length: ' + cssString.length + ' chars',
-        'color:#06b6d4;font-weight:bold');
 
-      /* ═══ 3. Buat iframe dan set srcdoc ═══ */
-      var iframe = document.createElement('iframe');
-      iframe.id = 'pdfRenderIframe';
-      iframe.style.cssText =
-        'position:fixed;left:-9999px;top:0;' +
-        'width:794px;height:1123px;border:0;' +
-        'background:#ffffff;';
-      document.body.appendChild(iframe);
-
-      /* ═══ 4. Build full HTML document ═══ */
+      /* ═══ 3. Build HTML document lengkap ═══ */
       var fullHTML =
         '<!DOCTYPE html>' +
         '<html><head>' +
@@ -491,113 +480,122 @@
         '<title>' + filename + '</title>' +
         '<style>' + cssString + '</style>' +
         '<style>' +
-          /* ← SAFETY NET: inline reset yang TIDAK bisa di-override */
+          /* Safety net */
           'html,body{margin:0;padding:0;background:#ffffff;}' +
           'body{color:#111111;font-family:Arial,Helvetica,sans-serif;font-size:10.5px;line-height:1.4;}' +
           'img{max-width:100%;height:auto;}' +
+          '@page{size:A4 portrait;margin:12mm 12mm 14mm 12mm;}' +
+          '@media print{' +
+            'body{margin:0;padding:0;}' +
+            '.rg-page{page-break-after:always;}' +
+            '.rg-page:last-child{page-break-after:auto;}' +
+            '.no-print{display:none !important;}' +
+          '}' +
         '</style>' +
         '</head>' +
         '<body>' + html + '</body>' +
         '</html>';
 
-      console.log('%c[PDF Debug] HTML length: ' + fullHTML.length + ' chars',
-        'color:#06b6d4;font-weight:bold');
+      /* ═══ 4. Buka window baru untuk preview ═══ */
+      var printWindow = window.open('', '_blank', 'width=900,height=1000');
 
-      /* ═══ 5. Set via srcdoc (browser parse sendiri) ═══ */
-      iframe.srcdoc = fullHTML;
+      if (!printWindow){
+        /* Fallback: kalau popup diblokir, pakai iframe invisible */
+        console.warn('[ReportGenerator] Popup blocked, using iframe mode');
+        var iframe = document.createElement('iframe');
+        iframe.style.cssText = 'position:fixed;left:-9999px;top:0;width:794px;height:1123px;border:0;';
+        iframe.srcdoc = fullHTML;
+        document.body.appendChild(iframe);
 
-      /* ═══ 6. Setelah load, tunggu gambar lalu render ═══ */
-      iframe.addEventListener('load', function onLoad(){
-        iframe.removeEventListener('load', onLoad);
-
-        /* Delay ekstra agar CSS & layout settle */
-        setTimeout(function(){
-          var idoc = iframe.contentDocument || iframe.contentWindow.document;
-          var bodyEl = idoc.body;
-
-          /* ── DEBUG: verifikasi CSS ter-apply ── */
-          console.log('%c[PDF Debug] === Verifikasi CSS ===', 'color:#06b6d4;font-weight:bold');
-          console.log('Body children:', bodyEl.children.length);
-          console.log('Body scrollHeight:', bodyEl.scrollHeight);
-          console.log('Body color:', getComputedStyle(bodyEl).color);
-          console.log('Body font:', getComputedStyle(bodyEl).fontFamily);
-
-          var headerEl = idoc.querySelector('.rg-header');
-          if (headerEl){
-            var hcs = getComputedStyle(headerEl);
-            console.log('Header display:', hcs.display);      // harus "flex"
-            console.log('Header flexDirection:', hcs.flexDirection);
-          } else {
-            console.warn('⚠ .rg-header TIDAK DITEMUKAN di DOM');
-          }
-
-          var logoEl = idoc.querySelector('.rg-logo');
-          if (logoEl){
-            console.log('Logo maxWidth:', getComputedStyle(logoEl).maxWidth);  // harus "75px"
-          } else {
-            console.warn('⚠ .rg-logo TIDAK DITEMUKAN (mungkin tidak ada logo atau img kosong)');
-          }
-
-          var tableEl = idoc.querySelector('.rg-table');
-          if (tableEl){
-            console.log('Table border-collapse:', getComputedStyle(tableEl).borderCollapse); // "collapse"
-          }
-
-          /* ── Tunggu semua gambar dimuat ── */
-          var images = idoc.querySelectorAll('img');
-          var imgPromises = Array.prototype.map.call(images, function(img){
-            if (img.complete && img.naturalWidth > 0) return Promise.resolve();
-            return new Promise(function(resolve){
-              img.onload = resolve;
-              img.onerror = resolve;
-              setTimeout(resolve, 3000);
-            });
-          });
-
-          Promise.all(imgPromises).then(function(){
-            /* Extra delay untuk rendering final */
+        iframe.onload = function(){
+          setTimeout(function(){
+            /* Cleanup overlay */
+            if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+            /* Beri tahu user */
+            _toast('⚠ Popup diblokir. Aktifkan popup untuk preview PDF.', false);
+            /* Tetap coba buka print dialog */
+            try {
+              iframe.contentWindow.focus();
+              iframe.contentWindow.print();
+            } catch(e){
+              console.error('Print error:', e);
+            }
+            /* Cleanup iframe setelah 10s */
             setTimeout(function(){
-              var opt = {
-                margin:       [10, 10, 10, 10],
-                filename:     filename,
-                image:        { type: 'jpeg', quality: 0.95 },
-                html2canvas:  {
-                  scale: 2,
-                  useCORS: true,
-                  backgroundColor: '#ffffff',
-                  logging: false,
-                  scrollX: 0,
-                  scrollY: 0,
-                  windowWidth: 794,
-                  width: 794
-                },
-                jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' },
-                pagebreak:    { mode: ['css', 'legacy'] }
-              };
+              if (iframe.parentNode) iframe.parentNode.removeChild(iframe);
+            }, 10000);
+          }, 800);
+        };
+        return;
+      }
 
-              html2pdf().set(opt).from(bodyEl)
-                .outputPdf('bloburl')
-                .then(function(blobUrl){
-                  cleanup();
-                  console.log('%c[PDF Debug] ✅ PDF selesai dibuat', 'color:#22c55e;font-weight:bold');
-                  openPdfPreview(blobUrl, filename);
-                })
-                .catch(function(err){
-                  cleanup();
-                  console.error('[ReportGenerator] PDF error:', err);
-                  _toast('Gagal membuat PDF: ' + err.message, false);
-                });
+      /* ═══ 5. Tulis HTML lengkap ke window baru ═══ */
+      printWindow.document.open();
+      printWindow.document.write(fullHTML);
+      printWindow.document.close();
 
-              function cleanup(){
-                try {
-                  if (iframe.parentNode) iframe.parentNode.removeChild(iframe);
-                  if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
-                } catch(e){}
-              }
-            }, 500);
-          });
-        }, 300);
-      });
+      /* ═══ 6. Setelah load, tampilkan toolbar kecil di atas preview ═══ */
+      printWindow.onload = function(){
+        setTimeout(function(){
+          try {
+            /* Inject toolbar floating ke window baru */
+            var toolbar = printWindow.document.createElement('div');
+            toolbar.className = 'no-print';
+            toolbar.style.cssText =
+              'position:fixed;top:0;left:0;right:0;height:52px;' +
+              'background:linear-gradient(135deg,#1f4e79,#17395a);' +
+              'color:#fff;display:flex;align-items:center;justify-content:space-between;' +
+              'padding:0 20px;box-shadow:0 4px 12px rgba(0,0,0,.3);' +
+              'z-index:9999;font-family:Segoe UI,Arial,sans-serif;';
+
+            var info = printWindow.document.createElement('div');
+            info.style.cssText = 'display:flex;align-items:center;gap:12px;font-size:13px;font-weight:600;';
+            info.innerHTML = '📄 <span style="font-weight:400;opacity:.9">' + filename + '</span>';
+
+            var buttons = printWindow.document.createElement('div');
+            buttons.style.cssText = 'display:flex;gap:8px;';
+
+            var btnPrint = printWindow.document.createElement('button');
+            btnPrint.textContent = '🖨 Print / Save as PDF';
+            btnPrint.style.cssText =
+              'padding:8px 18px;background:linear-gradient(135deg,#16a34a,#0f8a3f);' +
+              'color:#fff;border:none;border-radius:6px;font-size:12px;font-weight:700;' +
+              'cursor:pointer;box-shadow:0 2px 6px rgba(0,0,0,.2);font-family:inherit;';
+            btnPrint.onclick = function(){ printWindow.print(); };
+
+            var btnClose = printWindow.document.createElement('button');
+            btnClose.textContent = '✕ Tutup';
+            btnClose.style.cssText =
+              'padding:8px 18px;background:rgba(255,255,255,.15);' +
+              'color:#fff;border:1px solid rgba(255,255,255,.3);border-radius:6px;' +
+              'font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;';
+            btnClose.onclick = function(){ printWindow.close(); };
+
+            buttons.appendChild(btnPrint);
+            buttons.appendChild(btnClose);
+            toolbar.appendChild(info);
+            toolbar.appendChild(buttons);
+
+            /* Push body content down supaya tidak tertutup toolbar */
+            printWindow.document.body.style.paddingTop = '52px';
+            printWindow.document.body.insertBefore(toolbar, printWindow.document.body.firstChild);
+
+            /* ═══ 7. Cleanup overlay di parent ═══ */
+            if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+
+            _toast('✅ Preview siap — Klik "Print / Save as PDF"');
+
+          } catch(e){
+            console.error('[ReportGenerator] Toolbar inject error:', e);
+            if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+          }
+        }, 500);
+      };
+
+      /* ═══ 8. Fallback timeout — kalau onload tidak fire ═══ */
+      setTimeout(function(){
+        if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+      }, 5000);
     }
 
          /* ═══════════════════════════════════════════════════════════
