@@ -571,19 +571,25 @@ const CPM = {
       delete it._totalFloat; delete it._isManual;
     });
 
-    // 7) Update tanggal selesai proyek
-    const newFinishISO = WorkingCalendar.fmt(projFinish);
-    if (newFinishISO && newFinishISO !== proj.tgl_selesai){
-      proj.tgl_selesai = newFinishISO;
-      const dur = hitungDurasiLengkap(
-        proj.tgl_mulai, newFinishISO,
-        WorkingCalendar.get(proj.calendar_id),
-        proj.durasi_mode || 'working'
-      );
-      proj.durasi_hari   = dur.durasi_hari;
-      proj.durasi_minggu = dur.durasi_minggu;
-      proj.durasi_kerja  = dur.durasi_kerja;
-    }
+   // 7) Update tanggal selesai proyek — DENGAN GUARD
+   const newFinishISO = WorkingCalendar.fmt(projFinish);
+   const projStartISO = WorkingCalendar.fmt(projStart);
+   
+   // Guard: hanya update jika WBS menghasilkan schedule valid
+   const hasValidSchedule = items.length > 0 &&
+                            newFinishISO > projStartISO;
+   
+   if (hasValidSchedule && newFinishISO !== proj.tgl_selesai){
+     proj.tgl_selesai = newFinishISO;
+     const dur = hitungDurasiLengkap(
+       proj.tgl_mulai, newFinishISO,
+       WorkingCalendar.get(proj.calendar_id),
+       proj.durasi_mode || 'working'
+     );
+     proj.durasi_hari   = dur.durasi_hari;
+     proj.durasi_minggu = dur.durasi_minggu;
+     proj.durasi_kerja  = dur.durasi_kerja;
+   }
 
     const criticalCount = items.filter(it => num(it.is_critical) === 1).length;
     const manualCount   = items.filter(it => this.getScheduleMode(it) === 'manual').length;
