@@ -1485,50 +1485,151 @@ function renderDashboard(){
 }
 
 /* ---------- RENDER RESOURCES ---------- */
+/* ---------- RENDER RESOURCES (Per-Project Filter) ---------- */
 function renderResources(){
+  const pid = STATE.activeProject;
   const fj = $('#fResJenis')?.value || '';
   const q  = ($('#fResSearch')?.value || '').toLowerCase();
-  let rows = DB.master_resources.slice();
+  const showTemplate = localStorage.getItem('mk_res_show_template') === 'on';
+
+  if (!pid){
+    const tbl = $('#tblRes');
+    if (tbl) tbl.innerHTML = `<tbody><tr><td class="empty">Pilih proyek dulu.</td></tr></tbody>`;
+    return;
+  }
+
+  // Filter: tampilkan resource milik proyek ini + (opsional) template global
+  let rows = DB.master_resources.filter(r => {
+    const isProjectResource = r.project_id === pid;
+    const isTemplate = !r.project_id || r.project_id === '';
+    return isProjectResource || (showTemplate && isTemplate);
+  });
+
   if (fj) rows = rows.filter(r => r.jenis === fj);
   if (q)  rows = rows.filter(r => (r.kode + ' ' + r.nama).toLowerCase().includes(q));
 
+  // Sort: project resources dulu, baru template
+  rows.sort((a, b) => {
+    const aIsProject = a.project_id === pid ? 0 : 1;
+    const bIsProject = b.project_id === pid ? 0 : 1;
+    if (aIsProject !== bIsProject) return aIsProject - bIsProject;
+    return String(a.kode).localeCompare(String(b.kode));
+  });
+
   const badge = j => `<span class="badge b-${j}">${j.toUpperCase()}</span>`;
+  const scopeBadge = r => {
+    if (r.project_id === pid) return '<span class="badge b-ok" style="font-size:9px">PROYEK</span>';
+    return '<span class="badge b-warn" style="font-size:9px">TEMPLATE</span>';
+  };
+
+  // Statistik
+  const statProject = DB.master_resources.filter(r => r.project_id === pid).length;
+  const statTemplate = DB.master_resources.filter(r => !r.project_id).length;
+
+  // Header dengan tombol tambahan
+  const headerHTML = `
+    <div class="row" style="margin-bottom:12px; gap:8px; flex-wrap:wrap; align-items:center">
+      <div style="flex:1; min-width:200px">
+        <b style="color:#7cb3ff">📦 Resource Proyek:</b> ${statProject} item
+        <span style="color:var(--muted); margin-left:12px">|</span>
+        <span style="color:var(--muted); margin-left:12px">📋 Template Global: ${statTemplate} item</span>
+      </div>
+      <label style="display:flex; align-items:center; gap:6px; cursor:pointer; font-size:12px">
+        <input type="checkbox" id="chkShowTemplate" ${showTemplate ? 'checked' : ''}>
+        Tampilkan Template
+      </label>
+      <button class="btn btn-sm" id="btnCloneTemplate"
+        style="background:linear-gradient(135deg,#a855f7,#7c3aed);border-color:transparent;color:#fff">
+        📋 Clone Template ke Proyek
+      </button>
+    </div>
+  `;
+
   const head = `<thead><tr>
-    <th>Kode</th><th>Nama</th><th>Jenis</th><th>Satuan</th>
+    <th>Kode</th><th>Nama</th><th>Scope</th><th>Jenis</th><th>Satuan</th>
     <th class="num">Harga RAB</th><th class="num">Harga RAP</th>
-    <th class="num">Q (per jam)</th><th>Parameter</th><th class="center">Aksi</th>
+    <th class="center">Aksi</th>
   </tr></thead>`;
+
   const body = rows.map(r => {
-    let qVal = '—', param = '—';
-    if (r.jenis === 'alat'){
-      const q = Calc.QRAB(r);
-      qVal = (num(r.hitung_q) === 1 && q > 0) ? fmt(q,3) : 'manual';
-      param = `V:${fmt(r.kapasitas_bucket,2)} · Fb:${fmt(r.faktor_bucket,2)} · Fa:${fmt(r.faktor_efisiensi,2)} · Ts:${fmt(r.waktu_siklus,0)}s`;
-    }
-    return `<tr>
+    const isProjectResource = r.project_id === pid;
+    const rowStyle = isProjectResource ? '' : 'opacity:0.65; font-style:italic;';
+    return `<tr style="${rowStyle}">
       <td><b>${esc(r.kode)}</b></td>
       <td>${esc(r.nama)}</td>
+      <td class="center">${scopeBadge(r)}</td>
       <td>${badge(r.jenis)}</td>
       <td>${esc(r.satuan)}</td>
       <td class="num">${rp(r.harga_rab)}</td>
       <td class="num">${rp(r.harga_rap)}</td>
-      <td class="num">${qVal}</td>
-      <td style="font-size:11px;color:var(--muted)">${param}</td>
       <td class="center">
-        <button class="btn btn-sm" data-edit-res="${r.id}">✎</button>
-        <button class="btn btn-sm btn-danger" data-del-res="${r.id}">✕</button>
+        ${isProjectResource ? `
+          <button class="btn btn-sm" data-edit-res="${r.id}">✎</button>
+          <button class="btn btn-sm btn-danger" data-del-res="${r.id}">✕</button>
+        ` : `<span style="font-size:10px;color:var(--muted)">read-only</span>`}
       </td>
     </tr>`;
   }).join('');
-  const tbl = $('#tblRes');
-  if (tbl) tbl.innerHTML = head + `<tbody>${body || `<tr><td colspan="9" class="empty">Tidak ada data.</td></tr>`}</tbody>`;
 
+  const tbl = $('#tblRes');
+  if (tbl){
+    tbl.innerHTML = headerHTML + head +
+      `<tbody>${body || `<tr><td colspan="8" class="empty">Belum ada resource. Klik "📋 Clone Template" untuk memulai.</td></tr>`}</tbody>`;
+  }
+
+  // Wire tombol
+  const chk = $('#chkShowTemplate');
+  if (chk) chk.onchange = (e) => {
+    localStorage.setItem('mk_res_show_template', e.target.checked ? 'on' : 'off');
+    renderResources();
+  };
+
+  const btnClone = $('#btnCloneTemplate');
+  if (btnClone) btnClone.onclick = () => {
+    if (!confirm('Clone semua template global ke proyek ini?\n\nTemplate yang sudah ada tidak akan diduplikasi.')) return;
+    const r = cloneResourcesToProject(pid);
+    if (r.ok){
+      toast('✅ ' + r.cloned + ' resource berhasil di-clone ke proyek');
+      saveDB();
+      renderResources();
+    } else {
+      toast('⚠ ' + r.message, false);
+    }
+  };
+
+  // Wire edit & delete (hanya untuk resource milik proyek)
   $$('[data-edit-res]').forEach(b => b.onclick = () => formResource(b.dataset.editRes));
   $$('[data-del-res]').forEach(b => b.onclick = () => {
     if (!confirm('Hapus resource ini?')) return;
     DB.master_resources = DB.master_resources.filter(x => x.id !== b.dataset.delRes);
     saveDB(); renderResources(); toast('Resource dihapus');
   });
+}
+
+/* ═══ HELPER: Clone template global ke proyek ═══ */
+function cloneResourcesToProject(projectId){
+  if (!projectId) return { ok: false, message: 'projectId kosong' };
+
+  const templateRes = DB.master_resources.filter(r => !r.project_id);
+  if (!templateRes.length) return { ok: false, message: 'Tidak ada template global' };
+
+  let cloned = 0;
+  templateRes.forEach(template => {
+    // Skip kalau resource dengan kode sama sudah ada di proyek ini
+    const existing = DB.master_resources.find(r =>
+      r.project_id === projectId && r.kode === template.kode
+    );
+    if (existing) return;
+
+    DB.master_resources.push({
+      ...JSON.parse(JSON.stringify(template)),
+      id: uid('res'),
+      project_id: projectId
+    });
+    cloned++;
+  });
+
+  return { ok: true, cloned, total: templateRes.length };
 }
 
 /* ---------- FORM RESOURCE ---------- */
@@ -1559,6 +1660,7 @@ function formResource(id){
     const jenis = $('#fr_jenis').value;
     const obj = {
       id: r?.id || uid('res'),
+      project_id: STATE.activeProject,   // ⬅️ TAMBAHKAN BARIS INI
       kode: $('#fr_kode').value.trim(),
       nama: $('#fr_nama').value.trim(),
       jenis,
@@ -2074,7 +2176,18 @@ function formProject(id){
       overhead: num(SET.overhead)
     };
     if (p) Object.assign(p, obj);
-    else { DB.projects.push(obj); cloneAhspToProject(obj.id); STATE.activeProject = obj.id; }
+    else {
+      DB.projects.push(obj);
+      cloneAhspToProject(obj.id);
+      // Auto-clone resource template ke proyek baru
+      if (typeof cloneResourcesToProject === 'function'){
+        const resClone = cloneResourcesToProject(obj.id);
+        if (resClone.ok){
+          console.log('✅ Auto-clone ' + resClone.cloned + ' resources ke proyek baru');
+        }
+      }
+      STATE.activeProject = obj.id;
+    }
     runCPM(obj.id); saveDB(); renderAll(); toast('Proyek disimpan');
   });
 }
