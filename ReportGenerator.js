@@ -889,3 +889,338 @@
     bootstrap(0);
   }
 })();
+
+/* =====================================================================
+   ADD-ON: LAPORAN MINGGUAN & BULANAN
+   Sisipkan ke dalam ReportGenerator.js
+   ===================================================================== */
+
+const ReportGeneratorExtended = {
+
+  /* ── Helper: Ambil data proyek & progres ── */
+  _getProjectData(projectId) {
+    const proj = DB.projects.find(p => p.id === projectId);
+    if (!proj) throw new Error('Proyek tidak ditemukan');
+    const wbsItems = DB.project_wbs.filter(w => w.project_id === projectId && !w.is_group);
+    const progressItems = DB.progress.filter(p => p.project_id === projectId);
+    const photos = (DB.photos || []).filter(p => p.project_id === projectId);
+    return { proj, wbsItems, progressItems, photos };
+  },
+
+  /* ── Helper: Format tanggal ── */
+  _fmtDate(iso) {
+    if (!iso) return '-';
+    const d = new Date(iso);
+    return d.toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' });
+  },
+
+  /* =====================================================================
+     A1. LAPORAN MINGGUAN
+     ===================================================================== */
+  buildMingguanHTML(projectId, mingguKe, options = {}) {
+    const { proj, wbsItems, progressItems, photos } = this._getProjectData(projectId);
+    const minggu = parseInt(mingguKe, 10) || 1;
+    
+    // Filter progress untuk minggu ini
+    const progMingguIni = progressItems.filter(p => num(p.minggu) === minggu);
+    
+    // Hitung rencana vs aktual untuk minggu ini
+    let totalBobotRencana = 0;
+    let totalBobotAktual = 0;
+    const detailRows = wbsItems.map(w => {
+      const volRAB = num(w.volume_rab);
+      const bobot = volRAB * Calc.hargaSatuanRAB(projectId, w.ahsp_id);
+      
+      // Rencana (asumsi merata per minggu)
+      const durasi = num(proj.durasi_minggu) || 1;
+      const rencanaPct = Math.min(100, (1 / durasi) * 100 * minggu); // Kumulatif
+      
+      // Aktual
+      const volProg = progressItems
+        .filter(p => p.wbs_id === w.id && num(p.minggu) <= minggu)
+        .reduce((s, p) => s + num(p.volume), 0);
+      const aktualPct = volRAB > 0 ? Math.min(100, (volProg / volRAB) * 100) : 0;
+      
+      const dev = aktualPct - rencanaPct;
+      
+      totalBobotRencana += bobot * (rencanaPct / 100);
+      totalBobotAktual += bobot * (aktualPct / 100);
+      
+      return {
+        kode: w.kode_wbs,
+        uraian: w.uraian,
+        satuan: w.satuan,
+        volRAB,
+        rencanaPct,
+        aktualPct,
+        dev,
+        status: dev >= 0 ? 'On Schedule' : 'Behind'
+      };
+    });
+
+    const totalRAB = wbsItems.reduce((s, w) => s + (num(w.volume_rab) * Calc.hargaSatuanRAB(projectId, w.ahsp_id)), 0);
+    const pctRencana = totalRAB > 0 ? (totalBobotRencana / totalRAB) * 100 : 0;
+    const pctAktual = totalRAB > 0 ? (totalBobotAktual / totalRAB) * 100 : 0;
+
+    // Foto minggu ini (berdasarkan tanggal)
+    const fotoMingguIni = photos.filter(p => {
+      const tgl = new Date(p.tanggal);
+      // Asumsi minggu ke-N dimulai dari tanggal proyek + (N-1)*7 hari
+      const startProj = new Date(proj.tgl_mulai);
+      const startMinggu = new Date(startProj);
+      startMinggu.setDate(startMinggu.getDate() + (minggu - 1) * 7);
+      const endMinggu = new Date(startMinggu);
+      endMinggu.setDate(endMinggu.getDate() + 6);
+      return tgl >= startMinggu && tgl <= endMinggu;
+    });
+
+    // Bangun HTML
+    const css = this._getReportCSS();
+    const header = this._getReportHeader(proj, `LAPORAN MINGGUAN KE-${minggu}`);
+    
+    const ringkasanHTML = `
+      <div class="section">
+        <h3>Ringkasan Progress</h3>
+        <table class="data-table">
+          <tr><td>Rencana Kumulatif</td><td class="num">${fmt(pctRencana, 2)}%</td></tr>
+          <tr><td>Aktual Kumulatif</td><td class="num">${fmt(pctAktual, 2)}%</td></tr>
+          <tr><td>Deviasi</td><td class="num ${(pctAktual - pctRencana) >= 0 ? 'pos' : 'neg'}">${fmt(pctAktual - pctRencana, 2)}%</td></tr>
+        </table>
+      </div>
+    `;
+
+    const detailHTML = `
+      <div class="section">
+        <h3>Detail Progress per Item Pekerjaan</h3>
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Kode</th><th>Uraian</th><th>Satuan</th>
+              <th class="num">Vol RAB</th><th class="num">Rencana (%)</th>
+              <th class="num">Aktual (%)</th><th class="num">Deviasi</th><th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${detailRows.map(r => `
+              <tr>
+                <td>${esc(r.kode)}</td><td>${esc(r.uraian)}</td><td>${esc(r.satuan)}</td>
+                <td class="num">${fmt(r.volRAB, 2)}</td>
+                <td class="num">${fmt(r.rencanaPct, 2)}</td>
+                <td class="num">${fmt(r.aktualPct, 2)}</td>
+                <td class="num ${r.dev >= 0 ? 'pos' : 'neg'}">${fmt(r.dev, 2)}%</td>
+                <td>${r.status}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>
+    `;
+
+    const fotoHTML = fotoMingguIni.length > 0 ? `
+      <div class="section page-break">
+        <h3>Dokumentasi Foto Minggu Ke-${minggu}</h3>
+        <div class="photo-grid">
+          ${fotoMingguIni.map(f => `
+            <div class="photo-item">
+              <img src="${f.data}" alt="${esc(f.caption || '')}" />
+              <p>${esc(f.caption || 'Tanpa keterangan')}</p>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+    ` : '';
+
+    const ttdHTML = this._getTTDBlock(proj);
+
+    return `<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"><title>Laporan Mingguan - ${proj.kode}</title><style>${css}</style></head>
+<body>
+  ${header}
+  ${ringkasanHTML}
+  ${detailHTML}
+  ${fotoHTML}
+  ${ttdHTML}
+  <script>window.onload = function() { setTimeout(function() { window.print(); }, 500); }<\/script>
+</body>
+</html>`;
+  },
+
+  /* =====================================================================
+     A2. LAPORAN BULANAN
+     ===================================================================== */
+  buildBulananHTML(projectId, bulan, tahun, options = {}) {
+    const { proj, wbsItems, progressItems, photos } = this._getProjectData(projectId);
+    const targetBulan = parseInt(bulan, 10) || new Date().getMonth() + 1;
+    const targetTahun = parseInt(tahun, 10) || new Date().getFullYear();
+    
+    // Filter progress untuk bulan ini
+    const progBulanIni = progressItems.filter(p => {
+      const d = new Date(p.tanggal);
+      return d.getMonth() + 1 === targetBulan && d.getFullYear() === targetTahun;
+    });
+
+    // Hitung total minggu dalam bulan ini (dari progress)
+    const mingguDiBulanIni = [...new Set(progBulanIni.map(p => num(p.minggu)))].sort((a,b) => a - b);
+    const maxMinggu = mingguDiBulanIni.length > 0 ? Math.max(...mingguDiBulanIni) : 0;
+
+    // Analisis
+    const totalRAB = wbsItems.reduce((s, w) => s + (num(w.volume_rab) * Calc.hargaSatuanRAB(projectId, w.ahsp_id)), 0);
+    let totalBobotAktual = 0;
+
+    wbsItems.forEach(w => {
+      const volRAB = num(w.volume_rab);
+      const bobot = volRAB * Calc.hargaSatuanRAB(projectId, w.ahsp_id);
+      const volProg = progressItems
+        .filter(p => p.wbs_id === w.id && num(p.minggu) <= maxMinggu)
+        .reduce((s, p) => s + num(p.volume), 0);
+      const aktualPct = volRAB > 0 ? Math.min(100, (volProg / volRAB) * 100) : 0;
+      totalBobotAktual += bobot * (aktualPct / 100);
+    });
+
+    const pctAktual = totalRAB > 0 ? (totalBobotAktual / totalRAB) * 100 : 0;
+    
+    // Dapatkan data EVM untuk trend SPI/CPI
+    const evmData = Calc.evm(projectId);
+    const spi = evmData.ok ? evmData.SPI : 1;
+    const cpi = evmData.ok ? evmData.CPI : 1;
+
+    // Foto bulan ini
+    const fotoBulanIni = photos.filter(p => {
+      const d = new Date(p.tanggal);
+      return d.getMonth() + 1 === targetBulan && d.getFullYear() === targetTahun;
+    });
+
+    const css = this._getReportCSS();
+    const header = this._getReportHeader(proj, `LAPORAN BULANAN - ${this._getNamaBulan(targetBulan)} ${targetTahun}`);
+
+    const summaryHTML = `
+      <div class="section">
+        <h3>Executive Summary</h3>
+        <table class="data-table">
+          <tr><td>Progress Aktual Kumulatif</td><td class="num">${fmt(pctAktual, 2)}%</td></tr>
+          <tr><td>Schedule Performance Index (SPI)</td><td class="num ${spi >= 0.95 ? 'pos' : 'neg'}">${fmt(spi, 3)}</td></tr>
+          <tr><td>Cost Performance Index (CPI)</td><td class="num ${cpi >= 0.95 ? 'pos' : 'neg'}">${fmt(cpi, 3)}</td></tr>
+          <tr><td>Total RAB</td><td class="num">${rp(totalRAB)}</td></tr>
+        </table>
+      </div>
+    `;
+
+    const detailMingguanHTML = `
+      <div class="section">
+        <h3>Rekapitulasi Progress Mingguan (Bulan ${this._getNamaBulan(targetBulan)})</h3>
+        <table class="data-table">
+          <thead><tr><th>Minggu</th><th class="num">Volume Progress</th><th class="num">Jumlah Item</th></tr></thead>
+          <tbody>
+            ${mingguDiBulanIni.map(m => {
+              const items = progBulanIni.filter(p => num(p.minggu) === m);
+              const totalVol = items.reduce((s, p) => s + num(p.volume), 0);
+              return `<tr><td>Minggu ke-${m}</td><td class="num">${fmt(totalVol, 2)}</td><td class="num">${items.length} item</td></tr>`;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>
+    `;
+
+    const fotoHTML = fotoBulanIni.length > 0 ? `
+      <div class="section page-break">
+        <h3>Album Foto Dokumentasi — ${this._getNamaBulan(targetBulan)} ${targetTahun}</h3>
+        <div class="photo-grid">
+          ${fotoBulanIni.map(f => `
+            <div class="photo-item">
+              <img src="${f.data}" alt="${esc(f.caption || '')}" />
+              <p>${esc(f.caption || 'Tanpa keterangan')}</p>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+    ` : '';
+
+    const ttdHTML = this._getTTDBlock(proj);
+
+    return `<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"><title>Laporan Bulanan - ${proj.kode}</title><style>${css}</style></head>
+<body>
+  ${header}
+  ${summaryHTML}
+  ${detailMingguanHTML}
+  ${fotoHTML}
+  ${ttdHTML}
+  <script>window.onload = function() { setTimeout(function() { window.print(); }, 500); }<\/script>
+</body>
+</html>`;
+  },
+
+  /* ── Helper: Nama Bulan ── */
+  _getNamaBulan(bulan) {
+    const nama = ['', 'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
+    return nama[bulan] || '';
+  },
+
+  /* ── Helper: Header Laporan ── */
+  _getReportHeader(proj, title) {
+    return `
+      <div class="report-header">
+        <h1>${esc(proj.nama)}</h1>
+        <h2>${esc(title)}</h2>
+        <p>Kode Proyek: ${esc(proj.kode)} | Lokasi: ${esc(proj.lokasi || '-')}</p>
+        <hr/>
+      </div>
+    `;
+  },
+
+  /* ── Helper: Blok Tanda Tangan ── */
+  _getTTDBlock(proj) {
+    return `
+      <div class="section ttd-section page-break">
+        <h3>Tanda Tangan</h3>
+        <div class="ttd-grid">
+          <div class="ttd-box">
+            <p>Disetujui oleh,</p>
+            <p class="ttd-role">Project Manager</p>
+            <div class="ttd-space"></div>
+            <p class="ttd-name">(_____________________)</p>
+          </div>
+          <div class="ttd-box">
+            <p>Dibuat oleh,</p>
+            <p class="ttd-role">Site Engineer</p>
+            <div class="ttd-space"></div>
+            <p class="ttd-name">(_____________________)</p>
+          </div>
+        </div>
+      </div>
+    `;
+  },
+
+  /* ── Helper: CSS Laporan ── */
+  _getReportCSS() {
+    return `
+      body { font-family: Arial, sans-serif; font-size: 11px; color: #000; margin: 0; padding: 20px; }
+      .report-header { text-align: center; margin-bottom: 20px; }
+      .report-header h1 { font-size: 16px; margin: 0 0 5px 0; }
+      .report-header h2 { font-size: 14px; margin: 0 0 5px 0; }
+      .report-header p { font-size: 11px; margin: 0; color: #555; }
+      .report-header hr { border: 1px solid #000; margin-top: 10px; }
+      .section { margin-bottom: 20px; }
+      .section h3 { font-size: 13px; background: #eee; padding: 5px; border-left: 4px solid #1f4e79; margin-bottom: 10px; }
+      .data-table { width: 100%; border-collapse: collapse; font-size: 10px; }
+      .data-table th, .data-table td { border: 1px solid #999; padding: 4px 6px; }
+      .data-table th { background: #1f4e79; color: #fff; text-align: left; }
+      .data-table td.num { text-align: right; }
+      .pos { color: green; font-weight: bold; }
+      .neg { color: red; font-weight: bold; }
+      .page-break { page-break-before: always; }
+      .photo-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+      .photo-item { text-align: center; border: 1px solid #ccc; padding: 5px; }
+      .photo-item img { max-width: 100%; height: auto; max-height: 200px; object-fit: cover; }
+      .photo-item p { font-size: 9px; margin-top: 5px; color: #555; }
+      .ttd-grid { display: flex; justify-content: space-around; margin-top: 30px; }
+      .ttd-box { text-align: center; width: 40%; }
+      .ttd-role { font-weight: bold; }
+      .ttd-space { height: 60px; }
+      .ttd-name { text-decoration: underline; }
+      @media print { body { padding: 0; } .page-break { page-break-before: always; } }
+    `;
+  }
+};
