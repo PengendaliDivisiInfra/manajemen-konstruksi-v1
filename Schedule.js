@@ -6,9 +6,7 @@
 
 /* =====================================================================
    BAGIAN 1 — WORKING CALENDAR ENGINE
-   Menghitung durasi dengan mempertimbangkan hari kerja & hari libur
    ===================================================================== */
-/* Helper: format Date ke ISO date pakai waktu LOKAL (bukan UTC) */
 function localISO(d){
   if (!(d instanceof Date) || isNaN(d.getTime())) return '';
   const y = d.getFullYear();
@@ -19,7 +17,6 @@ function localISO(d){
 const WorkingCalendar = {
   DEFAULT_WORK_DAYS: [1,2,3,4,5],
 
-  /** Ambil objek kalender dari DB, fallback ke default */
   get(calendarId){
     if (calendarId){
       const c = (DB.working_calendars || []).find(x => x.id === calendarId);
@@ -29,7 +26,6 @@ const WorkingCalendar = {
         || { work_days: '1,2,3,4,5', jam_per_hari: 8 };
   },
 
-  /** Cek apakah tanggal adalah hari kerja */
   isWorkDay(date, cal){
     const workDays = String(cal.work_days || '1,2,3,4,5')
                         .split(',').map(s => parseInt(s.trim(), 10));
@@ -42,7 +38,6 @@ const WorkingCalendar = {
     return true;
   },
 
-  /** Hitung durasi antara dua tanggal berdasarkan mode */
   diffDays(startDate, endDate, cal, mode){
     if (!startDate || !endDate) return 0;
     const d1 = new Date(startDate);
@@ -63,7 +58,6 @@ const WorkingCalendar = {
     return count;
   },
 
-  /** Tambah N hari kerja ke tanggal */
   addWorkDays(startDate, days, cal){
     let d = new Date(startDate);
     let added = 0;
@@ -76,13 +70,11 @@ const WorkingCalendar = {
     return d;
   },
 
-  /** Format ISO date */
   fmt(d){
     return localISO(d);
   }
 };
 
-/** Helper: hitung lengkap durasi proyek */
 function hitungDurasiLengkap(tglMulai, tglSelesai, cal, mode){
   const durasi_hari  = WorkingCalendar.diffDays(tglMulai, tglSelesai, cal, 'calendar');
   const durasi_kerja = WorkingCalendar.diffDays(tglMulai, tglSelesai, cal, 'working');
@@ -99,7 +91,7 @@ function hitungDurasiLengkap(tglMulai, tglSelesai, cal, mode){
 }
 
 /* =====================================================================
-   BAGIAN 2 — SCHEDULE WHITELIST (Anti-Interference dengan RAB/RAP)
+   BAGIAN 2 — SCHEDULE WHITELIST
    ===================================================================== */
 const SCHEDULE_WRITABLE_FIELDS = Object.freeze([
   'predecessor','pred_type','lag_days','duration','calendar_id',
@@ -111,14 +103,13 @@ const SCHEDULE_WRITABLE_FIELDS = Object.freeze([
   'tgl_mulai_rencana','tgl_selesai_rencana',
   'tgl_mulai_aktual','tgl_selesai_aktual',
   'float_total',
-  // ── Baseline fields (Fase 4A) ──
   'bl1_start','bl1_finish','bl1_set_at',
   'bl2_start','bl2_finish','bl2_set_at',
   'bl3_start','bl3_finish','bl3_set_at',
-  // ── NEW (Fase 1A) — Auto vs Manual Scheduling ──
   'schedule_mode','manual_start','manual_finish',
-  // ── NEW (Fase 2E) — Work Contour ──
-  'work_contour'
+  'work_contour',
+  'wbs_level',
+  'progress_pct'
 ]);
 
 function writeScheduleField(wbsItem, field, value){
@@ -140,10 +131,8 @@ const CONSTRAINT_TYPES = {
   MSO:  'Must Start On',
   MFO:  'Must Finish On'
 };
-// Expose ke window agar bisa diakses dari inline script index.html
 window.CONSTRAINT_TYPES = CONSTRAINT_TYPES;
 
-/* ── Fase 2E: Work Contour types (MS Project standard) ── */
 const WORK_CONTOURS = Object.freeze({
   uniform:     'Uniform (Merata)',
   front:       'Front Loaded (Berat di Awal)',
@@ -154,17 +143,13 @@ const WORK_CONTOURS = Object.freeze({
   double_peak: 'Double Peak (Dua Puncak)',
   triangular:  'Triangular (Segitiga)'
 });
-// Expose ke window
 window.WORK_CONTOURS = WORK_CONTOURS;
 
 /* =====================================================================
-   BAGIAN 3 — CPM ENGINE v3 (Fase 1B)
-   Topological Sort + Forward/Backward Pass + Critical Path
-   NEW: Multiple Predecessor · Auto/Manual Routing · ALAP
+   BAGIAN 3 — CPM ENGINE v3
    ===================================================================== */
 const CPM = {
 
-  /* ── Helper: durasi efektif (kompatibel lama & baru) ── */
   getDuration(it){
     const a = num(it.duration);
     if (a > 0) return Math.max(1, Math.round(a));
@@ -173,13 +158,11 @@ const CPM = {
     return 1;
   },
 
-  /* ── Helper: MODE jadwal efektif (Fase 1B) ── */
   getScheduleMode(it){
     const m = String(it.schedule_mode || 'auto').trim().toLowerCase();
     return (m === 'manual') ? 'manual' : 'auto';
   },
 
-  /* ── Helper: parse tanggal toleran (Date | "yyyy-MM-dd" | ISO) ── */
   _parseDate(v){
     if (!v) return null;
     if (v instanceof Date) return isNaN(v.getTime()) ? null : new Date(v);
@@ -189,10 +172,6 @@ const CPM = {
     return isNaN(d.getTime()) ? null : d;
   },
 
-  /* ── Helper: parse SATU segmen predecessor ──
-     Format: "<ref><TYPE><lag>"
-     Contoh: "I.1", "I.1FS", "I.1FS+2", "I.2SS-1"
-     Return: { id, type, lag, explicit } */
   parsePredecessorSegment(seg){
     const s = String(seg).trim();
     if (!s) return null;
@@ -206,7 +185,6 @@ const CPM = {
     return { id: s, type:'FS', lag:0, explicit: false };
   },
 
-  /* ── Helper: parse STRING predecessor (multi, dipisah ; atau newline) ── */
   parsePredecessors(str){
     if (!str) return [];
     return String(str)
@@ -215,17 +193,11 @@ const CPM = {
       .filter(Boolean);
   },
 
-  /* ── Helper backward-compat: pred pertama ── */
   parsePred(str){
     const list = this.parsePredecessors(str);
     return list.length ? list[0] : null;
   },
 
-  /* ── Helper: relationship efektif untuk sebuah item (MULTI) ──
-     Aturan:
-       - >1 pred  → SEMUA pakai inline type/lag (global override diabaikan).
-       - 1 pred + inline EKSPLISIT ("I.1FS+2") → pakai inline.
-       - 1 pred + inline tidak eksplisit ("I.1") → pakai global override. */
   getRelationships(it){
     const parsed = this.parsePredecessors(it.predecessor);
     if (!parsed.length) return [];
@@ -250,13 +222,11 @@ const CPM = {
     });
   },
 
-  /* ── Helper backward-compat: relationship pertama ── */
   getRelationship(it){
     const list = this.getRelationships(it);
     return list.length ? list[0] : null;
   },
 
-  /* ── Helper: bangun map id/kode → item ── */
   buildMaps(items){
     const byId = {}, byKode = {};
     items.forEach(it => {
@@ -266,18 +236,15 @@ const CPM = {
     return { byId, byKode };
   },
 
-  /* ── Helper: resolve referensi (id atau kode_wbs) ── */
   resolveRef(ref, maps){
     if (!ref) return null;
     return maps.byId[ref] || maps.byKode[String(ref).trim()] || null;
   },
 
-  /* ── Helper: pilih kalender untuk sebuah item ── */
   getCalendarFor(it, proj){
     return WorkingCalendar.get(it.calendar_id || proj.calendar_id);
   },
 
-  /* ── Helper: snap tanggal ke hari kerja terdekat ke depan ── */
   snapToWorkDay(iso, cal){
     let d = iso instanceof Date ? new Date(iso) : new Date(iso + 'T00:00:00');
     let guard = 0;
@@ -287,9 +254,6 @@ const CPM = {
     return d;
   },
 
-  /* ═══════════════════════════════════════════════════════════
-     A. TOPOLOGICAL SORT — Kahn's Algorithm (multi-pred safe)
-     ═══════════════════════════════════════════════════════════ */
   topologicalSort(items, maps){
     const indeg = {}, succs = {};
     items.forEach(it => { indeg[it.id] = 0; succs[it.id] = []; });
@@ -327,9 +291,6 @@ const CPM = {
     return { ok:true, order };
   },
 
-  /* ═══════════════════════════════════════════════════════════
-     B. FORWARD PASS — ES & EF (Fase 1B: manual + multi-pred)
-     ═══════════════════════════════════════════════════════════ */
   forwardPass(items, order, proj, maps){
     const byId = maps.byId;
     const projStart = new Date(proj.tgl_mulai || new Date());
@@ -340,7 +301,6 @@ const CPM = {
       const cal = this.getCalendarFor(it, proj);
       const mode = this.getScheduleMode(it);
 
-      /* ═══ MANUAL MODE: tanggal terkunci user ═══ */
       if (mode === 'manual'){
         const ms = this._parseDate(it.manual_start);
         if (ms){
@@ -353,12 +313,10 @@ const CPM = {
           it._isManual = true;
           return;
         }
-        // Fallback: manual_start kosong → hitung auto
       }
 
       let es = new Date(projStart);
 
-      // Constraint awal (SNET, MSO, FNET)
       const ct = it.constraint_type;
       const cd = this._parseDate(it.constraint_date);
       if (ct && cd){
@@ -375,7 +333,6 @@ const CPM = {
         }
       }
 
-      // Predecessor (MULTI) — ambil ES paling "ketat" (max)
       const rels = this.getRelationships(it);
       rels.forEach(rel => {
         const pred = this.resolveRef(rel.predRef, maps);
@@ -400,15 +357,11 @@ const CPM = {
     });
   },
 
-  /* ═══════════════════════════════════════════════════════════
-     C. BACKWARD PASS — LF & LS (multi-pred + manual-aware)
-     ═══════════════════════════════════════════════════════════ */
   backwardPass(items, order, projFinish, proj, maps){
     const byId = maps.byId;
     const succs = {};
     items.forEach(it => { succs[it.id] = []; });
 
-    // Build edge list dengan dedup
     const seenEdges = {};
     items.forEach(it => {
       const rels = this.getRelationships(it);
@@ -448,7 +401,6 @@ const CPM = {
         });
       }
 
-      // Constraint akhir (FNLT, MFO, SNLT, MSO)
       const ct = it.constraint_type;
       const cd = this._parseDate(it.constraint_date);
       if (ct && cd){
@@ -477,9 +429,6 @@ const CPM = {
     }
   },
 
-  /* ═══════════════════════════════════════════════════════════
-     D. FLOAT & CRITICAL PATH
-     ═══════════════════════════════════════════════════════════ */
   computeFloat(items, proj){
     items.forEach(it => {
       const cal = this.getCalendarFor(it, proj);
@@ -493,15 +442,16 @@ const CPM = {
   },
 
   /* ═══════════════════════════════════════════════════════════
-     ORCHESTRATOR (Fase 1B)
+     ORCHESTRATOR
      ═══════════════════════════════════════════════════════════ */
   run(projectId){
     const proj = DB.projects.find(p => p.id === projectId);
     if (!proj) return { ok:false, message:'Proyek tidak ditemukan' };
 
-    const items = DB.project_wbs.filter(w =>
-      w.project_id === projectId && !w.is_group
-    );
+    // Ambil SEMUA item (termasuk group) untuk roll-up
+    const allItems = DB.project_wbs.filter(w => w.project_id === projectId);
+    const items = allItems.filter(w => !w.is_group);
+
     if (!items.length) return { ok:true, message:'Tidak ada item WBS', count:0 };
 
     // 1) Topological sort
@@ -527,7 +477,7 @@ const CPM = {
     // 4) Backward pass
     this.backwardPass(items, ts.order, projFinish, proj, maps);
 
-    // 4b) ALAP override — task ALAP pindah ke LS/LF
+    // 4b) ALAP override
     items.forEach(it => {
       if (it._isManual) return;
       const ct = String(it.constraint_type || '').toUpperCase();
@@ -540,30 +490,78 @@ const CPM = {
     // 5) Float + critical
     this.computeFloat(items, proj);
 
-    run(projectId){
-    const proj = DB.projects.find(p => p.id === projectId);
-    if (!proj) return { ok:false, message:'Proyek tidak ditemukan' };
-
-    // Ambil SEMUA item (termasuk group) untuk roll-up
-    const allItems = DB.project_wbs.filter(w => w.project_id === projectId);
-    const items = allItems.filter(w => !w.is_group);
-
-    if (!items.length) return { ok:true, message:'Tidak ada item WBS', count:0 };
-
-    // ... (existing topological sort, forward pass, backward pass, float)
-
-    // ═══ TAMBAHKAN: Roll-up ke parent group ═══
+    // 5b) Roll-up tanggal dari leaf ke parent group
     this.rollUpToGroups(allItems, proj);
 
-    // ... (existing write-back)
-    return { ok: true, /* ... */ };
+    // 6) Write-back (DUAL-WRITE)
+    items.forEach(it => {
+      const startISO  = WorkingCalendar.fmt(it._ES);
+      const finishISO = WorkingCalendar.fmt(it._EF);
+      const lsISO     = WorkingCalendar.fmt(it._LS);
+      const lfISO     = WorkingCalendar.fmt(it._LF);
+      const dur       = this.getDuration(it);
+      const flt       = it._totalFloat || 0;
+      const crit      = flt <= 0 ? 1 : 0;
+
+      writeScheduleField(it, 'durasi_hari',         dur);
+      writeScheduleField(it, 'tgl_mulai_rencana',   startISO);
+      writeScheduleField(it, 'tgl_selesai_rencana', finishISO);
+      writeScheduleField(it, 'float_total',         flt);
+      writeScheduleField(it, 'is_critical',         crit);
+
+      writeScheduleField(it, 'start_date',   startISO);
+      writeScheduleField(it, 'finish_date',  finishISO);
+      writeScheduleField(it, 'early_start',  startISO);
+      writeScheduleField(it, 'early_finish', finishISO);
+      writeScheduleField(it, 'late_start',   lsISO);
+      writeScheduleField(it, 'late_finish',  lfISO);
+      writeScheduleField(it, 'total_float',  flt);
+
+      delete it._ES; delete it._EF; delete it._LS; delete it._LF;
+      delete it._totalFloat; delete it._isManual;
+    });
+
+    // 7) Update tanggal selesai proyek — dengan guard
+    const newFinishISO = WorkingCalendar.fmt(projFinish);
+    const projStartISO = WorkingCalendar.fmt(projStart);
+
+    const hasValidSchedule = items.length > 0 &&
+                             newFinishISO > projStartISO &&
+                             !proj.manual_dates;
+
+    if (hasValidSchedule && newFinishISO !== proj.tgl_selesai){
+      proj.tgl_selesai = newFinishISO;
+      const dur = hitungDurasiLengkap(
+        proj.tgl_mulai, newFinishISO,
+        WorkingCalendar.get(proj.calendar_id),
+        proj.durasi_mode || 'working'
+      );
+      proj.durasi_hari   = dur.durasi_hari;
+      proj.durasi_minggu = dur.durasi_minggu;
+      proj.durasi_kerja  = dur.durasi_kerja;
+    }
+
+    const criticalCount = items.filter(it => num(it.is_critical) === 1).length;
+    const manualCount   = items.filter(it => this.getScheduleMode(it) === 'manual').length;
+
+    return {
+      ok: true,
+      message: 'CPM selesai',
+      count: items.length,
+      critical: criticalCount,
+      manual: manualCount,
+      finish: newFinishISO,
+      start: WorkingCalendar.fmt(projStart)
+    };
   },
 
-  /* ── Roll-up tanggal dari leaf ke group ── */
-  rollUpToGroups(allItems, proj) {
+  /* ═══════════════════════════════════════════════════════════
+     ROLL-UP: Agregasi tanggal & progress dari leaf ke group
+     ═══════════════════════════════════════════════════════════ */
+  rollUpToGroups(allItems, proj){
     const groups = allItems.filter(w => w.is_group);
     const byParent = {};
-    
+
     allItems.forEach(w => {
       if (w.parent_id) {
         if (!byParent[w.parent_id]) byParent[w.parent_id] = [];
@@ -578,7 +576,6 @@ const CPM = {
         const kids = byParent[g.id] || [];
         if (!kids.length) return;
 
-        // Ambil tanggal dari kids yang sudah terisi
         let minStart = null;
         let maxFinish = null;
         let totalDur = 0;
@@ -592,7 +589,6 @@ const CPM = {
           if (kf && (!maxFinish || kf > maxFinish)) maxFinish = kf;
           totalDur += num(k.durasi_hari || k.duration || 0);
 
-          // Progress berbobot cost
           const costTotal = num(k.volume_rab) * Calc.hargaSatuanRAB(proj.id, k.ahsp_id);
           const progPct = this.computeProgressPct(k);
           totalBobot += costTotal;
@@ -610,90 +606,23 @@ const CPM = {
     }
   },
 
-  /* ── Hitung progress leaf task ── */
-  computeProgressPct(task) {
+  /* ── Hitung progress leaf task (0-100) ── */
+  computeProgressPct(task){
     const volRAB = num(task.volume_rab) || 1;
     const done = DB.progress
       .filter(p => p.wbs_id === task.id)
       .reduce((s, p) => s + num(p.volume), 0);
     return Math.min(100, (done / volRAB) * 100);
   }
-
-    // 6) Write-back (DUAL-WRITE)
-    items.forEach(it => {
-      const startISO  = WorkingCalendar.fmt(it._ES);
-      const finishISO = WorkingCalendar.fmt(it._EF);
-      const lsISO     = WorkingCalendar.fmt(it._LS);
-      const lfISO     = WorkingCalendar.fmt(it._LF);
-      const dur       = this.getDuration(it);
-      const flt       = it._totalFloat || 0;
-      const crit      = flt <= 0 ? 1 : 0;
-
-      // New fields (Phase 1)
-      writeScheduleField(it, 'durasi_hari',         dur);
-      writeScheduleField(it, 'tgl_mulai_rencana',   startISO);
-      writeScheduleField(it, 'tgl_selesai_rencana', finishISO);
-      writeScheduleField(it, 'float_total',         flt);
-      writeScheduleField(it, 'is_critical',         crit);
-
-      // Legacy fields (backward compat)
-      writeScheduleField(it, 'start_date',   startISO);
-      writeScheduleField(it, 'finish_date',  finishISO);
-      writeScheduleField(it, 'early_start',  startISO);
-      writeScheduleField(it, 'early_finish', finishISO);
-      writeScheduleField(it, 'late_start',   lsISO);
-      writeScheduleField(it, 'late_finish',  lfISO);
-      writeScheduleField(it, 'total_float',  flt);
-
-      // Cleanup temp fields
-      delete it._ES; delete it._EF; delete it._LS; delete it._LF;
-      delete it._totalFloat; delete it._isManual;
-    });
-
-   // 7) Update tanggal selesai proyek — DENGAN GUARD
-   const newFinishISO = WorkingCalendar.fmt(projFinish);
-   const projStartISO = WorkingCalendar.fmt(projStart);
-   
-   // Guard: hanya update jika WBS menghasilkan schedule valid
-   const hasValidSchedule = items.length > 0 &&
-                            newFinishISO > projStartISO &&
-                            !proj.manual_dates;
-   
-   if (hasValidSchedule && newFinishISO !== proj.tgl_selesai){
-     proj.tgl_selesai = newFinishISO;
-     const dur = hitungDurasiLengkap(
-       proj.tgl_mulai, newFinishISO,
-       WorkingCalendar.get(proj.calendar_id),
-       proj.durasi_mode || 'working'
-     );
-     proj.durasi_hari   = dur.durasi_hari;
-     proj.durasi_minggu = dur.durasi_minggu;
-     proj.durasi_kerja  = dur.durasi_kerja;
-   }
-
-    const criticalCount = items.filter(it => num(it.is_critical) === 1).length;
-    const manualCount   = items.filter(it => this.getScheduleMode(it) === 'manual').length;
-
-    return {
-      ok: true,
-      message: 'CPM selesai',
-      count: items.length,
-      critical: criticalCount,
-      manual: manualCount,
-      finish: newFinishISO,
-      start: WorkingCalendar.fmt(projStart)
-    };
-  }
 };
 
-/* ── Backward-compat: fungsi lama memanggil runCPM ── */
+/* ── Backward-compat ── */
 function runCPM(projectId){
   return CPM.run(projectId);
 }
 
 /* =====================================================================
    BAGIAN 4 — AUTOSAVE MODULE v2
-   Multi-Layer Persistence + Draft Recovery + Before-Unload Guard
    ===================================================================== */
 const AUTOSAVE = {
   DELAY_MS: 2000,
@@ -823,7 +752,7 @@ const AUTOSAVE = {
 };
 
 /* =====================================================================
-   BAGIAN 5 — INDEXEDDB WRAPPER (Layer 2 Backup)
+   BAGIAN 5 — INDEXEDDB WRAPPER
    ===================================================================== */
 const IDB = {
   dbName: 'mk_v1_idb',
@@ -918,13 +847,10 @@ document.addEventListener('visibilitychange', () => {
 });
 
 /* =====================================================================
-   BAGIAN 7 — RESOURCE LOADER v2 (Phase 3)
-   Ekstraksi kebutuhan × distribusi waktu × agregasi bucket
-   READ-ONLY terhadap master_resources, ahsp_details_master, project_ahsp_details
+   BAGIAN 7 — RESOURCE LOADER v2
    ===================================================================== */
 const ResourceLoader = {
 
-  /* ── Util: daftar hari kerja eksklusif [start, finish) ── */
   workingDaysInRange(startISO, finishISOExcl, cal){
     const out = [];
     if (!startISO || !finishISOExcl) return out;
@@ -941,7 +867,6 @@ const ResourceLoader = {
     return out;
   },
 
-  /* ── Util: bobot distribusi ternormalisasi (Fase 2E: 8 contour types) ── */
   computeWeights(n, mode){
     if (n <= 0) return [];
     if (n === 1) return [1];
@@ -951,17 +876,14 @@ const ResourceLoader = {
 
     switch (mode){
       case 'front':
-        // Front Loaded: linier menurun dari 1.5× ke 0.5×
         for (let i = 0; i < n; i++) w[i] = 1.5 - (i / last);
         break;
 
       case 'back':
-        // Back Loaded: linier naik dari 0.5× ke 1.5×
         for (let i = 0; i < n; i++) w[i] = 0.5 + (i / last);
         break;
 
       case 'bell':
-        // Bell: distribusi normal di tengah
         {
           const sigma = n / 4 || 1;
           for (let i = 0; i < n; i++)
@@ -970,7 +892,6 @@ const ResourceLoader = {
         break;
 
       case 'early_peak':
-        // Early Peak: puncak di 1/3 awal
         {
           const peak = n / 3;
           const sigma = n / 5 || 1;
@@ -980,7 +901,6 @@ const ResourceLoader = {
         break;
 
       case 'late_peak':
-        // Late Peak: puncak di 2/3 akhir
         {
           const peak = (2 * n) / 3;
           const sigma = n / 5 || 1;
@@ -990,7 +910,6 @@ const ResourceLoader = {
         break;
 
       case 'double_peak':
-        // Double Peak: puncak di 1/4 & 3/4
         {
           const p1 = n / 4, p2 = (3 * n) / 4;
           const sigma = n / 8 || 1;
@@ -1002,7 +921,6 @@ const ResourceLoader = {
         break;
 
       case 'triangular':
-        // Triangular: linier naik lalu turun
         for (let i = 0; i < n; i++)
           w[i] = 1 - Math.abs(i - c) / (c || 1) + 0.05;
         break;
@@ -1016,7 +934,6 @@ const ResourceLoader = {
     return w.map(x => x / sum);
   },
 
-  /* ── Util: bucket key sesuai granularitas ── */
   bucketKey(iso, gran){
     if (gran === 'monthly') return iso.slice(0, 7);
     if (gran === 'weekly'){
@@ -1030,24 +947,18 @@ const ResourceLoader = {
     return iso;
   },
 
-  /* ═══════════════════════════════════════════════════════════
-     A. EKSTRAKSI KEBUTUHAN PER ITEM WBS
-     Volume × Koefisien → qty_total; × harga → cost_total
-     ═══════════════════════════════════════════════════════════ */
   extractItemNeeds(projectId, mode){
     mode = mode || 'rab';
     const items = DB.project_wbs.filter(w =>
       w.project_id === projectId && !w.is_group && w.ahsp_id
     );
 
-    // Pre-index project_ahsp_details by ahsp_id
     const detByAhsp = {};
     DB.project_ahsp_details.forEach(d => {
       if (d.project_id !== projectId) return;
       (detByAhsp[d.ahsp_id] = detByAhsp[d.ahsp_id] || []).push(d);
     });
 
-    // Pre-index resources
     const resById = {};
     DB.master_resources.forEach(r => { resById[r.id] = r; });
 
@@ -1085,9 +996,6 @@ const ResourceLoader = {
     return result;
   },
 
-  /* ═══════════════════════════════════════════════════════════
-     B. DISTRIBUSI HARIAN & AGREGASI BUCKET
-     ═══════════════════════════════════════════════════════════ */
   load(projectId, opts){
     opts = opts || {};
     const mode  = opts.mode         || 'rab';
@@ -1097,7 +1005,6 @@ const ResourceLoader = {
     const proj = DB.projects.find(p => p.id === projectId);
     if (!proj) return { ok:false, error:'Proyek tidak ditemukan' };
 
-    // Pastikan CPM terbaru
     const cpm = CPM.run(projectId);
     if (!cpm.ok) return { ok:false, error: cpm.message };
 
@@ -1105,7 +1012,7 @@ const ResourceLoader = {
 
     const buckets     = {};
     const byResource  = {};
-    const resDailyMap = {};  // resKode → { isoDate: qty }
+    const resDailyMap = {};
     const byWBS       = [];
 
     items.forEach(({ wbs, volume, needs }) => {
@@ -1117,7 +1024,6 @@ const ResourceLoader = {
       );
       if (!days.length) return;
 
-      // ── Fase 2E: per-task contour override, fallback ke global dist ──
       const taskContour = String(wbs.work_contour || '').trim().toLowerCase();
       const effectiveDist = (taskContour && WORK_CONTOURS[taskContour])
         ? taskContour
@@ -1182,7 +1088,6 @@ const ResourceLoader = {
       byWBS.push(wbsAgg);
     });
 
-    /* ── Peak per resource ── */
     Object.keys(resDailyMap).forEach(kode => {
       const map = resDailyMap[kode];
       let peak = 0;
@@ -1200,7 +1105,7 @@ const ResourceLoader = {
       buckets:    Object.values(buckets).sort((a,b) => a.bucket_key.localeCompare(b.bucket_key)),
       byResource: Object.values(byResource).sort((a,b) => b.total_cost - a.total_cost),
       byWBS:      byWBS.sort((a,b) => a.kode_wbs.localeCompare(b.kode_wbs)),
-      resDailyMap,                                    // ← NEW (Phase 4)
+      resDailyMap,
       totals: {
         upah:  Object.values(buckets).reduce((s,b) => s + b.upah,  0),
         bahan: Object.values(buckets).reduce((s,b) => s + b.bahan, 0),
@@ -1210,7 +1115,6 @@ const ResourceLoader = {
   }
 };
 
-/* ── Backward-compat: kode lama yang memanggil breakdownResources ── */
 function breakdownResources(projectId, granularity){
   const r = ResourceLoader.load(projectId, { granularity: granularity || 'weekly' });
   return r.ok ? r : { error: r.error };
@@ -1248,7 +1152,7 @@ function renderSchedule(){
     return;
   }
 
-  /* ── Tabel time-phased ── */
+  /* Tabel time-phased */
   const head = `<thead><tr>
     <th>Periode</th><th>Rentang</th>
     <th class="num">Upah (Rp)</th>
@@ -1274,7 +1178,7 @@ function renderSchedule(){
   $('#tblResourceLoad').innerHTML = head +
     `<tbody>${body || '<tr><td colspan="6" class="empty">Tidak ada data jadwal.</td></tr>'}</tbody>` + foot;
 
-  /* ── Tabel per-resource dengan Peak/hari ── */
+  /* Tabel per-resource */
   const rHead = `<thead><tr>
     <th>Kode</th><th>Nama</th><th>Jenis</th><th>Satuan</th>
     <th class="num">Total Qty</th>
@@ -1299,7 +1203,7 @@ function renderSchedule(){
       `<tbody>${rBody || '<tr><td colspan="7" class="empty">Tidak ada data.</td></tr>'}</tbody>`;
   }
 
-  /* ── Critical path ── */
+  /* Critical path */
   const cHead = `<thead><tr>
     <th>Kode</th><th>Uraian</th><th class="center">Dur</th>
     <th class="center">Start</th><th class="center">Finish</th>
@@ -1315,7 +1219,7 @@ function renderSchedule(){
   </tr>`).join('') || '<tr><td colspan="6" class="empty">Tidak ada item kritis</td></tr>';
   $('#tblCritical').innerHTML = cHead + `<tbody>${cBody}</tbody>`;
 
-  /* ── Grafik distribusi biaya per periode ── */
+  /* Grafik distribusi biaya */
   const cv = $('#chartResourceLoad');
   if (cv){
     if (STATE.chartRL) STATE.chartRL.destroy();
@@ -1342,30 +1246,29 @@ function renderSchedule(){
       }
     });
   }
-   
-   /* ── Fase 1 + 2D: Gantt / Resource Sheet View Toggle ── */
-   const ganttEl = document.getElementById('ganttContainer');
-   const schedViewTabs = document.getElementById('schedViewTabs');
-   if (ganttEl){
-     const viewMode = ganttEl._viewMode || 'gantt';
-     if (schedViewTabs){
-       schedViewTabs.querySelectorAll('[data-view]').forEach(btn => {
-         btn.classList.toggle('is-active', btn.getAttribute('data-view') === viewMode);
-       });
-     }
-     if (viewMode === 'gantt'){
-       const mode = $('#schedMode')?.value || 'rab';
-       GanttView.mount(ganttEl, pid, { mode, zoom: ganttEl._lastZoom || 'weekly' });
-     } else {
-       ResourceSheet.render(ganttEl, pid, {});
-     }
-   }
 
-  /* ── Phase 4: Resource Histogram ── */
+  /* Gantt / Resource Sheet View Toggle */
+  const ganttEl = document.getElementById('ganttContainer');
+  const schedViewTabs = document.getElementById('schedViewTabs');
+  if (ganttEl){
+    const viewMode = ganttEl._viewMode || 'gantt';
+    if (schedViewTabs){
+      schedViewTabs.querySelectorAll('[data-view]').forEach(btn => {
+        btn.classList.toggle('is-active', btn.getAttribute('data-view') === viewMode);
+      });
+    }
+    if (viewMode === 'gantt'){
+      const mode = $('#schedMode')?.value || 'rab';
+      GanttView.mount(ganttEl, pid, { mode, zoom: ganttEl._lastZoom || 'weekly' });
+    } else {
+      ResourceSheet.render(ganttEl, pid, {});
+    }
+  }
+
+  /* Resource Histogram */
   const selRes = document.getElementById('histResource');
   const histEl = document.getElementById('chartHistogram');
   if (selRes && histEl){
-    // isi dropdown resource (sekali, kalau kosong)
     if (!selRes.options.length){
       selRes.innerHTML = rl.byResource.map(r =>
         `<option value="${esc(r.kode)}">${esc(r.kode)} — ${esc(r.nama)} (${esc(r.jenis)})</option>`
@@ -1376,14 +1279,14 @@ function renderSchedule(){
     if (kode) ResourceHistogram.render(pid, histEl, kode, gran);
   }
 
-  /* ── Phase 4: Over-Allocation Alerts ── */
+  /* Over-Allocation Alerts */
   const alertEl = document.getElementById('overAllocWrap');
   if (alertEl){
     const det = OverAllocationDetector.detect(pid);
     if (!det.ok){
       alertEl.innerHTML = `<div class="alert warn">${esc(det.error)}</div>`;
     } else if (!det.alerts.length){
-      alertEl.innerHTML = `<div class="alert ok"><span>✅</span><div><b>Tidak ada over-allocation.</b><br>Semua resource berada dalam batas kapasitas harian (atau kapasitas belum diisi).</div></div>`;
+      alertEl.innerHTML = `<div class="alert ok"><span>✅</span><div><b>Tidak ada over-allocation.</b></div></div>`;
     } else {
       const html = det.alerts.map(a => `
         <div class="alert">
@@ -1392,13 +1295,7 @@ function renderSchedule(){
             <b>${esc(a.kode)} — ${esc(a.nama)}</b>
             <div style="font-size:11.5px;margin-top:4px">
               Kapasitas <b>${fmt(a.kapasitas,0)} ${esc(a.satuan)}/hari</b> ·
-              Dilampaui <b>${a.jumlah_hari} hari</b> ·
-              Puncak <b>${fmt(a.qty_terburuk,2)} ${esc(a.satuan)}</b>
-              (<span class="neg">+${fmt(a.over_terburuk,2)}</span>, <b class="neg">${fmt(a.persen_over,1)}%</b>)
-              pada <b>${esc(a.tanggal_terburuk)}</b>
-            </div>
-            <div style="font-size:10.5px;color:var(--muted);margin-top:4px">
-              Saran: delay item non-kritis, atau tambah kapasitas ${esc(a.jenis)}.
+              Dilampaui <b>${a.jumlah_hari} hari</b>
             </div>
           </div>
         </div>`).join('');
@@ -1406,24 +1303,22 @@ function renderSchedule(){
     }
   }
 
-  /* ── Fase 1E: Conflict Detection Panel ── */
+  /* Conflict Detection Panel */
   const conflictEl = document.getElementById('conflictWrap');
   if (conflictEl){
     const cfr = ConflictDetector.detect(pid);
     if (!cfr.ok){
       conflictEl.innerHTML = '<div class="alert warn">' + esc(cfr.error || 'Gagal deteksi konflik') + '</div>';
     } else if (!cfr.conflicts.length){
-      conflictEl.innerHTML = '<div class="alert ok"><span>✅</span><div><b>Tidak ada konflik jadwal.</b><br>Semua constraint dan predecessor konsisten.</div></div>';
+      conflictEl.innerHTML = '<div class="alert ok"><span>✅</span><div><b>Tidak ada konflik jadwal.</b></div></div>';
     } else {
       const groups = { high: [], warn: [], info: [] };
       cfr.conflicts.forEach(c => (groups[c.severity] || groups.info).push(c));
       let html = '';
       if (groups.high.length){
-        html += '<div style="font-size:11px;color:var(--muted);margin-bottom:6px;letter-spacing:.5px;font-weight:700">🔴 KRITIS (' + groups.high.length + ')</div>';
         html += groups.high.map(renderConflictCard).join('');
       }
       if (groups.warn.length){
-        html += '<div style="font-size:11px;color:var(--muted);margin:10px 0 6px;letter-spacing:.5px;font-weight:700">🟡 PERINGATAN (' + groups.warn.length + ')</div>';
         html += groups.warn.map(renderConflictCard).join('');
       }
       if (groups.info.length){
@@ -1431,7 +1326,6 @@ function renderSchedule(){
       }
       conflictEl.innerHTML = html;
 
-      // Click-to-edit: klik conflict card → buka form WBS
       conflictEl.querySelectorAll('[data-conflict-task]').forEach(card => {
         card.style.cursor = 'pointer';
         card.onclick = () => {
@@ -1444,7 +1338,7 @@ function renderSchedule(){
 }
 
 /* =====================================================================
-   BAGIAN 9 — EVENT WIRING (Optional — panggil dari init jika ada tab schedule)
+   BAGIAN 9 — EVENT WIRING
    ===================================================================== */
 function initScheduleEvents(){
   const btnRun = document.getElementById('btnRunCPM');
@@ -1459,9 +1353,8 @@ function initScheduleEvents(){
     };
   }
   const selGran = document.getElementById('schedGranularity');
-  if (selGran){
-    selGran.onchange = renderSchedule;
-  }
+  if (selGran) selGran.onchange = renderSchedule;
+
   const selMode = document.getElementById('schedMode');
   if (selMode) selMode.onchange = renderSchedule;
 
@@ -1474,7 +1367,6 @@ function initScheduleEvents(){
   const selHistGran = document.getElementById('histGranularity');
   if (selHistGran) selHistGran.onchange = renderSchedule;
 
-  /* ── Fase 2D: View Toggle (Gantt ↔ Resource Sheet) ── */
   const schedViewTabs = document.getElementById('schedViewTabs');
   if (schedViewTabs){
     schedViewTabs.querySelectorAll('[data-view]').forEach(btn => {
@@ -1489,7 +1381,6 @@ function initScheduleEvents(){
     });
   }
 
-  /* ── Fase 1E: Conflict Refresh ── */
   const btnCfr = document.getElementById('btnConflictRefresh');
   if (btnCfr){
     btnCfr.onclick = () => {
@@ -1529,18 +1420,15 @@ function initScheduleEvents(){
 }
 
 /* =====================================================================
-   BAGIAN 8B — BASELINE & VARIANCE ENGINE (Fase 4A)
-   Menyimpan snapshot jadwal sebagai acuan + menghitung slip
+   BAGIAN 8B — BASELINE & VARIANCE ENGINE
    ===================================================================== */
 const Baseline = {
   INDICES: [1, 2, 3],
 
   fieldFor(idx, kind){
-    // kind: 'start' | 'finish' | 'set_at'
     return 'bl' + idx + '_' + kind;
   },
 
-  /* Apakah baseline ke-idx sudah pernah di-set untuk proyek ini? */
   isSet(projectId, idx){
     if (!idx) return false;
     const items = DB.project_wbs.filter(w => w.project_id === projectId && !w.is_group);
@@ -1549,7 +1437,6 @@ const Baseline = {
     return items.some(w => w[f] && String(w[f]).trim() !== '');
   },
 
-  /* Ambil timestamp baseline (ISO string) */
   getTimestamp(projectId, idx){
     if (!idx) return null;
     const items = DB.project_wbs.filter(w => w.project_id === projectId && !w.is_group);
@@ -1561,7 +1448,6 @@ const Baseline = {
     return null;
   },
 
-  /* Snapshot jadwal saat ini ke baseline ke-idx */
   set(projectId, idx){
     const items = DB.project_wbs.filter(w => w.project_id === projectId && !w.is_group);
     if (!items.length) return { ok:false, msg:'Tidak ada item WBS' };
@@ -1578,7 +1464,6 @@ const Baseline = {
     return { ok:true, count: items.length, timestamp: now };
   },
 
-  /* Hapus baseline ke-idx */
   clear(projectId, idx){
     const items = DB.project_wbs.filter(w => w.project_id === projectId);
     const fS = this.fieldFor(idx, 'start');
@@ -1593,7 +1478,6 @@ const Baseline = {
     return { ok:true };
   },
 
-  /* Hitung variance per task */
   variance(projectId, idx){
     if (!idx || !this.isSet(projectId, idx)) return [];
     const fS = this.fieldFor(idx, 'start');
@@ -1614,7 +1498,6 @@ const Baseline = {
     });
   },
 
-  /* KPI agregat */
   kpi(projectId, idx){
     const rows = this.variance(projectId, idx);
     const valid   = rows.filter(r => r.slip !== null);
@@ -1635,15 +1518,7 @@ const Baseline = {
 
 /* =====================================================================
    BAGIAN 9 — GANTT CHART MS PROJECT STYLE
-   A. GanttEngine          — Data layer (tree, rollup, progress)
-   B. GanttView            — Presentation layer (table + canvas)
-   C. ResourceHistogram    — Histogram kebutuhan per resource
-   D. OverAllocationDetector — Deteksi over-alokasi
    ===================================================================== */
-
-/* ═══════════════════════════════════════════════════════════
-   A. GANTT ENGINE — Data Layer
-   ═══════════════════════════════════════════════════════════ */
 const GanttEngine = {
 
   buildTree(projectId, opts){
@@ -1676,15 +1551,10 @@ const GanttEngine = {
 
     this.rollup(nodes);
     this.computeCostAggregates(nodes);
-    this.computeActualDates(nodes, projectId);   // ← Fase 3B-1
+    this.computeActualDates(nodes, projectId);
     return { ok:true, nodes, proj };
   },
 
-  /* ═══════════════════════════════════════════════════════════
-     FASE 3B-1 — ACTUAL DATES dari PROGRESS
-     actual_start = tanggal progress pertama
-     actual_finish = tanggal progress saat cumulative >= target (kalau selesai)
-     ═══════════════════════════════════════════════════════════ */
   computeActualDates(nodes, projectId){
     const progByWbs = {};
     DB.progress.filter(p => p.project_id === projectId).forEach(p => {
@@ -1699,7 +1569,6 @@ const GanttEngine = {
     const byId = {};
     nodes.forEach(n => { byId[n.id] = n; });
 
-    /* Leaf task: hitung actual per task */
     nodes.forEach(n => {
       if (n.isSummary || n.isGroupHeader) return;
       const prog = progByWbs[n.id];
@@ -1712,10 +1581,8 @@ const GanttEngine = {
         return;
       }
 
-      /* Sort by tanggal */
       prog.sort((a, b) => (a.tanggal || '').localeCompare(b.tanggal || ''));
 
-      /* Filter valid tanggal */
       const withTanggal = prog.filter(x => x.tanggal);
       if (!withTanggal.length){
         n.actualStart = null;
@@ -1729,21 +1596,18 @@ const GanttEngine = {
       const target = num(n.raw.volume_rab) || 1;
       let cum = 0;
       let finishISO = null;
-      let cumAtFinish = 0;
 
       for (const p of withTanggal){
         cum += p.volume;
         if (cum >= target && !finishISO){
           finishISO = p.tanggal;
-          cumAtFinish = cum;
         }
       }
 
       n.actualStart = withTanggal[0].tanggal;
-      n.actualFinish = finishISO;   // null kalau belum selesai
+      n.actualFinish = finishISO;
       n.actualPct = Math.min(100, (cum / target) * 100);
 
-      /* Slip = actual_finish - plan_finish (kalau selesai) */
       if (finishISO && n.finishISO){
         const cal = WorkingCalendar.get(n.raw.calendar_id || DB.projects.find(p => p.id === projectId)?.calendar_id);
         const slip = WorkingCalendar.diffDays(n.finishISO, finishISO, cal, 'working');
@@ -1752,13 +1616,11 @@ const GanttEngine = {
         n.slipDays = null;
       }
 
-      /* Status */
       if (finishISO) n.status = 'complete';
       else if (n.actualPct > 0) n.status = 'in-progress';
       else n.status = 'not-started';
     });
 
-    /* Rollup actual untuk summary */
     const maxLevel = Math.max(...nodes.map(n => n.level), 0);
     for (let lvl = maxLevel; lvl >= 0; lvl--){
       nodes.filter(n => n.level === lvl && n.isSummary).forEach(n => {
@@ -1770,7 +1632,6 @@ const GanttEngine = {
         n.actualStart = starts.length ? starts[0] : null;
         n.actualFinish = finishes.length ? finishes[finishes.length - 1] : null;
 
-        /* Actual % berbobot cost */
         const wSum = kids.reduce((s,c) => s + (c.costTotal || 0), 0);
         if (wSum > 0){
           n.actualPct = kids.reduce((s,c) => s + c.actualPct * (c.costTotal || 0), 0) / wSum;
@@ -1778,18 +1639,16 @@ const GanttEngine = {
           n.actualPct = kids.reduce((s,c) => s + c.actualPct, 0) / kids.length;
         }
 
-        /* Slip summary = max slip dari kids */
         const slips = kids.map(c => c.slipDays).filter(v => v !== null);
         n.slipDays = slips.length ? Math.max(...slips) : null;
 
-        /* Status summary */
         const statuses = kids.map(c => c.status);
         if (statuses.every(s => s === 'complete')) n.status = 'complete';
         else if (statuses.some(s => s === 'in-progress' || s === 'complete')) n.status = 'in-progress';
         else n.status = 'not-started';
       });
     }
-},
+  },
 
   makeNode(w, level, proj, mode){
     const isSummary = !!w.is_group;
@@ -1808,7 +1667,6 @@ const GanttEngine = {
       }
     }
 
-    /* ── Fase 3A-3: Cost fields ── */
     const costTotal = isSummary ? 0 : num(w.volume_rab) * Calc.hargaSatuanRAB(proj.id, w.ahsp_id);
     const durationForCost = duration || 1;
     const costPerDay = isSummary ? 0 : (costTotal / durationForCost);
@@ -1817,8 +1675,7 @@ const GanttEngine = {
       id: w.id,
       kode: w.kode_wbs || '',
       nama: w.uraian || '',
-      level: w.wbs_level || level, 
-      level,
+      level: w.wbs_level || level,
       isSummary,
       isMilestone: !isSummary && duration === 0,
       isCritical:  !isSummary && num(w.is_critical) === 1,
@@ -1830,7 +1687,6 @@ const GanttEngine = {
       progressPct,
       parentId: w.parent_id || null,
       totalRab: num(w.volume_rab) * Calc.hargaSatuanRAB(proj.id, w.ahsp_id),
-      /* Fase 3A-3 */
       costTotal,
       costPerDay,
       pctBudget: 0,
@@ -1891,7 +1747,6 @@ const GanttEngine = {
         }
         n.isCritical = kids.some(c => c.isCritical);
 
-        /* Fase 3A-3: rollup cost dari children */
         const kidsCost = kids.reduce((s,c) => s + (c.costTotal || 0), 0);
         n.costTotal = kidsCost;
         n.costPerDay = n.duration > 0 ? (kidsCost / n.duration) : 0;
@@ -1899,11 +1754,6 @@ const GanttEngine = {
     }
   },
 
-  /* ═══════════════════════════════════════════════════════════
-     FASE 3A-3 — COMPUTE COST AGGREGATES
-     pct_budget: cost task / total biaya proyek
-     cum_pct   : kumulatif % mengikuti urutan hierarki
-     ═══════════════════════════════════════════════════════════ */
   computeCostAggregates(nodes){
     const leaves = nodes.filter(n => !n.isSummary && !n.isGroupHeader);
     const totalCost = leaves.reduce((s, n) => s + (n.costTotal || 0), 0);
@@ -1918,7 +1768,6 @@ const GanttEngine = {
       const cost = n.costTotal || 0;
       n.pctBudget = (cost / totalCost) * 100;
       if (n.isSummary){
-        // Summary: cum% mengikuti running (posisi hierarkis)
         n.cumPct = (running / totalCost) * 100;
       } else {
         running += cost;
@@ -1928,9 +1777,9 @@ const GanttEngine = {
   }
 };
 
-/* ═══════════════════════════════════════════════════════════
-   B. GANTT VIEW — Presentation Layer
-   ═══════════════════════════════════════════════════════════ */
+/* =====================================================================
+   GANTT VIEW
+   ===================================================================== */
 const GanttView = {
 
   ZOOM: {
@@ -1949,12 +1798,10 @@ const GanttView = {
     { key:'startISO',     label:'Start',     width: 78, align:'center'},
     { key:'finishISO',    label:'Finish',    width: 78, align:'center'},
     { key:'variance',     label:'Var',       width: 56, align:'center'},
-    /* ── Fase 3A-3: Cost Table Columns ── */
     { key:'cost_total',   label:'Cost Total', width:110, align:'right', cost: true },
     { key:'cost_day',     label:'Cost/Day',   width: 95, align:'right', cost: true },
     { key:'pct_budget',   label:'% Budget',   width: 86, align:'right', cost: true },
     { key:'cum_pct',      label:'Cum %',      width: 78, align:'right', cost: true },
-    /* ── Existing ── */
     { key:'predecessors', label:'Pred',      width: 62, align:'left'  },
     { key:'resources',    label:'Resources', width:108, align:'left'  }
   ],
@@ -1963,9 +1810,6 @@ const GanttView = {
   ROW_H: 26,
   AXIS_H: 60,
 
-  /* ═══════════════════════════════════════════════════════════
-     Fase 2C — Bar Style Presets + Gridlines Config
-     ═══════════════════════════════════════════════════════════ */
   STYLE_STORE_KEY: 'mk_gantt_style_v1',
 
   BAR_STYLES: {
@@ -2006,7 +1850,6 @@ const GanttView = {
 
   _state: null,
 
-  /* ─────── MOUNT ─────── */
   mount(container, projectId, opts){
     if (!container) return null;
     opts = opts || {};
@@ -2062,10 +1905,8 @@ const GanttView = {
     const totalDays   = Math.round((endDate - startDate) / 86400000) + 1;
     let chartWidth;
     if (zoom === 'hourly'){
-      // Hourly: 1 hari = 24 jam, tapi kita punya pxPerDay = 96 → 4px/jam
       chartWidth = Math.max(800, totalDays * zoomCfg.pxPerDay);
     } else if (zoom === 'yearly'){
-      // Yearly: pxPerDay sangat kecil — pastikan minimum lebar
       chartWidth = Math.max(600, totalDays * zoomCfg.pxPerDay);
     } else {
       chartWidth = Math.max(400, totalDays * zoomCfg.pxPerDay);
@@ -2084,19 +1925,14 @@ const GanttView = {
       totalHeight: 0,
       posMap: {},
       barDrag: null,
-      /* Fase 2C — style */
       barStyle:      styleState.barStyle,
       barStyleCfg:   this.BAR_STYLES[styleState.barStyle] || this.BAR_STYLES.classic,
       gridlines:     styleState.gridlines,
-      /* Fase 3A-1 — Cost Strip */
       costStrip: localStorage.getItem('mk_gantt_cost_strip') !== 'off',
       costPerDay: null,
-      /* Fase 3A-2 — S-Curve Overlay */
       sCurveOverlay: localStorage.getItem('mk_gantt_scurve') === 'on',
       sCurveData: null,
-      /* Fase 3A-3 — Cost Columns */
       costColumns: localStorage.getItem('mk_gantt_cost_cols') === 'on',
-      /* Fase 3B-1 — Tracking */
       trackingMode: localStorage.getItem('mk_gantt_track') === 'on',
       actualMap: null
     };
@@ -2116,11 +1952,9 @@ const GanttView = {
     return state;
   },
 
-     /* Hitung node yang terlihat (skip descendants of collapsed) */
   computeVisible(state){
     const {nodes, collapsed, filter} = state;
 
-    // 1. Hidden karena collapse summary
     const hidden = new Set();
     const markHidden = (id) => {
       const kids = state.childrenOf[id] || [];
@@ -2130,22 +1964,18 @@ const GanttView = {
 
     let visible = nodes.filter(n => !hidden.has(n.id));
 
-    // 2. Filter by search
     if (filter.search){
       visible = this.applySearch(visible, state, filter.search);
     }
 
-    // 3. Filter by chips
     if (filter.chips.size > 0){
       visible = this.applyChips(visible, state, filter.chips);
     }
 
-    // 4. Sort by column (skip kalau group aktif)
     if (filter.sort.key && !filter.groupBy){
       visible = this.applySort(visible, state);
     }
 
-    // 5. Group by (insert group headers)
     if (filter.groupBy){
       visible = this.applyGroup(visible, state);
     }
@@ -2154,7 +1984,6 @@ const GanttView = {
     state.totalHeight  = visible.length * this.ROW_H;
   },
 
-  /* Filter by search (show matching + ancestors) */
   applySearch(nodes, state, q){
     const needle = q.toLowerCase();
     const matching = new Set();
@@ -2178,7 +2007,6 @@ const GanttView = {
     return nodes.filter(n => keep.has(n.id));
   },
 
-  /* Filter by chips (AND semantics) */
   applyChips(nodes, state, chips){
     const matching = new Set();
     const byId = {};
@@ -2219,7 +2047,6 @@ const GanttView = {
     return nodes.filter(n => keep.has(n.id));
   },
 
-  /* Sort siblings within each parent */
   applySort(nodes, state){
     const { key, dir } = state.filter.sort;
     const byParent = {};
@@ -2269,12 +2096,11 @@ const GanttView = {
     }
   },
 
-  /* Group by field — insert synthetic header rows */
   applyGroup(nodes, state){
     const field = state.filter.groupBy;
     const groups = {};
     nodes.forEach(n => {
-      if (n.isSummary) return;   // skip summaries in grouped view
+      if (n.isSummary) return;
       const val = this.groupValue(n, field, state);
       (groups[val] = groups[val] || []).push(n);
     });
@@ -2349,11 +2175,10 @@ const GanttView = {
     }
   },
 
-  /* Cari index node di visibleNodes */
   indexOfVisible(state, id){
     return state.visibleNodes.findIndex(n => n.id === id);
   },
-     /* ── Column widths persistence ── */
+
   loadColWidths(){
     try {
       const raw = localStorage.getItem(this.COL_STORE_KEY);
@@ -2379,21 +2204,18 @@ const GanttView = {
     }, 0);
   },
 
-  /* ─────── LAYOUT (Fase 1.2 — grid 2×2) ─────── */
   renderLayout(state){
     const {container, proj, zoom, chartWidth, totalHeight, visibleNodes, selected, baselineIdx} = state;
     const tableW = this.tableWidth(state.costColumns);
 
     const blIsSet = baselineIdx && Baseline.isSet(proj.id, baselineIdx);
 
-    // ── Toolbar baseline options ──
     const blOpts = Baseline.INDICES.map(i => {
       const isSet = Baseline.isSet(proj.id, i);
       const sel = (baselineIdx === i) ? ' selected' : '';
       return '<option value="' + i + '"' + sel + '>BL' + i + (isSet ? ' ✓' : '') + '</option>';
     }).join('');
 
-    // ── KPI bar (hanya muncul bila baseline aktif) ──
     let kpiBar = '';
     if (blIsSet){
       const k = Baseline.kpi(proj.id, baselineIdx);
@@ -2435,10 +2257,10 @@ const GanttView = {
             '</select>' +
             '<button class="gantt-btn-tool gantt-btn-bl-set" title="Set Baseline">📌 Set</button>' +
             '<button class="gantt-btn-tool gantt-btn-bl-clear" title="Clear Baseline">🗑 Clear</button>' +
-            '<button class="gantt-btn-cost-toggle' + (state.costStrip ? ' is-on' : '') + '" title="Tampilkan/Sembunyikan Cost Loading Strip">💰 Cost</button>' +
-            '<button class="gantt-btn-scurve-toggle' + (state.sCurveOverlay ? ' is-on' : '') + '" title="Tampilkan/Sembunyikan S-Curve Overlay di Gantt">📈 S-Curve</button>' +
-            '<button class="gantt-btn-costcols-toggle' + (state.costColumns ? ' is-on' : '') + '" title="Tampilkan Kolom Cost di Tabel">💵 Cost Columns</button>' +
-            '<button class="gantt-btn-track-toggle' + (state.trackingMode ? ' is-on' : '') + '" title="Tracking Gantt — Aktual vs Rencana vs Baseline">📊 Tracking</button>' +
+            '<button class="gantt-btn-cost-toggle' + (state.costStrip ? ' is-on' : '') + '" title="Cost Loading">💰 Cost</button>' +
+            '<button class="gantt-btn-scurve-toggle' + (state.sCurveOverlay ? ' is-on' : '') + '" title="S-Curve">📈 S-Curve</button>' +
+            '<button class="gantt-btn-costcols-toggle' + (state.costColumns ? ' is-on' : '') + '" title="Cost Columns">💵 Cost Columns</button>' +
+            '<button class="gantt-btn-track-toggle' + (state.trackingMode ? ' is-on' : '') + '" title="Tracking">📊 Tracking</button>' +
             '<span class="gantt-lbl" style="margin-left:8px">Style</span>' +
             '<select class="gantt-bar-style">' +
               Object.keys(this.BAR_STYLES).map(k =>
@@ -2520,7 +2342,6 @@ const GanttView = {
           '</div>' +
         '</div>' +
 
-        /* Fase 3A-1 — Cost Strip */
         '<div class="gantt-cost-strip' + (state.costStrip ? '' : ' is-hidden') + '">' +
           '<div class="gantt-cost-label">' +
             '<div class="gantt-cost-title">💰 Cost Loading</div>' +
@@ -2546,26 +2367,15 @@ const GanttView = {
     this.drawBars(state, container.querySelector('.gantt-bars'));
     this.updateSelBar(state);
 
-    /* Fase 3A-1: Render Cost Strip kalau ON */
     if (state.costStrip){
       this.drawCostStrip(state, container.querySelector('.gantt-cost-canvas'));
     }
   },
 
-  /* ═══════════════════════════════════════════════════════════
-     DEPENDENCY ARROWS — MS Project Style (Fase 1C)
-     Mendukung:
-       · Multi-predecessor (via CPM.getRelationships)
-       · 4 tipe relasi: FS, SS, FF, SF
-       · Arrowhead adaptif (right untuk FS/SS, left untuk FF/SF)
-       · Routing orthogonal + detour untuk backward dependency
-       · Warna kritis (merah) vs normal (grey-blue)
-     ═══════════════════════════════════════════════════════════ */
   drawDependencies(ctx, state, posMap, rowH){
     const {nodes} = state;
     const visibleNodes = state.visibleNodes.filter(n => !n.isGroupHeader);
 
-    // Lookup pred by id ATAU kode_wbs (untuk support referensi dua format)
     const nodeById = {};
     const nodeByKode = {};
     nodes.forEach(n => {
@@ -2573,17 +2383,16 @@ const GanttView = {
       if (n.kode) nodeByKode[String(n.kode).trim()] = n;
     });
 
-    const ARROW         = 7;   // ukuran arrowhead
-    const GAP           = 5;   // jarak panah dari tepi bar
-    const ROUTE_OFFSET  = 12;  // offset elbow dari bar
-    const DETOUR_EXTRA  = 24;  // detour untuk backward dependency
+    const ARROW         = 7;
+    const GAP           = 5;
+    const ROUTE_OFFSET  = 12;
+    const DETOUR_EXTRA  = 24;
 
     ctx.save();
     ctx.lineWidth = 1.5;
     ctx.lineCap   = 'round';
     ctx.lineJoin  = 'round';
 
-    // Dedup edge: 1 pasang (pred→succ, type) digambar sekali
     const drawnEdges = new Set();
 
     visibleNodes.forEach(succNode => {
@@ -2591,7 +2400,6 @@ const GanttView = {
       const succRaw = succNode.raw || {};
       if (!succRaw.predecessor) return;
 
-      // Ambil SEMUA relasi (multi-predecessor support)
       const rels = CPM.getRelationships(succRaw);
       if (!rels || !rels.length) return;
 
@@ -2599,7 +2407,6 @@ const GanttView = {
       if (!s) return;
 
       rels.forEach(rel => {
-        // Resolve predecessor: id → kode_wbs fallback
         const predRef = rel.predRef;
         const predNode = nodeById[predRef] || nodeByKode[String(predRef).trim()];
         if (!predNode) return;
@@ -2609,52 +2416,44 @@ const GanttView = {
 
         const type = (rel.type || 'FS').toUpperCase();
 
-        // Dedup key
         const edgeKey = predNode.id + '>' + succNode.id + ':' + type;
         if (drawnEdges.has(edgeKey)) return;
         drawnEdges.add(edgeKey);
 
         const isCrit = succNode.isCritical || predNode.isCritical;
 
-        // ── Tentukan anchor point per tipe relasi ──
         const pMidY = p.y + rowH / 2;
         const sMidY = s.y + rowH / 2;
 
         let sx, sy, tx, ty, arrowDir;
         switch (type){
           case 'SS':
-            // pred.start → succ.start (exits left)
             sx = p.x1 - GAP;   sy = pMidY;
             tx = s.x1 - GAP;   ty = sMidY;
             arrowDir = 'right';
             break;
           case 'FF':
-            // pred.finish → succ.finish (exits right, enters right)
             sx = p.x2 + GAP;   sy = pMidY;
             tx = s.x2 + GAP;   ty = sMidY;
             arrowDir = 'left';
             break;
           case 'SF':
-            // pred.start → succ.finish (exits left, enters right)
             sx = p.x1 - GAP;   sy = pMidY;
             tx = s.x2 + GAP;   ty = sMidY;
             arrowDir = 'left';
             break;
           case 'FS':
           default:
-            // pred.finish → succ.start (exits right, enters left)
             sx = p.x2 + GAP;   sy = pMidY;
             tx = s.x1 - GAP;   ty = sMidY;
             arrowDir = 'right';
             break;
         }
 
-        // ── Warna per tipe ──
         const strokeColor = isCrit ? '#dc2626' : '#94a3b8';
         ctx.strokeStyle = strokeColor;
         ctx.fillStyle   = strokeColor;
 
-        // ── Gambar path ──
         this._drawDependencyPath(ctx, {
           sx, sy, tx, ty,
           type, arrowDir,
@@ -2667,15 +2466,12 @@ const GanttView = {
     ctx.restore();
   },
 
-  /* ── Orthogonal routing per tipe relasi ── */
   _drawDependencyPath(ctx, o){
     const { sx, sy, tx, ty, type, arrowDir, ARROW, ROUTE_OFFSET, DETOUR_EXTRA } = o;
     const sameRow = Math.abs(sy - ty) < 2;
 
-    // Titik berhenti garis (sebelum arrowhead)
     const stopX = arrowDir === 'right' ? tx - ARROW : tx + ARROW;
 
-    /* ── KASUS 1: SEBARIS → garis horizontal lurus ── */
     if (sameRow){
       ctx.beginPath();
       ctx.moveTo(sx, sy);
@@ -2685,12 +2481,8 @@ const GanttView = {
       return;
     }
 
-    /* ── KASUS 2: BARIS BERBEDA → orthogonal per tipe ── */
-
     if (type === 'FS'){
-      // Finish-to-Start: pred.finish → succ.start
       if (sx < stopX){
-        // Forward: exit right pred → elbow tengah → enter left succ
         const midX = (sx + stopX) / 2;
         ctx.beginPath();
         ctx.moveTo(sx, sy);
@@ -2699,7 +2491,6 @@ const GanttView = {
         ctx.lineTo(stopX, ty);
         ctx.stroke();
       } else {
-        // Backward: pred di kanan succ.start → detour kanan
         const detourX = Math.max(sx, stopX) + DETOUR_EXTRA;
         ctx.beginPath();
         ctx.moveTo(sx, sy);
@@ -2712,8 +2503,6 @@ const GanttView = {
     }
 
     else if (type === 'SS'){
-      // Start-to-Start: pred.start → succ.start (keduanya di kiri)
-      // Detour kiri → geser vertikal → masuk kanan ke succ.start
       const detourX = Math.min(sx, stopX) - ROUTE_OFFSET;
       ctx.beginPath();
       ctx.moveTo(sx, sy);
@@ -2725,8 +2514,6 @@ const GanttView = {
     }
 
     else if (type === 'FF'){
-      // Finish-to-Finish: pred.finish → succ.finish (keduanya di kanan)
-      // Detour kanan → geser vertikal → masuk kiri ke succ.finish
       const detourX = Math.max(sx, stopX) + ROUTE_OFFSET;
       ctx.beginPath();
       ctx.moveTo(sx, sy);
@@ -2738,9 +2525,7 @@ const GanttView = {
     }
 
     else if (type === 'SF'){
-      // Start-to-Finish: pred.start (kiri) → succ.finish (kanan)
       if (sx < stopX){
-        // Forward: elbow tengah
         const midX = (sx + stopX) / 2;
         ctx.beginPath();
         ctx.moveTo(sx, sy);
@@ -2749,7 +2534,6 @@ const GanttView = {
         ctx.lineTo(stopX, ty);
         ctx.stroke();
       } else {
-        // Backward: detour kanan
         const detourX = Math.max(sx, stopX) + DETOUR_EXTRA;
         ctx.beginPath();
         ctx.moveTo(sx, sy);
@@ -2762,7 +2546,6 @@ const GanttView = {
     }
   },
 
-  /* ── Arrowhead: (x,y) adalah TIP (ujung panah) ── */
   _drawArrowHead(ctx, x, y, dir, size){
     ctx.beginPath();
     if (dir === 'right'){
@@ -2777,7 +2560,7 @@ const GanttView = {
       ctx.moveTo(x, y);
       ctx.lineTo(x - size * 0.55, y - size);
       ctx.lineTo(x + size * 0.55, y - size);
-    } else { // up
+    } else {
       ctx.moveTo(x, y);
       ctx.lineTo(x - size * 0.55, y + size);
       ctx.lineTo(x + size * 0.55, y + size);
@@ -2786,7 +2569,6 @@ const GanttView = {
     ctx.fill();
   },
 
-  /* ── Backward-compat: arrowHead lama (base-anchored) ── */
   arrowHead(ctx, x, y, dir, size){
     ctx.beginPath();
     if (dir === 'right'){
@@ -2810,7 +2592,6 @@ const GanttView = {
     ctx.fill();
   },
 
-  /* ─────── ROW HTML ─────── */
   rowHtml(node, idx){
     if (node.isGroupHeader) return this.groupHeaderHtml(node);
 
@@ -2836,7 +2617,7 @@ const GanttView = {
           const badge = '<span class="gt-id-badge" draggable="true" data-drag-id="' + esc(node.id) + '">' +
                         esc(node.kode || '—') + '</span>';
           const info  = '<span class="gt-info" data-info-id="' + esc(node.id) + '" ' +
-                        'title="Task Inspector — kenapa tanggalnya begitu?">ⓘ</span>';
+                        'title="Task Inspector">ⓘ</span>';
           inner = check + badge + info;
           break;
         }
@@ -2890,7 +2671,6 @@ const GanttView = {
           }
           break;
         }
-         /* ── Fase 3A-3: Cost columns ── */
         case 'cost_total':
           inner = node.isSummary
             ? '<b class="gt-cost-sum">' + rp(node.costTotal || 0) + '</b>'
@@ -2916,7 +2696,6 @@ const GanttView = {
           inner = '<span class="gt-cum">' + fmt(cp, 2) + '%</span>';
           break;
         }
-
         case 'predecessors':
           inner = node.predecessors
             ? '<span class="gt-pred">' + esc(node.predecessors) + '</span>'
@@ -2942,7 +2721,7 @@ const GanttView = {
            cells + '</div>';
   },
 
-     groupHeaderHtml(node){
+  groupHeaderHtml(node){
     const isCollapsed = node.collapsed;
     return '<div class="gantt-row is-group-header" data-group-name="' + esc(node.groupName) + '">' +
       '<div class="gantt-td" style="width:100%;justify-content:flex-start">' +
@@ -2953,10 +2732,6 @@ const GanttView = {
     '</div>';
   },
 
-  /* ── AXIS (Fase 2B — Two-tier + multi-zoom) ──
-     Tier 1 (atas)   : unit besar (tahun/triwulan/bulan/hari)
-     Tier 2 (tengah) : unit kecil (bulan/minggu/hari/jam)
-     Tier 3 (bawah)  : label detail (tanggal/jam) — opsional per zoom */
   drawAxis(state, canvas){
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
@@ -2967,14 +2742,11 @@ const GanttView = {
     const tier1 = cfg.tier1 || 'month';
     const tier2 = cfg.tier2 || 'week';
 
-    /* ── Background ── */
     ctx.fillStyle = '#0e1a30';
     ctx.fillRect(0, 0, W, H);
 
-    /* ── Helper: offset pixel dari startDate (float, untuk hourly) ── */
     const pxOfF = (d) => ((d - startDate) / 86400000) * px;
 
-    /* ── Shading non-work days (kecuali hourly — terlalu padat) ── */
     if (zoom !== 'hourly'){
       const dSh = new Date(startDate);
       while (dSh <= endDate){
@@ -2987,7 +2759,6 @@ const GanttView = {
       }
     }
 
-    /* ── Gridlines vertikal per hari (kecuali hourly & yearly, toggle Fase 2C) ── */
     const glA = state.gridlines || { vertical: true };
     if (glA.vertical && zoom !== 'hourly' && zoom !== 'yearly'){
       const dg = new Date(startDate);
@@ -3003,9 +2774,8 @@ const GanttView = {
       }
     }
 
-    /* ── Helper: gambar label tier ── */
     const drawTierLabel = (cx, cy, text, isBold, size) => {
-      if (cx < -50 || cx > W + 50) return;   // skip offscreen
+      if (cx < -50 || cx > W + 50) return;
       ctx.fillStyle = isBold ? '#e6edf7' : '#a8b8d6';
       ctx.font = (isBold ? 'bold ' : '') + (size || 10) + 'px Segoe UI';
       ctx.textAlign = 'center';
@@ -3013,14 +2783,10 @@ const GanttView = {
       ctx.fillText(text, cx, cy);
     };
 
-    /* ── Batas tier vertikal (H = 60) ── */
-    const Y_TIER1 = H * 0.22;   // baris atas
-    const Y_TIER2 = H * 0.50;   // baris tengah
-    const Y_TIER3 = H * 0.80;   // baris bawah
+    const Y_TIER1 = H * 0.22;
+    const Y_TIER2 = H * 0.50;
+    const Y_TIER3 = H * 0.80;
 
-    /* ═══════════════════════════════════════════════════════
-       RENDER TIER 1 (Besar): Year / Quarter / Month / Day
-       ═══════════════════════════════════════════════════════ */
     if (tier1 === 'year'){
       let y = startDate.getFullYear();
       const yEnd = endDate.getFullYear();
@@ -3029,7 +2795,6 @@ const GanttView = {
         const d2 = new Date(y + 1, 0, 1);
         const x1 = pxOfF(d1), x2 = pxOfF(d2);
         const cx = (x1 + x2) / 2;
-        // Garis pemisah tahun
         ctx.strokeStyle = '#5a7ab0';
         ctx.lineWidth = 2;
         ctx.beginPath();
@@ -3079,7 +2844,6 @@ const GanttView = {
       }
     }
     else if (tier1 === 'day'){
-      /* Top tier = day (untuk hourly view) — tampil "Sen 15 Jan" */
       const dd = new Date(startDate);
       while (dd <= endDate){
         const dNext = new Date(dd); dNext.setDate(dNext.getDate() + 1);
@@ -3105,11 +2869,7 @@ const GanttView = {
       }
     }
 
-    /* ═══════════════════════════════════════════════════════
-       RENDER TIER 2 (Kecil): Month / Week / Day / Hour
-       ═══════════════════════════════════════════════════════ */
     if (tier2 === 'month'){
-      /* Bulan — untuk monthly/quarterly/yearly view */
       const startMonth = new Date(startDate.getFullYear(), startDate.getMonth(), 1);
       const endMonth   = new Date(endDate.getFullYear(), endDate.getMonth() + 1, 1);
       let m = new Date(startMonth);
@@ -3129,7 +2889,6 @@ const GanttView = {
       }
     }
     else if (tier2 === 'week'){
-      /* Minggu — untuk weekly view */
       const wd = new Date(startDate);
       const dayNr = (wd.getDay() + 6) % 7;
       wd.setDate(wd.getDate() - dayNr);
@@ -3153,7 +2912,6 @@ const GanttView = {
       }
     }
     else if (tier2 === 'day'){
-      /* Hari — untuk daily view */
       const dd = new Date(startDate);
       while (dd <= endDate){
         const x = Math.round((dd - startDate) / 86400000) * px + 0.5;
@@ -3175,11 +2933,9 @@ const GanttView = {
       }
     }
     else if (tier2 === 'hour'){
-      /* Jam — untuk hourly view. Tampil 08:00, 12:00, 16:00 */
       const dd = new Date(startDate);
       while (dd <= endDate){
         const dayStart = new Date(dd); dayStart.setHours(0,0,0,0);
-        // Tampil label jam pada jam kerja (8, 12, 16)
         [8, 12, 16].forEach(h => {
           const t = new Date(dayStart); t.setHours(h, 0, 0, 0);
           if (t < startDate || t > endDate) return;
@@ -3201,14 +2957,12 @@ const GanttView = {
       }
     }
 
-    /* ── Batas bawah axis ── */
     ctx.strokeStyle = '#24365c';
     ctx.beginPath();
     ctx.moveTo(0, H - 0.5);
     ctx.lineTo(W, H - 0.5);
     ctx.stroke();
 
-    /* ── Today marker (garis vertikal orange solid di axis) ── */
     const today = new Date(); today.setHours(0,0,0,0);
     const tOff = Math.round((today - startDate) / 86400000);
     if (tOff >= 0 && tOff <= state.totalDays){
@@ -3223,7 +2977,6 @@ const GanttView = {
     }
   },
 
-  /* ── ISO Week helper (Fase 2B) ── */
   isoWeek(d){
     const t = new Date(d.valueOf());
     const dn = (d.getDay() + 6) % 7;
@@ -3232,7 +2985,6 @@ const GanttView = {
     return 1 + Math.round((t - ft) / (7 * 86400000));
   },
 
-  /* ─────── BARS ─────── */
   drawBars(state, canvas){
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
@@ -3246,7 +2998,6 @@ const GanttView = {
 
     const gl = state.gridlines || { horizontal: true, workingDaysShading: true, vertical: true, weekSeparator: true };
 
-    // A. Row striping
     visibleNodes.forEach((n, i) => {
       if (n.isSummary){
         ctx.fillStyle = 'rgba(47,129,247,.08)';
@@ -3257,7 +3008,6 @@ const GanttView = {
       }
     });
 
-    // B. Garis horizontal per row (toggle)
     if (gl.horizontal){
       ctx.strokeStyle = 'rgba(60, 90, 130, 0.85)';
       ctx.lineWidth = 1;
@@ -3270,7 +3020,6 @@ const GanttView = {
       }
     }
 
-    // C. Shading libur (toggle)
     if (gl.workingDaysShading){
       const dShade = new Date(startDate);
       while (dShade <= state.endDate){
@@ -3283,12 +3032,11 @@ const GanttView = {
       }
     }
 
-    // C.2. Garis vertikal per hari + pemisah minggu (toggle)
     if (gl.vertical || gl.weekSeparator){
       const dv = new Date(startDate);
       while (dv <= state.endDate){
         const dow = dv.getDay();
-        const isWeekStart = (dow === 1); // Senin
+        const isWeekStart = (dow === 1);
         const isWorkDay = WorkingCalendar.isWorkDay(dv, cal);
 
         if (gl.vertical && isWorkDay && !isWeekStart){
@@ -3314,7 +3062,6 @@ const GanttView = {
       }
     }
 
-    // D. Today marker
     const today = new Date(); today.setHours(0,0,0,0);
     const tOff = Math.round((today - startDate) / 86400000);
     if (tOff >= 0 && tOff <= state.totalDays){
@@ -3330,13 +3077,11 @@ const GanttView = {
       ctx.lineWidth = 1;
     }
 
-    // E. Bars
     const posMap = {};
     state.posMap = posMap;
 
-    // Iterate over ALL visible items (including group headers) supaya y benar
     state.visibleNodes.forEach((n, i) => {
-      if (n.isGroupHeader) return;   // group header tidak punya bar
+      if (n.isGroupHeader) return;
       const y = i * rowH;
       if (!n.startISO || !n.finishISO) return;
 
@@ -3368,7 +3113,6 @@ const GanttView = {
       }
     });
 
-    // E.2. Baseline shadow bars (MS Project style — solid gray bar di bawah task bar)
     if (state.baselineIdx && Baseline.isSet(state.proj.id, state.baselineIdx)){
       const fS = Baseline.fieldFor(state.baselineIdx, 'start');
       const fF = Baseline.fieldFor(state.baselineIdx, 'finish');
@@ -3384,26 +3128,19 @@ const GanttView = {
         const bx = sOff * px;
         const bw = Math.max(3, (fOff - sOff) * px);
 
-        /* Baseline bar: di bawah task bar
-           Row height 26, task bar bottom = y + (26-14)/2 + 14 = y + 20
-           Baseline at y + 20, height 4 (fits in remaining 6px) */
         const by = i * rowH + 20;
 
-        /* Main solid gray body */
         ctx.fillStyle = '#6b7280';
         ctx.fillRect(bx, by, bw, 4);
 
-        /* Dark border atas untuk kontras */
         ctx.fillStyle = '#4b5563';
         ctx.fillRect(bx, by, bw, 1);
 
-        /* End caps tipis untuk member kesan bar solid */
         ctx.fillRect(bx, by, 1.5, 4);
         ctx.fillRect(bx + bw - 1.5, by, 1.5, 4);
       });
     }
 
-    // E.3. Constraint & Manual Badges (Fase 1E)
     state.visibleNodes.forEach((n, i) => {
       if (n.isGroupHeader) return;
       if (n.isSummary || n.isMilestone) return;
@@ -3422,7 +3159,6 @@ const GanttView = {
       const midY = pos.y + rowH / 2;
       let bx = pos.x2 + 5;
 
-      /* ── Badge helper ── */
       const drawBadge = (x, label, bg) => {
         ctx.save();
         ctx.font = 'bold 9px Segoe UI';
@@ -3440,34 +3176,27 @@ const GanttView = {
         return w;
       };
 
-      /* ── Manual badge (purple) ── */
       if (isManual) bx += drawBadge(bx, 'M', 'rgba(168,85,247,.92)') + 3;
 
-      /* ── Conflict badge (red, high-priority) ── */
       if (isConflict){
         bx += drawBadge(bx, '⚠', 'rgba(220,38,38,.92)') + 3;
       }
 
-      /* ── Constraint badge (orange) — tampilkan kode constraint ── */
       if (hasCt && ct.length <= 4){
         bx += drawBadge(bx, ct, 'rgba(245,158,11,.92)') + 3;
       }
     });
 
-    // E.3. Tracking Overlay (Fase 3B-1)
     if (state.trackingMode){
       this.drawTrackingBars(ctx, state, posMap, rowH);
     }
 
-    // F. Dependency arrows (Fase 1C — MS Project style)
     this.drawDependencies(ctx, state, posMap, rowH);
 
-    // F.2 S-Curve Overlay (Fase 3A-2) — digambar paling atas
     if (state.sCurveOverlay){
       this.drawSCurveOverlay(ctx, state, W, H);
     }
 
-    // G. Bar drag ghost
     const bd = state.barDrag;
     if (bd && bd.preview){
       const pos = posMap[bd.nodeId];
@@ -3491,10 +3220,6 @@ const GanttView = {
     }
   },
 
-  /* ═══════════════════════════════════════════════════════════
-     FASE 3B-1 — TRACKING BARS OVERLAY
-     Actual bar (hijau) di atas plan + slip zone merah
-     ═══════════════════════════════════════════════════════════ */
   drawTrackingBars(ctx, state, posMap, rowH){
     const {startDate} = state;
     const px = state.zoomCfg.pxPerDay;
@@ -3502,12 +3227,11 @@ const GanttView = {
     state.visibleNodes.forEach((n, i) => {
       if (n.isGroupHeader) return;
       if (n.isSummary || n.isMilestone) return;
-      if (!n.actualStart) return;   // belum ada progress
+      if (!n.actualStart) return;
 
       const pos = posMap[n.id];
       if (!pos) return;
 
-      /* ── Actual bar (hijau overlay) ── */
       const actStart = new Date(n.actualStart + 'T00:00:00');
       const actFinishISO = n.actualFinish || n.actualStart;
       const actFinish = new Date(actFinishISO + 'T00:00:00');
@@ -3519,23 +3243,19 @@ const GanttView = {
       const ax2 = fOff * px;
       const aw  = Math.max(3, ax2 - ax1);
 
-      /* Posisi: overlay tepat di atas plan bar (turun 1px) */
       const barY = pos.y + (rowH - 14) / 2;
       const barH = 14;
 
-      /* Actual bar — hijau cerah, dengan transparansi sedang */
       ctx.save();
       ctx.fillStyle = 'rgba(34, 197, 94, 0.85)';
       this.rrect(ctx, ax1, barY, aw, barH, 3);
       ctx.fill();
 
-      /* Border hijau tua */
       ctx.strokeStyle = '#16a34a';
       ctx.lineWidth = 1.2;
       this.rrect(ctx, ax1 + 0.5, barY + 0.5, aw - 1, barH - 1, 3);
       ctx.stroke();
 
-      /* Label % di dalam bar kalau cukup lebar */
       if (aw > 42){
         ctx.fillStyle = '#fff';
         ctx.font = 'bold 9px Segoe UI';
@@ -3544,7 +3264,6 @@ const GanttView = {
         ctx.fillText(Math.round(n.actualPct || 0) + '%', ax1 + aw / 2, barY + barH / 2);
       }
 
-      /* ── Slip zone (merah) — kalau actual finish > plan finish ── */
       if (n.actualFinish && n.finishISO){
         const planFinish = new Date(n.finishISO + 'T00:00:00');
         if (actFinish > planFinish){
@@ -3554,11 +3273,9 @@ const GanttView = {
           const slipW = slipX2 - slipX1;
 
           if (slipW > 1){
-            /* Area merah semi-transparan */
             ctx.fillStyle = 'rgba(220, 38, 38, 0.35)';
             ctx.fillRect(slipX1, barY, slipW, barH);
 
-            /* Garis merah tebal di batas slip */
             ctx.strokeStyle = '#dc2626';
             ctx.lineWidth = 2;
             ctx.beginPath();
@@ -3566,7 +3283,6 @@ const GanttView = {
             ctx.lineTo(slipX2 + 0.5, barY + barH + 2);
             ctx.stroke();
 
-            /* Label "slip +Nd" di bawah bar */
             if (slipW > 30){
               ctx.fillStyle = '#fca5a5';
               ctx.font = 'bold 8.5px Segoe UI';
@@ -3578,7 +3294,6 @@ const GanttView = {
         }
       }
 
-      /* ── Dot marker di actual start (kalau ada) ── */
       if (aw > 6){
         ctx.beginPath();
         ctx.arc(ax1 + 3, barY + barH / 2, 3.5, 0, Math.PI * 2);
@@ -3589,7 +3304,6 @@ const GanttView = {
         ctx.stroke();
       }
 
-      /* ── Dot marker di actual finish (kalau selesai) ── */
       if (n.actualFinish && aw > 6){
         ctx.beginPath();
         ctx.arc(ax2 - 3, barY + barH / 2, 3.5, 0, Math.PI * 2);
@@ -3604,10 +3318,6 @@ const GanttView = {
     });
   },
 
-  /* ═══════════════════════════════════════════════════════════
-     FASE 3A-1 — COST LOADING STRIP
-     Histogram biaya per hari + kurva kumulatif
-     ═══════════════════════════════════════════════════════════ */
   drawCostStrip(state, canvas){
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
@@ -3617,17 +3327,14 @@ const GanttView = {
     const W = Math.max(400, totalDays * px);
     const H = 90;
 
-    /* Set canvas size */
     canvas.width = W;
     canvas.height = H;
     canvas.style.width = W + 'px';
     canvas.style.height = H + 'px';
 
-    /* Background */
     ctx.fillStyle = '#0a1424';
     ctx.fillRect(0, 0, W, H);
 
-    /* Ambil data ResourceLoader */
     let rl;
     try {
       rl = ResourceLoader.load(proj.id, {
@@ -3644,7 +3351,6 @@ const GanttView = {
       return;
     }
 
-    /* Bangun map cost per hari dari resDailyMap × harga rata-rata per unit */
     const costPerDay = {};
     Object.keys(rl.resDailyMap).forEach(kode => {
       const r = rl.byResource.find(x => x.kode === kode);
@@ -3664,7 +3370,6 @@ const GanttView = {
       return;
     }
 
-    /* Cari max & total */
     let maxCost = 0, totalCost = 0;
     days.forEach(d => {
       if (costPerDay[d] > maxCost) maxCost = costPerDay[d];
@@ -3675,18 +3380,15 @@ const GanttView = {
       return;
     }
 
-    /* Layout */
     const barTop = 10;
     const barBottom = H - 16;
     const barHeight = barBottom - barTop;
 
-    /* Kumulatif */
     const cumCost = {};
     let running = 0;
     days.forEach(d => { running += costPerDay[d]; cumCost[d] = running; });
     const totalCum = running;
 
-    /* ── Gridline vertical (tiap hari kerja) ── */
     const gridGl = state.gridlines || {};
     if (gridGl.vertical || gridGl.weekSeparator){
       const dgrid = new Date(startDate);
@@ -3706,7 +3408,6 @@ const GanttView = {
       }
     }
 
-    /* ── Bar biaya per hari (gradient biru) ── */
     const gradBar = ctx.createLinearGradient(0, barTop, 0, barBottom);
     gradBar.addColorStop(0, 'rgba(47,129,247,.95)');
     gradBar.addColorStop(1, 'rgba(47,129,247,.35)');
@@ -3722,7 +3423,6 @@ const GanttView = {
       ctx.fillRect(x, y, bw, h);
     });
 
-    /* ── Kurva kumulatif (garis kuning) ── */
     ctx.strokeStyle = '#f59e0b';
     ctx.lineWidth = 1.8;
     ctx.beginPath();
@@ -3736,21 +3436,18 @@ const GanttView = {
     });
     ctx.stroke();
 
-    /* ── Label max/hari (kanan atas) ── */
     ctx.fillStyle = '#64748b';
     ctx.font = '9px Segoe UI';
     ctx.textAlign = 'right';
     ctx.textBaseline = 'top';
     ctx.fillText('Max/hari: Rp ' + this._fmtJuta(maxCost), W - 6, 3);
 
-    /* ── Label Total (kanan bawah) ── */
     ctx.fillStyle = '#4ade80';
     ctx.font = 'bold 10px Segoe UI';
     ctx.textAlign = 'right';
     ctx.textBaseline = 'bottom';
     ctx.fillText('Total: Rp ' + this._fmtJuta(totalCum) + ' (' + days.length + ' hari)', W - 6, H - 3);
 
-    /* ── Today marker (kalau di range) ── */
     const today = new Date(); today.setHours(0,0,0,0);
     const tOff = Math.round((today - startDate) / 86400000);
     if (tOff >= 0 && tOff <= totalDays){
@@ -3766,18 +3463,15 @@ const GanttView = {
       ctx.lineWidth = 1;
     }
 
-    /* ── Border bawah ── */
     ctx.strokeStyle = '#24365c';
     ctx.beginPath();
     ctx.moveTo(0, H - 0.5);
     ctx.lineTo(W, H - 0.5);
     ctx.stroke();
 
-    /* Cache untuk tooltip nanti */
     state.costPerDay = costPerDay;
   },
 
-  /* Helper: empty state */
   _drawCostEmptyState(ctx, W, H, msg){
     ctx.fillStyle = '#475569';
     ctx.font = '11px Segoe UI';
@@ -3786,16 +3480,10 @@ const GanttView = {
     ctx.fillText(msg, W / 2, H / 2);
   },
 
-     /* ═══════════════════════════════════════════════════════════
-     FASE 3A-2 — S-CURVE OVERLAY
-     Kurva kumulatif biaya ditumpuk di atas bars Gantt
-     ═══════════════════════════════════════════════════════════ */
   drawSCurveOverlay(ctx, state, W, H){
     const {proj, startDate, endDate} = state;
     const px = state.zoomCfg.pxPerDay;
-    const totalDays = state.totalDays;
 
-    /* ── Ambil atau reuse data kurva ── */
     if (!state.sCurveData){
       let rl;
       try {
@@ -3809,7 +3497,6 @@ const GanttView = {
       if (!rl || !rl.ok || !rl.resDailyMap){
         state.sCurveData = { ok: false };
       } else {
-        /* Bangun cost per hari */
         const costPerDay = {};
         Object.keys(rl.resDailyMap).forEach(kode => {
           const r = rl.byResource.find(x => x.kode === kode);
@@ -3825,7 +3512,6 @@ const GanttView = {
         if (!days.length){
           state.sCurveData = { ok: false };
         } else {
-          /* Kumulatif */
           const cum = [];
           let running = 0, total = 0;
           days.forEach(d => { total += costPerDay[d]; });
@@ -3846,9 +3532,8 @@ const GanttView = {
     const sc = state.sCurveData;
     if (!sc || !sc.ok) return;
 
-    /* ── Siapkan koordinat kurva ── */
-    const yTop = 4;               // % tertinggi di dekat atas area bars
-    const yBottom = H - 8;        // % terendah di dekat bawah area bars
+    const yTop = 4;
+    const yBottom = H - 8;
     const yRange = yBottom - yTop;
 
     const points = sc.cum.map(item => {
@@ -3860,7 +3545,6 @@ const GanttView = {
 
     if (!points.length) return;
 
-    /* ── Gradient fill di bawah kurva (semi-transparan) ── */
     ctx.save();
 
     const gradFill = ctx.createLinearGradient(0, yTop, 0, yBottom);
@@ -3875,7 +3559,6 @@ const GanttView = {
     ctx.fillStyle = gradFill;
     ctx.fill();
 
-    /* ── Garis kurva utama (cyan solid) ── */
     ctx.strokeStyle = '#06b6d4';
     ctx.lineWidth = 2.2;
     ctx.lineJoin = 'round';
@@ -3888,7 +3571,6 @@ const GanttView = {
     });
     ctx.stroke();
 
-    /* ── Glow effect di garis ── */
     ctx.strokeStyle = 'rgba(6, 182, 212, 0.35)';
     ctx.lineWidth = 6;
     ctx.stroke();
@@ -3896,7 +3578,6 @@ const GanttView = {
     ctx.lineWidth = 2.2;
     ctx.stroke();
 
-    /* ── Titik-titik di posisi data (kalau tidak terlalu banyak) ── */
     if (points.length <= 40){
       points.forEach(p => {
         ctx.beginPath();
@@ -3909,7 +3590,6 @@ const GanttView = {
       });
     }
 
-    /* ── Grid horizontal di 25% / 50% / 75% ── */
     [0.25, 0.5, 0.75].forEach(pct => {
       const y = yBottom - (pct * yRange);
       ctx.strokeStyle = 'rgba(6, 182, 212, 0.12)';
@@ -3922,7 +3602,6 @@ const GanttView = {
       ctx.setLineDash([]);
     });
 
-    /* ── Label % di sisi kiri ── */
     ctx.font = 'bold 9px Segoe UI';
     ctx.textAlign = 'left';
     ctx.textBaseline = 'middle';
@@ -3932,7 +3611,6 @@ const GanttView = {
       ctx.fillText(Math.round(pct * 100) + '%', 4, y);
     });
 
-    /* ── Highlight titik terakhir (current cumulative) ── */
     const last = points[points.length - 1];
     if (last){
       ctx.beginPath();
@@ -3947,7 +3625,6 @@ const GanttView = {
       ctx.lineWidth = 1.5;
       ctx.stroke();
 
-      /* Label nilai % akhir */
       const label = Math.round(last.pct * 100) + '%';
       ctx.font = 'bold 10px Segoe UI';
       const tw = ctx.measureText(label).width;
@@ -3963,7 +3640,6 @@ const GanttView = {
       ctx.fillText(label, lx, ly);
     }
 
-    /* ── Legend kanan atas (mini) ── */
     const legendText = 'S-Curve · Total Rp ' + this._fmtJuta(sc.total);
     ctx.font = 'bold 10px Segoe UI';
     const lw = ctx.measureText(legendText).width;
@@ -3979,7 +3655,6 @@ const GanttView = {
     this.rrect(ctx, lgX, lgY, lgW, 20, 5);
     ctx.stroke();
 
-    /* Dot cyan di kiri legend */
     ctx.beginPath();
     ctx.arc(lgX + 10, lgY + 10, 4, 0, Math.PI * 2);
     ctx.fillStyle = '#06b6d4';
@@ -3993,7 +3668,6 @@ const GanttView = {
     ctx.restore();
   },
 
-  /* Helper: format Rp singkat (jt/m) */
   _fmtJuta(v){
     const n = Math.abs(v);
     if (n >= 1e9) return (v/1e9).toFixed(2) + ' M';
@@ -4002,12 +3676,10 @@ const GanttView = {
     return Math.round(v).toString();
   },
 
-  /* ── Task bar (MS Project style + Fase 2C presets) ── */
   taskBar(ctx, x, y, w, h, fill, stroke, pct, cfg){
     cfg = cfg || this.BAR_STYLES.classic;
     const radius = Math.min(cfg.radius || 3, h/2);
 
-    /* Shadow (Modern/Bold) */
     if (cfg.shadow){
       ctx.save();
       ctx.shadowColor = 'rgba(0,0,0,.4)';
@@ -4019,7 +3691,6 @@ const GanttView = {
       ctx.restore();
     }
 
-    /* Background fill */
     let bgFill;
     if (cfg.gradient){
       const grad = ctx.createLinearGradient(x, y, x, y + h);
@@ -4034,7 +3705,6 @@ const GanttView = {
     this.rrect(ctx, x, y, w, h, radius);
     ctx.fill();
 
-    /* Completed portion */
     if (pct > 0){
       const pw = Math.max(2, w * (pct/100));
       let doneFill;
@@ -4050,7 +3720,6 @@ const GanttView = {
       this.rrect(ctx, x, y, pw, h, radius);
       ctx.fill();
 
-      /* Progress Line: garis vertikal hitam di batas completed */
       if (pct < 100 && pw > 3 && w > 8){
         ctx.save();
         ctx.fillStyle = '#0b1220';
@@ -4059,7 +3728,6 @@ const GanttView = {
       }
     }
 
-    /* Border */
     if (cfg.border){
       ctx.strokeStyle = stroke;
       ctx.lineWidth = cfg.borderW || 1;
@@ -4067,7 +3735,6 @@ const GanttView = {
       ctx.stroke();
     }
 
-    /* Label % di tengah bar */
     if (w > 60 && pct > 0){
       ctx.fillStyle = '#fff';
       ctx.font = 'bold 9px Segoe UI';
@@ -4078,11 +3745,9 @@ const GanttView = {
   },
 
   summaryBar(ctx, x, y, w, h){
-    // Fill terang + border terang → KONTRAS di background gelap
     ctx.fillStyle = '#475569';
     ctx.fillRect(x, y, w, h);
 
-    // Border putih tipis atas & bawah
     ctx.strokeStyle = '#94a3b8';
     ctx.lineWidth = 1;
     ctx.beginPath();
@@ -4094,7 +3759,6 @@ const GanttView = {
     ctx.lineTo(x + w, y + h - 0.5);
     ctx.stroke();
 
-    // End-cap triangle (kiri bawah)
     ctx.fillStyle = '#94a3b8';
     ctx.beginPath();
     ctx.moveTo(x, y + h);
@@ -4103,7 +3767,6 @@ const GanttView = {
     ctx.closePath();
     ctx.fill();
 
-    // End-cap triangle (kanan bawah)
     ctx.beginPath();
     ctx.moveTo(x + w, y + h);
     ctx.lineTo(x + w - 8, y + h);
@@ -4112,29 +3775,23 @@ const GanttView = {
     ctx.fill();
   },
 
-  /* ── Milestone diamond (MS Project style) ──
-     - Normal milestone   : fill hitam, outline abu
-     - Critical milestone : fill merah, outline dark red
-     - Complete milestone : fill putih, outline hitam
-     Backward compat: kalau arg1 bertipe string → mode lama (arg1 = warna fill) */
   diamond(ctx, cx, cy, r, arg1, arg2){
     let fill, stroke;
     if (typeof arg1 === 'string'){
-      // Mode lama
       fill = arg1;
       stroke = '#e6edf7';
     } else {
       const isCritical = !!arg1;
       const isComplete = !!arg2;
       if (isComplete){
-        fill = '#e6edf7';       // putih (complete)
-        stroke = '#0b1220';     // outline hitam
+        fill = '#e6edf7';
+        stroke = '#0b1220';
       } else if (isCritical){
-        fill = '#dc2626';       // merah (kritis)
-        stroke = '#7f1d1d';     // outline dark red
+        fill = '#dc2626';
+        stroke = '#7f1d1d';
       } else {
-        fill = '#0b1220';       // hitam (normal — MS Project default)
-        stroke = '#94a3b8';     // outline abu
+        fill = '#0b1220';
+        stroke = '#94a3b8';
       }
     }
 
@@ -4174,7 +3831,6 @@ const GanttView = {
       Math.round(b + (255-b)*amt) + ')';
   },
 
-  /* ─────── EVENTS (Fase 1.2) ─────── */
   wireEvents(state){
     const {container} = state;
     const leftBody   = container.querySelector('.gantt-tbody');
@@ -4189,7 +3845,6 @@ const GanttView = {
     const blSel      = container.querySelector('.gantt-baseline-sel');
     const blSetBtn   = container.querySelector('.gantt-btn-bl-set');
     const blClrBtn   = container.querySelector('.gantt-btn-bl-clear');
-    const selBar     = container.querySelector('.gantt-sel-bar');
 
     if (!leftBody || !rightScr || !axisTrack) return;
 
@@ -4209,7 +3864,6 @@ const GanttView = {
       this.mount(state.container, state.proj.id, { mode: state.mode, zoom: e.target.value });
     };
 
-    /* ── Fase 3A-1: Cost Strip Toggle ── */
     const btnCost = container.querySelector('.gantt-btn-cost-toggle');
     if (btnCost){
       btnCost.onclick = () => {
@@ -4219,7 +3873,6 @@ const GanttView = {
       };
     }
 
-    /* ── Fase 3A-2: S-Curve Overlay Toggle ── */
     const btnSCurve = container.querySelector('.gantt-btn-scurve-toggle');
     if (btnSCurve){
       btnSCurve.onclick = () => {
@@ -4229,7 +3882,6 @@ const GanttView = {
       };
     }
 
-    /* ── Fase 3A-3: Cost Columns Toggle ── */
     const btnCostCols = container.querySelector('.gantt-btn-costcols-toggle');
     if (btnCostCols){
       btnCostCols.onclick = () => {
@@ -4239,7 +3891,6 @@ const GanttView = {
       };
     }
 
-    /* ── Fase 3B-1: Tracking Toggle ── */
     const btnTrack = container.querySelector('.gantt-btn-track-toggle');
     if (btnTrack){
       btnTrack.onclick = () => {
@@ -4249,8 +3900,7 @@ const GanttView = {
         toast(next ? '📊 Tracking aktif' : '📊 Tracking nonaktif');
       };
     }
-     
-    /* ── Fase 2C: Bar Style dropdown ── */
+
     const styleSel = container.querySelector('.gantt-bar-style');
     if (styleSel){
       styleSel.onchange = e => {
@@ -4260,7 +3910,6 @@ const GanttView = {
       };
     }
 
-    /* ── Fase 2C: Gridline toggle chips ── */
     container.querySelectorAll('.grid-chip').forEach(chip => {
       chip.onclick = () => {
         const key = chip.getAttribute('data-grid');
@@ -4288,19 +3937,14 @@ const GanttView = {
       this.mount(state.container, state.proj.id, { mode: state.mode, zoom: state.zoom });
     };
 
-    // Export
-    // Export
-    // Export
     if (btnPNG) btnPNG.onclick = () => this.exportPNG(state, false);
     if (btnPDF) btnPDF.onclick = () => this.exportPNG(state, true);
 
-    // ── Leveling ──
     const btnLevel = container.querySelector('.gantt-btn-level-open');
     if (btnLevel) btnLevel.onclick = () => {
       Leveling.openUI(state.proj.id);
     };
-     
-    // ── Baseline controls ──
+
     if (blSel) blSel.onchange = e => {
       const v = e.target.value;
       state.baselineIdx = v ? parseInt(v, 10) : null;
@@ -4336,9 +3980,7 @@ const GanttView = {
       toast('🗑 Baseline BL' + idx + ' dihapus');
     };
 
-    // ── Fase 2F: Task Inspector wire ──
     leftBody.addEventListener('click', e => {
-      // Info button (ⓘ)
       const infoBtn = e.target.closest('[data-info-id]');
       if (infoBtn){
         e.stopPropagation();
@@ -4347,7 +3989,6 @@ const GanttView = {
       }
     });
 
-    // Double-click row → open inspector
     leftBody.addEventListener('dblclick', e => {
       const row = e.target.closest('.gantt-row');
       if (!row || row.classList.contains('is-group-header')) return;
@@ -4355,7 +3996,6 @@ const GanttView = {
       if (id && typeof TaskInspector !== 'undefined') TaskInspector.open(id);
     });
 
-    // Double-click bar di Gantt canvas → open inspector
     if (rightScr){
       rightScr.addEventListener('dblclick', e => {
         const canvas = rightScr.querySelector('.gantt-bars');
@@ -4370,7 +4010,6 @@ const GanttView = {
       });
     }
 
-    // ── Expand/Collapse individual ──
     leftBody.addEventListener('click', e => {
       const tog = e.target.closest('[data-toggle-id]');
       if (tog){
@@ -4381,7 +4020,6 @@ const GanttView = {
         return;
       }
 
-      // Checkbox click
       const chk = e.target.closest('[data-select-id]');
       if (chk){
         e.stopPropagation();
@@ -4390,7 +4028,6 @@ const GanttView = {
         return;
       }
 
-      // Row click (selection)
       const row = e.target.closest('.gantt-row');
       if (row && !e.target.closest('.gt-id-badge')){
         const id = row.getAttribute('data-node-id');
@@ -4400,7 +4037,6 @@ const GanttView = {
       }
     });
 
-    // ── Column resize ──
     const thead = container.querySelector('.gantt-thead');
     thead.addEventListener('mousedown', e => {
       const rez = e.target.closest('.gantt-th-resizer');
@@ -4409,7 +4045,6 @@ const GanttView = {
       this.beginColResize(state, rez, e);
     });
 
-    // ── Row reorder (HTML5 DnD) ──
     leftBody.addEventListener('dragstart', e => {
       const badge = e.target.closest('[data-drag-id]');
       if (!badge) return;
@@ -4445,10 +4080,8 @@ const GanttView = {
       this.reorderRow(state, state.reorderSrc, targetId, isAbove);
     });
 
-    // ── Bar drag-to-move ──
     this.wireBarDrag(state, rightScr);
 
-    // ── Selection toolbar ──
     const selClear    = container.querySelector('.sel-btn-clear');
     const selClearAll = container.querySelector('.sel-btn-clear-all');
     const selBulk     = container.querySelector('.sel-btn-bulk');
@@ -4458,7 +4091,6 @@ const GanttView = {
       BulkEdit.open(Array.from(state.selected));
     };
 
-    // ── Filter bar wiring ──
     const filterBar = container.querySelector('.gantt-filterbar');
     if (filterBar){
       const searchInput = filterBar.querySelector('.fb-search');
@@ -4473,7 +4105,6 @@ const GanttView = {
             this.mount(state.container, state.proj.id, { mode: state.mode, zoom: state.zoom });
           }, 250);
         });
-        // Preserve cursor pos after mount
         if (state.filter.search){
           searchInput.focus();
           searchInput.setSelectionRange(searchInput.value.length, searchInput.value.length);
@@ -4515,7 +4146,6 @@ const GanttView = {
       }
     }
 
-    // ── Sort by column header (mousedown for responsiveness) ──
     const theadEl = container.querySelector('.gantt-thead');
     if (theadEl){
       theadEl.addEventListener('mousedown', e => {
@@ -4538,7 +4168,6 @@ const GanttView = {
       });
     }
 
-    // ── Group header collapse toggle ──
     leftBody.addEventListener('click', e => {
       const toggle = e.target.closest('.gt-group-toggle');
       if (!toggle) return;
@@ -4551,10 +4180,8 @@ const GanttView = {
       this.mount(state.container, state.proj.id, { mode: state.mode, zoom: state.zoom });
     });
 
-    // ── Tooltip ──
     this.wireTooltip(state, rightScr, axisTrack);
 
-    // Auto-scroll to today
     setTimeout(() => {
       const today = new Date(); today.setHours(0,0,0,0);
       const off = Math.round((today - state.startDate) / 86400000);
@@ -4566,9 +4193,6 @@ const GanttView = {
     }, 30);
   },
 
-     /* ═══════════════════════════════════════════════════════════
-     (a) COLUMN RESIZE
-     ═══════════════════════════════════════════════════════════ */
   beginColResize(state, handle, ev){
     const colIdx = parseInt(handle.getAttribute('data-col-idx'), 10);
     const col = this.COLUMNS[colIdx];
@@ -4590,18 +4214,15 @@ const GanttView = {
       col.width = newW;
       state.colWidths[col.key] = newW;
 
-      // Update header
       const th = handle.parentElement;
       th.style.width = newW + 'px';
 
-      // Update all rows
       const rows = state.container.querySelectorAll('.gantt-row');
       rows.forEach(r => {
         const td = r.querySelector('.gantt-td[data-col-key="' + col.key + '"]');
         if (td) td.style.width = newW + 'px';
       });
 
-      // Update grid table width
       const root = state.container.querySelector('.gantt-root');
       root.style.setProperty('--gantt-table-w', this.tableWidth(state.costColumns) + 'px');
     };
@@ -4620,9 +4241,6 @@ const GanttView = {
     document.addEventListener('mouseup', onUp);
   },
 
-  /* ═══════════════════════════════════════════════════════════
-     (b) ROW REORDER
-     ═══════════════════════════════════════════════════════════ */
   reorderRow(state, srcId, targetId, before){
     if (srcId === targetId) return;
 
@@ -4630,13 +4248,11 @@ const GanttView = {
     const tgt = DB.project_wbs.find(w => w.id === targetId);
     if (!src || !tgt) return;
 
-    // Hanya boleh reorder kalau parent sama
     if ((src.parent_id || '') !== (tgt.parent_id || '')){
       toast('Hanya bisa reorder item dengan induk (parent) yang sama', false);
       return;
     }
 
-    // Rebuild ordered siblings
     const siblings = DB.project_wbs
       .filter(w => (w.parent_id || '') === (src.parent_id || '') && w.project_id === state.proj.id)
       .sort((a,b) => (a.urut||0) - (b.urut||0));
@@ -4650,7 +4266,6 @@ const GanttView = {
     if (!before) toIdx += 1;
     siblings.splice(toIdx, 0, src);
 
-    // Renumber
     if (typeof Undo !== 'undefined') Undo.snapshot('Reorder: ' + (src.kode_wbs || '') + ' → ' + (tgt.kode_wbs || ''));
     siblings.forEach((w, i) => { w.urut = i + 1; });
     saveDB();
@@ -4658,9 +4273,6 @@ const GanttView = {
     toast('Urutan WBS diperbarui');
   },
 
-  /* ═══════════════════════════════════════════════════════════
-     (c) EXPORT PNG / PDF
-     ═══════════════════════════════════════════════════════════ */
   exportPNG(state, asPDF){
     const axis = state.container.querySelector('.gantt-axis');
     const bars = state.container.querySelector('.gantt-bars');
@@ -4673,16 +4285,12 @@ const GanttView = {
     out.height = H;
     const ctx = out.getContext('2d');
 
-    // Background
     ctx.fillStyle = '#0b1220';
     ctx.fillRect(0, 0, W, H);
 
-    // Axis di atas
     ctx.drawImage(axis, 0, 0, W, this.AXIS_H);
-    // Bars di bawah
     ctx.drawImage(bars, 0, this.AXIS_H, W, state.totalHeight);
 
-    // Footer watermark
     ctx.fillStyle = '#3a5590';
     ctx.font = 'bold 12px Segoe UI';
     ctx.textAlign = 'right';
@@ -4713,9 +4321,6 @@ const GanttView = {
     }
   },
 
-  /* ═══════════════════════════════════════════════════════════
-     (d) ROW SELECTION
-     ═══════════════════════════════════════════════════════════ */
   singleSelect(state, id){
     state.selected.clear();
     state.selected.add(id);
@@ -4743,12 +4348,10 @@ const GanttView = {
     this.refreshSelectionUI(state);
   },
   refreshSelectionUI(state){
-    // Update checkboxes
     state.container.querySelectorAll('.gt-check[data-select-id]').forEach(el => {
       const id = el.getAttribute('data-select-id');
       el.classList.toggle('is-checked', state.selected.has(id));
     });
-    // Update row highlight
     state.container.querySelectorAll('.gantt-row').forEach(r => {
       const id = r.getAttribute('data-node-id');
       r.classList.toggle('is-selected', state.selected.has(id));
@@ -4764,9 +4367,6 @@ const GanttView = {
     if (el) el.textContent = cnt;
   },
 
-  /* ═══════════════════════════════════════════════════════════
-     (e) BAR DRAG-TO-MOVE
-     ═══════════════════════════════════════════════════════════ */
   wireBarDrag(state, rightScr){
     const canvas = state.container.querySelector('.gantt-bars');
     if (!canvas) return;
@@ -4781,9 +4381,7 @@ const GanttView = {
       const pos = state.posMap[node.id];
       if (!pos) return null;
       const cx = clientX - rect.left;
-      // Hit horizontal: bar + 4px toleransi
       if (cx < pos.x1 - 4 || cx > pos.x2 + 4) return null;
-      // Hit vertikal: hanya area bar (bukan seluruh row)
       const barTop = pos.y + (this.ROW_H - 14) / 2;
       const barBot = barTop + 14;
       if (cy < barTop - 3 || cy > barBot + 3) return null;
@@ -4794,7 +4392,7 @@ const GanttView = {
       if (e.button !== 0) return;
       const hit = hitTest(e.clientX, e.clientY);
       if (!hit) return;
-      if (hit.node.isSummary) return;  // summary tidak bisa di-drag
+      if (hit.node.isSummary) return;
 
       e.preventDefault();
       state.barDrag = {
@@ -4814,7 +4412,6 @@ const GanttView = {
         const bd = state.barDrag;
         if (!bd) return;
         const dx = ev.clientX - bd.startMouseX;
-        // Untuk zoom sangat kecil (yearly/quarterly), pakai pendekatan berbeda
         const pxPerDay = state.zoomCfg.pxPerDay;
         const deltaDays = Math.round(dx / Math.max(2, pxPerDay));
         bd.deltaDays = deltaDays;
@@ -4836,7 +4433,6 @@ const GanttView = {
         state.barDrag = null;
         if (!bd || !bd.deltaDays) { this.drawBars(state, canvas); return; }
 
-        // Hitung tanggal baru — snap ke hari kerja
         const origStart = new Date(bd.origStartISO + 'T00:00:00');
         const wbsItem = DB.project_wbs.find(w => w.id === bd.nodeId);
         if (!wbsItem){ this.drawBars(state, canvas); return; }
@@ -4846,7 +4442,6 @@ const GanttView = {
         const snapped = WorkingCalendar.addWorkDays(origStart, bd.deltaDays, cal);
         const newStartISO = WorkingCalendar.fmt(snapped);
 
-        // Terapkan sebagai constraint SNET (Start No Earlier Than)
         writeScheduleField(wbsItem, 'constraint_type', 'SNET');
         writeScheduleField(wbsItem, 'constraint_date', newStartISO);
 
@@ -4860,7 +4455,6 @@ const GanttView = {
       document.addEventListener('mouseup', onUp);
     });
 
-    // Cursor hint
     rightScr.addEventListener('mousemove', e => {
       if (state.barDrag) return;
       const hit = hitTest(e.clientX, e.clientY);
@@ -4868,13 +4462,11 @@ const GanttView = {
     });
   },
 
-     /* Hover tooltip pada bar chart */
   wireTooltip(state, rightScr, axisTrack){
     const {container, visibleNodes} = state;
     const canvas = container.querySelector('.gantt-bars');
     if (!canvas) return;
 
-    // Buat elemen tooltip sekali
     let tip = container.querySelector('.gt-tip');
     if (!tip){
       tip = document.createElement('div');
@@ -4890,19 +4482,16 @@ const GanttView = {
       const pred = node.predecessors || '—';
       const res  = node.resources || '—';
 
-      /* ── Fase 3A-4: Cost section (hanya kalau Cost Columns ON) ── */
       let costSectionHTML = '';
       if (state.costColumns){
         const proj = DB.projects.find(p => p.id === state.proj.id);
         const task = node.raw;
 
-        /* Cost summary dari node (sudah dihitung GanttEngine) */
         const costTotal = num(node.costTotal);
         const costPerDay = num(node.costPerDay);
         const pctBudget = num(node.pctBudget);
         const cumPct = num(node.cumPct);
 
-        /* Breakdown per jenis (hanya untuk leaf task, bukan summary) */
         let breakdownHTML = '';
         let topResHTML = '';
 
@@ -4927,7 +4516,6 @@ const GanttView = {
 
             const totalJenis = jenis.upah + jenis.bahan + jenis.alat || 1;
 
-            /* Breakdown bars */
             const rows = [
               { key: 'upah',  label: 'Upah',  val: jenis.upah,  pct: (jenis.upah / totalJenis) * 100 },
               { key: 'bahan', label: 'Bahan', val: jenis.bahan, pct: (jenis.bahan / totalJenis) * 100 },
@@ -4949,7 +4537,6 @@ const GanttView = {
                 '</div>';
             }
 
-            /* Top-3 resource */
             resList.sort((a, b) => b.cost - a.cost);
             const top3 = resList.slice(0, 3);
             if (top3.length){
@@ -4966,7 +4553,6 @@ const GanttView = {
           }
         }
 
-        /* Build cost section */
         costSectionHTML =
           '<div class="gt-tip-cost">' +
             '<div class="gt-tip-cost-title">💰 Cost Info</div>' +
@@ -5004,7 +4590,6 @@ const GanttView = {
       let left = e.clientX - rect.left + 14;
       let top  = e.clientY - rect.top + 14;
 
-      // Cegah overflow kanan/bawah (dynamic height kalau ada cost section)
       const tipW = 320;
       const tipH = state.costColumns ? 480 : 220;
       if (left + tipW > rect.width)  left = e.clientX - rect.left - tipW - 14;
@@ -5020,9 +4605,8 @@ const GanttView = {
     const hideTip = () => tip.classList.remove('show');
 
     rightScr.addEventListener('mousemove', e => {
-      if (state.barDrag){ hideTip(); return; }   // ← tambah baris ini
+      if (state.barDrag){ hideTip(); return; }
       const rect = canvas.getBoundingClientRect();
-      // Koordinat relatif ke canvas
       const cx = e.clientX - rect.left;
       const cy = e.clientY - rect.top;
 
@@ -5042,13 +4626,11 @@ const GanttView = {
 };
 
 /* =====================================================================
-   BAGIAN 9C.2 — TASK INSPECTOR (Fase 2F)
-   Slide-out panel: analisis kenapa task punya tanggal tertentu
+   TASK INSPECTOR
    ===================================================================== */
 const TaskInspector = {
   _currentTaskId: null,
 
-  /* ── Buka panel untuk task tertentu ── */
   open(taskId){
     if (!taskId) return;
     const task = DB.project_wbs.find(w => w.id === taskId);
@@ -5061,11 +4643,9 @@ const TaskInspector = {
     panel.innerHTML = this._buildHTML(task);
     panel.classList.add('show');
 
-    // Wire close button
     const closeBtn = panel.querySelector('.ti-close');
     if (closeBtn) closeBtn.onclick = () => this.close();
 
-    // Wire navigation klik pada pred/succ
     panel.querySelectorAll('[data-ti-goto]').forEach(el => {
       el.onclick = () => {
         const id = el.getAttribute('data-ti-goto');
@@ -5085,19 +4665,16 @@ const TaskInspector = {
     else this.open(taskId);
   },
 
-  /* ── Helper: format tanggal ── */
   _fmt(d){
     if (!d) return '—';
     if (d instanceof Date) return WorkingCalendar.fmt(d);
     return String(d);
   },
 
-  /* ── Bangun HTML inspector ── */
   _buildHTML(task){
     const proj = DB.projects.find(p => p.id === task.project_id);
     const cal = WorkingCalendar.get(task.calendar_id || proj?.calendar_id);
 
-    /* ── Section 1: Header ── */
     const schedMode = String(task.schedule_mode || 'auto').toLowerCase();
     const isManual = schedMode === 'manual';
     const ct = String(task.constraint_type || '').toUpperCase();
@@ -5116,7 +4693,6 @@ const TaskInspector = {
         '<div class="ti-title">' + esc(task.uraian || '') + '</div>' +
       '</div>';
 
-    /* ── Section 2: Timeline ── */
     const dur = num(task.durasi_hari) || num(task.duration) || 1;
     const startISO = this._fmt(task.tgl_mulai_rencana || task.start_date);
     const finishISO = this._fmt(task.tgl_selesai_rencana || task.finish_date);
@@ -5131,7 +4707,6 @@ const TaskInspector = {
         '</div>' +
       '</div>';
 
-    /* ── Section 3: Predecessors ── */
     const rels = (typeof CPM !== 'undefined' && CPM.getRelationships) ? CPM.getRelationships(task) : [];
     const items = DB.project_wbs.filter(w => w.project_id === task.project_id && !w.is_group);
     const byId = {}, byKode = {};
@@ -5142,7 +4717,7 @@ const TaskInspector = {
 
     let predRowsHTML = '';
     if (!rels.length){
-      predRowsHTML = '<div class="ti-empty">Tidak ada predecessor — task mulai bebas (mengikuti tanggal proyek atau constraint).</div>';
+      predRowsHTML = '<div class="ti-empty">Tidak ada predecessor — task mulai bebas.</div>';
     } else {
       predRowsHTML = rels.map((rel, i) => {
         const pred = byId[rel.predRef] || byKode[String(rel.predRef).trim()];
@@ -5166,7 +4741,6 @@ const TaskInspector = {
         '<div class="ti-rels">' + predRowsHTML + '</div>' +
       '</div>';
 
-    /* ── Section 4: Successors ── */
     const succs = [];
     items.forEach(succ => {
       if (succ.id === task.id) return;
@@ -5179,7 +4753,7 @@ const TaskInspector = {
 
     let succRowsHTML = '';
     if (!succs.length){
-      succRowsHTML = '<div class="ti-empty">Tidak ada successor — task tidak mengikatkan task lain.</div>';
+      succRowsHTML = '<div class="ti-empty">Tidak ada successor.</div>';
     } else {
       succRowsHTML = succs.map(({ succ, rel }) => {
         const lagLabel = rel.lag !== 0 ? (rel.lag > 0 ? '+' + rel.lag : String(rel.lag)) + 'd' : '0d';
@@ -5198,7 +4772,6 @@ const TaskInspector = {
         '<div class="ti-rels">' + succRowsHTML + '</div>' +
       '</div>';
 
-    /* ── Section 5: Constraint ── */
     const cdISO = this._fmt(task.constraint_date);
     const constraintHTML =
       '<div class="ti-section">' +
@@ -5211,7 +4784,6 @@ const TaskInspector = {
         '</div>' +
       '</div>';
 
-    /* ── Section 6: Schedule Mode ── */
     const msISO = this._fmt(task.manual_start);
     const mfISO = this._fmt(task.manual_finish);
     const modeHTML =
@@ -5228,7 +4800,6 @@ const TaskInspector = {
         '</div>' +
       '</div>';
 
-    /* ── Section 7: Kalender ── */
     const calName = cal ? (cal.kode + ' — ' + cal.nama) : '—';
     const calendarHTML =
       '<div class="ti-section">' +
@@ -5238,7 +4809,6 @@ const TaskInspector = {
         '</div>' +
       '</div>';
 
-    /* ── Section 8: Resources ── */
     let resHTML = '';
     if (task.ahsp_id){
       const dets = DB.project_ahsp_details.filter(d =>
@@ -5269,29 +4839,26 @@ const TaskInspector = {
           '</div>' +
         '</div>';
       } else {
-        resHTML = '<div class="ti-section"><div class="ti-section-title">🧱 Resource</div><div class="ti-empty">Tidak ada resource (AHSP kosong atau volume nol).</div></div>';
+        resHTML = '<div class="ti-section"><div class="ti-section-title">🧱 Resource</div><div class="ti-empty">Tidak ada resource.</div></div>';
       }
     } else {
       resHTML = '<div class="ti-section"><div class="ti-section-title">🧱 Resource</div><div class="ti-empty">Task tidak punya AHSP.</div></div>';
     }
 
-    /* ── Section 9: "Why this date?" ── */
     const explanationHTML = this._buildExplanation(task, rels, ct, isManual, byId, byKode);
 
     return headerHTML + timelineHTML + explanationHTML + predSection + succSection +
            modeHTML + constraintHTML + calendarHTML + resHTML;
   },
 
-  /* ── "Kenapa tanggalnya begitu?" ── */
   _buildExplanation(task, rels, ct, isManual, byId, byKode){
     const reasons = [];
 
     if (isManual){
       reasons.push({
         icon: '🔒',
-        text: 'Task dijadwalkan <b>manual</b> (tanggal dikunci user). ' +
-              'Start: <b>' + this._fmt(task.manual_start) + '</b>, Finish: <b>' + this._fmt(task.manual_finish) + '</b>. ' +
-              'CPM tidak akan menggeser task ini meskipun predecessor berubah.'
+        text: 'Task dijadwalkan <b>manual</b>. ' +
+              'Start: <b>' + this._fmt(task.manual_start) + '</b>, Finish: <b>' + this._fmt(task.manual_finish) + '</b>.'
       });
     } else {
       if (ct && ct !== ''){
@@ -5333,16 +4900,11 @@ const TaskInspector = {
                     : '') +
                   ' → menghasilkan start <b>' + WorkingCalendar.fmt(driving.candidate) + '</b>.'
           });
-        } else {
-          reasons.push({
-            icon: 'ℹ',
-            text: 'Task punya ' + rels.length + ' predecessor, tapi belum semuanya terjadwal.'
-          });
         }
       } else {
         reasons.push({
           icon: '🚀',
-          text: 'Task <b>tidak punya predecessor</b> — mulai bebas sejak tanggal proyek atau constraint.'
+          text: 'Task <b>tidak punya predecessor</b> — mulai bebas sejak tanggal proyek.'
         });
       }
     }
@@ -5351,8 +4913,7 @@ const TaskInspector = {
     if (flt < 0){
       reasons.push({
         icon: '⚠',
-        text: 'Task punya <b>negative float (' + flt + ' hari)</b> — ' +
-              'kombinasi constraint dan predecessor tidak dapat dipenuhi.'
+        text: 'Task punya <b>negative float (' + flt + ' hari)</b>.'
       });
     }
 
@@ -5369,13 +4930,7 @@ const TaskInspector = {
 };
 
 /* =====================================================================
-   BAGIAN 9D — RESOURCE HISTOGRAM
-   Kebutuhan harian/periodik per resource + garis kapasitas
-   ===================================================================== */
-
-/* =====================================================================
-   BAGIAN 9D — RESOURCE HISTOGRAM
-   Kebutuhan harian/periodik per resource + garis kapasitas
+   RESOURCE HISTOGRAM
    ===================================================================== */
 const ResourceHistogram = {
   render(projectId, canvasEl, resourceKode, granularity){
@@ -5404,8 +4959,7 @@ const ResourceHistogram = {
                     : cap * 22;
 
     const datasets = [{
-      label: 'Kebutuhan ' + (info?.nama || resourceKode) +
-             ' (' + (info?.satuan || '') + ')',
+      label: 'Kebutuhan ' + (info?.nama || resourceKode),
       data: values,
       backgroundColor: values.map(v => capBucket > 0 && v > capBucket
         ? 'rgba(239,68,68,.75)' : 'rgba(47,129,247,.75)'),
@@ -5416,7 +4970,7 @@ const ResourceHistogram = {
 
     if (capBucket > 0){
       datasets.push({
-        label: 'Kapasitas (' + fmt(capBucket, 0) + ' ' + (info?.satuan||'') + ')',
+        label: 'Kapasitas (' + fmt(capBucket, 0) + ')',
         data: labels.map(() => capBucket),
         type: 'line',
         borderColor: '#f59e0b',
@@ -5437,9 +4991,7 @@ const ResourceHistogram = {
         animation: {duration: 300},
         plugins: {
           legend: {labels:{color:'#e6edf7', font:{size:11}}},
-          tooltip: {
-            callbacks: { label: c => c.dataset.label + ': ' + fmt(c.parsed.y, 2) }
-          }
+          tooltip: {callbacks: { label: c => c.dataset.label + ': ' + fmt(c.parsed.y, 2) }}
         },
         scales: {
           x: {ticks:{color:'#8fa3c4', font:{size:10}}, grid:{display:false}},
@@ -5451,8 +5003,7 @@ const ResourceHistogram = {
 };
 
 /* =====================================================================
-   BAGIAN 9E — OVER-ALLOCATION DETECTOR
-   Bandingkan kebutuhan harian vs kapasitas_harian per resource
+   OVER-ALLOCATION DETECTOR
    ===================================================================== */
 const OverAllocationDetector = {
   detect(projectId){
@@ -5499,8 +5050,7 @@ const OverAllocationDetector = {
 };
 
 /* =====================================================================
-   BAGIAN 9E.3 — RESOURCE SHEET VIEW (Fase 2D)
-   Matriks resource × periode (Vertical / Horizontal)
+   RESOURCE SHEET VIEW
    ===================================================================== */
 const ResourceSheet = {
   LAYOUT_STORE_KEY: 'mk_resource_sheet_layout_v1',
@@ -5524,21 +5074,17 @@ const ResourceSheet = {
     try { localStorage.setItem(this.LAYOUT_STORE_KEY, JSON.stringify(layout)); } catch(e){}
   },
 
-  /* Ambil data matrix — resource × bucket */
   buildMatrix(projectId, granularity, hideEmpty){
     const rl = ResourceLoader.load(projectId, {
       mode: 'rab', distribution: 'uniform', granularity
     });
     if (!rl.ok) return { ok: false, error: rl.error };
 
-    const buckets = rl.buckets;
     const resources = rl.byResource;
 
-    /* Map: resourceKode → { bucketKey → qty } */
     const matrix = {};
     resources.forEach(r => matrix[r.kode] = {});
 
-    /* Ambil dari resDailyMap → konversi ke bucket */
     Object.keys(rl.resDailyMap || {}).forEach(kode => {
       const raw = rl.resDailyMap[kode];
       Object.keys(raw).forEach(iso => {
@@ -5548,12 +5094,10 @@ const ResourceSheet = {
       });
     });
 
-    /* Column keys = semua bucket_key unik yang muncul */
     const colKeys = new Set();
     Object.values(matrix).forEach(m => Object.keys(m).forEach(k => colKeys.add(k)));
     const columns = Array.from(colKeys).sort();
 
-    /* Filter kolom kosong & resource kosong */
     let rows = resources.slice();
     if (hideEmpty){
       rows = rows.filter(r => {
@@ -5562,10 +5106,9 @@ const ResourceSheet = {
       });
     }
 
-    return { ok: true, resources: rows, columns, matrix, byResource: rl.byResource, buckets };
+    return { ok: true, resources: rows, columns, matrix, byResource: rl.byResource, buckets: rl.buckets };
   },
 
-  /* ── Render utama — dipanggil dari GanttView toggle ── */
   render(container, projectId, opts){
     if (!container) return;
     opts = opts || {};
@@ -5585,13 +5128,12 @@ const ResourceSheet = {
       return;
     }
 
-    /* ── Toolbar kontrol ── */
     const toolbar =
       '<div class="rs-toolbar">' +
         '<span class="rs-lbl">Layout</span>' +
         '<select class="rs-layout-sel">' +
-          '<option value="vertical"' + (layout.mode === 'vertical' ? ' selected' : '') + '>Vertical (baris = resource)</option>' +
-          '<option value="horizontal"' + (layout.mode === 'horizontal' ? ' selected' : '') + '>Horizontal (baris = periode)</option>' +
+          '<option value="vertical"' + (layout.mode === 'vertical' ? ' selected' : '') + '>Vertical</option>' +
+          '<option value="horizontal"' + (layout.mode === 'horizontal' ? ' selected' : '') + '>Horizontal</option>' +
         '</select>' +
         '<span class="rs-lbl">Granularitas</span>' +
         '<select class="rs-gran-sel">' +
@@ -5604,7 +5146,6 @@ const ResourceSheet = {
         '<span class="rs-count">' + data.resources.length + ' resource · ' + data.columns.length + ' periode</span>' +
       '</div>';
 
-    /* ── Tabel ── */
     let tableHTML = '';
     if (layout.mode === 'vertical'){
       tableHTML = this._renderVertical(data, layout);
@@ -5614,7 +5155,6 @@ const ResourceSheet = {
 
     container.innerHTML = toolbar + tableHTML;
 
-    /* ── Wire controls ── */
     const layoutSel = container.querySelector('.rs-layout-sel');
     if (layoutSel) layoutSel.onchange = e => {
       const newLayout = Object.assign({}, layout, { mode: e.target.value });
@@ -5636,7 +5176,6 @@ const ResourceSheet = {
       this.render(container, projectId, newLayout);
     };
 
-    /* Tooltip & klik cell → detail */
     container.querySelectorAll('[data-rs-cell]').forEach(cell => {
       cell.addEventListener('click', () => {
         const kode = cell.getAttribute('data-rs-kode');
@@ -5649,10 +5188,8 @@ const ResourceSheet = {
     });
   },
 
-  /* ── Cell renderer dengan utilization color ── */
   _cellHTML(kode, bk, qty, resourceInfo){
     const cap = num(resourceInfo?.kapasitas_harian);
-    /* Konversi kapasitas ke bucket */
     const gran = resourceInfo?._gran || 'weekly';
     const capPerBucket = gran === 'daily' ? cap : gran === 'weekly' ? cap * 5 : cap * 22;
 
@@ -5678,11 +5215,9 @@ const ResourceSheet = {
     '</td>';
   },
 
-  /* ── Layout Vertical: baris = resource, kolom = periode ── */
   _renderVertical(data, layout){
     const {resources, columns, matrix} = data;
 
-    /* Header */
     const head =
       '<thead><tr>' +
         '<th class="rs-th-id">Kode</th>' +
@@ -5694,7 +5229,6 @@ const ResourceSheet = {
         '<th class="rs-th-total num">Total</th>' +
       '</tr></thead>';
 
-    /* Body */
     const body = resources.map(r => {
       const m = matrix[r.kode] || {};
       const cap = num(r.kapasitas_harian);
@@ -5727,11 +5261,9 @@ const ResourceSheet = {
     '</div>';
   },
 
-  /* ── Layout Horizontal: baris = periode, kolom = resource ── */
   _renderHorizontal(data, layout){
     const {resources, columns, matrix} = data;
 
-    /* Header */
     const head =
       '<thead><tr>' +
         '<th class="rs-th-id">Periode</th>' +
@@ -5743,7 +5275,6 @@ const ResourceSheet = {
         '<th class="rs-th-total num">Total</th>' +
       '</tr></thead>';
 
-    /* Body — 1 row per column (bucket) */
     const body = columns.map(bk => {
       let rowTotal = 0;
       const cells = resources.map(r => {
@@ -5767,18 +5298,9 @@ const ResourceSheet = {
 };
 
 /* =====================================================================
-   BAGIAN 9E.2 — CONFLICT DETECTOR (Fase 1E)
-
-/* =====================================================================
-   BAGIAN 9E.2 — CONFLICT DETECTOR (Fase 1E)
-   Deteksi konflik jadwal: Manual vs Predecessor, Constraint Ketat, Negative Float
+   CONFLICT DETECTOR
    ===================================================================== */
 const ConflictDetector = {
-  /**
-   * Deteksi semua konflik jadwal untuk sebuah proyek.
-   * Return: { ok, conflicts: [], count }
-   * Setiap conflict: { type, severity, taskId, kode, uraian, message, detail }
-   */
   detect(projectId){
     const proj = DB.projects.find(p => p.id === projectId);
     if (!proj) return { ok: false, error: 'Proyek tidak ditemukan', conflicts: [] };
@@ -5796,7 +5318,6 @@ const ConflictDetector = {
 
     const conflicts = [];
 
-    /* ═══ 1. NEGATIVE FLOAT ═══ */
     items.forEach(it => {
       const flt = num(it.float_total ?? it.total_float);
       if (flt < 0){
@@ -5806,13 +5327,12 @@ const ConflictDetector = {
           taskId: it.id,
           kode: it.kode_wbs || '?',
           uraian: it.uraian || '',
-          message: 'Total Float negatif (' + flt + ' hari) — jadwal tidak mungkin dengan constraint saat ini.',
-          detail: 'Constraint dan predecessor saling bertentangan, sehingga task tidak dapat dijadwalkan tepat waktu.'
+          message: 'Total Float negatif (' + flt + ' hari).',
+          detail: 'Constraint dan predecessor saling bertentangan.'
         });
       }
     });
 
-    /* ═══ 2. MANUAL TASK vs PREDECESSOR ═══ */
     items.forEach(it => {
       if (CPM.getScheduleMode(it) !== 'manual') return;
       if (!it.manual_start) return;
@@ -5838,115 +5358,19 @@ const ConflictDetector = {
         }
 
         if (minStart && mStart < minStart){
-          const lagLabel = rel.lag !== 0
-            ? (rel.lag > 0 ? '+' + rel.lag : String(rel.lag)) + 'd'
-            : '';
           conflicts.push({
             type: 'MANUAL_PRED_CONFLICT',
             severity: 'warn',
             taskId: it.id,
             kode: it.kode_wbs || '?',
             uraian: it.uraian || '',
-            message: 'Manual start (' + it.manual_start + ') lebih awal dari yang diizinkan predecessor ' +
-                     pred.kode_wbs + ' (' + WorkingCalendar.fmt(minStart) + ').',
-            detail: 'Relasi ' + rel.type + lagLabel + ' — task manual mengabaikan logika predecessor. ' +
-                    'Successor mungkin akan bergeser karena task ini dipatok di tanggal manual.'
+            message: 'Manual start (' + it.manual_start + ') lebih awal dari minimum (' + WorkingCalendar.fmt(minStart) + ').',
+            detail: 'Relasi ' + rel.type + ' — task manual mengabaikan logika predecessor.'
           });
         }
       });
     });
 
-    /* ═══ 3. CONSTRAINT KETAT (MSO / MFO / FNLT) vs PREDECESSOR ═══ */
-    items.forEach(it => {
-      const ct = String(it.constraint_type || '').toUpperCase();
-      if (!['MSO', 'MFO', 'SNLT', 'FNLT'].includes(ct)) return;
-      const cd = it.constraint_date ? CPM._parseDate(it.constraint_date) : null;
-      if (!cd) return;
-
-      const rels = CPM.getRelationships(it);
-      if (!rels.length) return;
-
-      const cal = WorkingCalendar.get(it.calendar_id || proj.calendar_id);
-
-      rels.forEach(rel => {
-        const pred = byId[rel.predRef] || byKode[String(rel.predRef).trim()];
-        if (!pred) return;
-
-        /* MSO: start dipatok → cek apakah predecessor masih mengizinkan */
-        if (ct === 'MSO' && rel.type === 'FS'){
-          const predEF = pred.tgl_selesai_rencana ? CPM._parseDate(pred.tgl_selesai_rencana) : null;
-          if (!predEF) return;
-          const minStart = WorkingCalendar.addWorkDays(predEF, rel.lag, cal);
-          if (cd < minStart){
-            conflicts.push({
-              type: 'MSO_PRED_CONFLICT',
-              severity: 'high',
-              taskId: it.id,
-              kode: it.kode_wbs || '?',
-              uraian: it.uraian || '',
-              message: 'MSO (' + it.constraint_date + ') lebih awal dari minimum start dari predecessor ' +
-                       pred.kode_wbs + ' (' + WorkingCalendar.fmt(minStart) + ').',
-              detail: 'Constraint MSO memaksa task mulai sebelum predecessor selesai — akan memicu negative float.'
-            });
-          }
-        }
-
-        /* FNLT: finish dipatok → cek apakah task bisa selesai tepat waktu */
-        if (ct === 'FNLT'){
-          const curFinish = it.tgl_selesai_rencana ? CPM._parseDate(it.tgl_selesai_rencana) : null;
-          if (curFinish && curFinish > cd){
-            conflicts.push({
-              type: 'FNLT_PRED_CONFLICT',
-              severity: 'warn',
-              taskId: it.id,
-              kode: it.kode_wbs || '?',
-              uraian: it.uraian || '',
-              message: 'Finish (' + it.tgl_selesai_rencana + ') melebihi constraint FNLT (' + it.constraint_date + ').',
-              detail: 'Task tidak dapat diselesaikan sesuai batas waktu yang diinginkan.'
-            });
-          }
-        }
-      });
-    });
-
-    /* ═══ 4. MANUAL TASK vs SUCCESSOR ═══ */
-    items.forEach(it => {
-      if (CPM.getScheduleMode(it) !== 'manual') return;
-      if (!it.manual_finish) return;
-
-      const mFinish = CPM._parseDate(it.manual_finish);
-      if (!mFinish) return;
-      const cal = WorkingCalendar.get(it.calendar_id || proj.calendar_id);
-
-      items.forEach(succ => {
-        if (succ.id === it.id) return;
-        const succRels = CPM.getRelationships(succ);
-        succRels.forEach(rel => {
-          const refTask = byId[rel.predRef] || byKode[String(rel.predRef).trim()];
-          if (!refTask || refTask.id !== it.id) return;
-
-          if (rel.type === 'FS' && succ.tgl_mulai_rencana){
-            const succStart = CPM._parseDate(succ.tgl_mulai_rencana);
-            if (!succStart) return;
-            const minSuccStart = WorkingCalendar.addWorkDays(mFinish, rel.lag, cal);
-            if (succStart < minSuccStart){
-              conflicts.push({
-                type: 'MANUAL_SUCC_CONFLICT',
-                severity: 'warn',
-                taskId: it.id,
-                kode: it.kode_wbs || '?',
-                uraian: it.uraian || '',
-                message: 'Successor ' + succ.kode_wbs + ' mulai (' + succ.tgl_mulai_rencana +
-                         ') sebelum manual finish task ini (' + it.manual_finish + ').',
-                detail: 'Successor mungkin tidak menghormati tanggal manual atau akan memicu slack negatif.'
-              });
-            }
-          }
-        });
-      });
-    });
-
-    /* ── Dedup by (type + taskId) ── */
     const seen = new Set();
     const filtered = conflicts.filter(c => {
       const key = c.type + '::' + c.taskId;
@@ -5955,7 +5379,6 @@ const ConflictDetector = {
       return true;
     });
 
-    /* ── Sort: high → warn → info ── */
     const ord = { high: 0, warn: 1, info: 2 };
     filtered.sort((a, b) => (ord[a.severity] ?? 99) - (ord[b.severity] ?? 99));
 
@@ -5963,7 +5386,6 @@ const ConflictDetector = {
   }
 };
 
-/* ── Helper: HTML kartu konflik (dipakai di renderSchedule) ── */
 function renderConflictCard(c){
   const sev = c.severity || 'warn';
   const cls = sev === 'high' ? '' : sev === 'warn' ? 'warn' : 'info';
@@ -5973,13 +5395,12 @@ function renderConflictCard(c){
     '<div style="flex:1">' +
       '<b>' + esc(c.kode) + ' — ' + esc(c.uraian) + '</b>' +
       '<div style="font-size:11.5px;margin-top:4px">' + esc(c.message) + '</div>' +
-      '<div style="font-size:10.5px;color:var(--muted);margin-top:3px">' + esc(c.detail || '') + '</div>' +
     '</div>' +
   '</div>';
 }
 
 /* =====================================================================
-   BAGIAN 10 — SEED WORKING CALENDARS & HOLIDAYS (Frontend fallback)
+   SEED CALENDAR DEFAULTS
    ===================================================================== */
 function seedCalendarDefaults(){
   if (!DB.working_calendars || !DB.working_calendars.length){
@@ -6010,7 +5431,7 @@ function seedCalendarDefaults(){
 }
 
 /* =====================================================================
-   TEST CPM — Jalankan dari Console Browser
+   TEST CPM
    ===================================================================== */
 function testCPM(projectId){
   projectId = projectId || STATE.activeProject;
@@ -6028,8 +5449,6 @@ function testCPM(projectId){
     durasi:   num(it.durasi_hari),
     ES:       it.tgl_mulai_rencana,
     EF:       it.tgl_selesai_rencana,
-    LS:       it.late_start,
-    LF:       it.late_finish,
     float:    num(it.float_total),
     kritis:   num(it.is_critical) === 1 ? '★' : ''
   })));
@@ -6037,27 +5456,10 @@ function testCPM(projectId){
 }
 
 /* =====================================================================
-   TEST RESOURCE LOADER — jalankan dari Console Browser
+   TEST RESOURCE LOADER
    ===================================================================== */
 function testResourceLoader(projectId){
   projectId = projectId || STATE.activeProject;
-  const modes = ['rab','rap'];
-  const dists = ['uniform','triangular','bell'];
-
-  modes.forEach(mode => {
-    dists.forEach(dist => {
-      const r = ResourceLoader.load(projectId, {
-        mode, distribution: dist, granularity: 'daily'
-      });
-      if (!r.ok){ console.warn(mode, dist, r.error); return; }
-      const tot = r.totals.upah + r.totals.bahan + r.totals.alat;
-      console.log(
-        `%c[${mode.toUpperCase()} / ${dist}]%c total=${rp(tot)} | buckets=${r.buckets.length}`,
-        'color:#1abc9c;font-weight:bold', 'color:#e6edf7'
-      );
-    });
-  });
-
   const r = ResourceLoader.load(projectId, {mode:'rab', distribution:'uniform', granularity:'daily'});
   const sB = r.buckets.reduce((s,b) => s + b.upah + b.bahan + b.alat, 0);
   const sR = r.byResource.reduce((s,x) => s + x.total_cost, 0);
@@ -6078,7 +5480,7 @@ function testResourceLoader(projectId){
 }
 
 /* =====================================================================
-   BAGIAN 9F — UNDO / REDO ENGINE (Fase 4C)
+   UNDO / REDO ENGINE
    ===================================================================== */
 const Undo = {
   STACK_MAX: 25,
@@ -6142,7 +5544,7 @@ const Undo = {
 };
 
 /* =====================================================================
-   BAGIAN 9G — BULK EDIT (Fase 4C)
+   BULK EDIT
    ===================================================================== */
 const BulkEdit = {
   open(ids){
@@ -6162,7 +5564,7 @@ const BulkEdit = {
       '<option value="__none__">❌ Hapus constraint</option>';
 
     const body =
-      '<div class="bulk-summary">✎ <b>' + items.length + ' task</b> akan diubah. Operasi yang dicentang akan diterapkan.</div>' +
+      '<div class="bulk-summary">✎ <b>' + items.length + ' task</b> akan diubah.</div>' +
 
       '<div class="bulk-opt-row">' +
         '<input type="checkbox" id="bulk_dur_en">' +
@@ -6198,7 +5600,7 @@ const BulkEdit = {
 
       '<div class="bulk-opt-row">' +
         '<input type="checkbox" id="bulk_clrpred_en">' +
-        '<label for="bulk_clrpred_en">Hapus Predecessor (jadi mulai bebas)</label>' +
+        '<label for="bulk_clrpred_en">Hapus Predecessor</label>' +
         '<div class="bulk-field"></div>' +
       '</div>' +
 
@@ -6206,15 +5608,8 @@ const BulkEdit = {
         '<input type="checkbox" id="bulk_lag_en">' +
         '<label for="bulk_lag_en">Set Lag Predecessor</label>' +
         '<div class="bulk-field"><input type="number" id="bulk_lag_val" step="1" value="0" disabled><span class="gt-dim">hari</span></div>' +
-      '</div>' +
-
-      '<div class="bulk-opt-row">' +
-        '<input type="checkbox" id="bulk_resetfloat_en">' +
-        '<label for="bulk_resetfloat_en">Reset CPM (recalculate setelahnya)</label>' +
-        '<div class="bulk-field"></div>' +
       '</div>';
 
-    // Signal "shift dir" toggle — default +1
     let shiftDir = 1;
 
     openModal('✎ Bulk Edit — ' + items.length + ' task terpilih', body, () => {
@@ -6224,10 +5619,9 @@ const BulkEdit = {
         ct:  document.getElementById('bulk_ct_en').checked,
         shift: document.getElementById('bulk_shift_en').checked,
         clrpred: document.getElementById('bulk_clrpred_en').checked,
-        lag: document.getElementById('bulk_lag_en').checked,
-        resetfloat: document.getElementById('bulk_resetfloat_en').checked
+        lag: document.getElementById('bulk_lag_en').checked
       };
-      if (!apply.dur && !apply.cal && !apply.ct && !apply.shift && !apply.clrpred && !apply.lag && !apply.resetfloat){
+      if (!apply.dur && !apply.cal && !apply.ct && !apply.shift && !apply.clrpred && !apply.lag){
         toast('Pilih minimal 1 operasi', false);
         return false;
       }
@@ -6273,14 +5667,13 @@ const BulkEdit = {
         }
       });
 
-      if (apply.resetfloat || apply.dur || apply.cal || apply.ct || apply.shift || apply.clrpred){
+      if (apply.dur || apply.cal || apply.ct || apply.shift || apply.clrpred){
         runCPM(items[0].project_id);
       }
       saveDB();
       toast('✅ Bulk edit selesai: ' + items.length + ' task');
     });
 
-    // Enable/disable inputs
     const bindEnable = (chkId, inputs) => {
       const chk = document.getElementById(chkId);
       chk.addEventListener('change', () => {
@@ -6296,7 +5689,6 @@ const BulkEdit = {
     bindEnable('bulk_shift_en', ['bulk_shift_val']);
     bindEnable('bulk_lag_en', ['bulk_lag_val']);
 
-    // Shift dir toggle
     const dirBtn = document.getElementById('bulk_shift_dir');
     dirBtn.addEventListener('click', () => {
       shiftDir = -shiftDir;
@@ -6306,18 +5698,16 @@ const BulkEdit = {
 };
 
 /* =====================================================================
-   BAGIAN 9H — RESOURCE LEVELING & WHAT-IF (Fase 4D)
+   RESOURCE LEVELING
    ===================================================================== */
 const Leveling = {
   MAX_ITER: 20,
 
-  /* Preview: hitung tanpa commit */
   preview(projectId, opts){
     opts = opts || {};
     const preserveCrit = opts.preserveCritical !== false;
     const maxIter = opts.maxIter || this.MAX_ITER;
 
-    // Snapshot current state
     const snapWbs = JSON.parse(JSON.stringify(DB.project_wbs));
     const snapProg = JSON.parse(JSON.stringify(DB.progress));
 
@@ -6331,45 +5721,36 @@ const Leveling = {
         const det = OverAllocationDetector.detect(projectId);
         if (!det.ok || !det.alerts.length) break;
 
-        // Ambil worst offender
         const worst = det.alerts[0];
         const delayResult = this.tryFix(projectId, worst, preserveCrit);
         if (!delayResult.ok){
           log.push({
             type: 'unresolved',
             resKode: worst.kode,
-            resNama: worst.nama,
-            tanggal: worst.tanggal_terburuk,
             reason: delayResult.reason
           });
           break;
         }
         log.push({
           type: 'delayed',
-          taskId: delayResult.task.id,
           kode: delayResult.task.kode_wbs,
           uraian: delayResult.task.uraian,
-          delayDays: delayResult.delayDays,
-          reason: worst.kode + ' · ' + worst.tanggal_terburuk
+          delayDays: delayResult.delayDays
         });
       }
 
-      // Compute final state
       runCPM(projectId);
-      const finalKPI = this.computeKPI(projectId);
       const detFinal = OverAllocationDetector.detect(projectId);
       const remaining = detFinal.ok ? detFinal.alerts.length : 0;
 
-      return { ok:true, log, remaining, finalKPI, iter };
+      return { ok:true, log, remaining, iter };
     } finally {
-      // Rollback
       DB.project_wbs = snapWbs;
       DB.progress    = snapProg;
       runCPM(projectId);
     }
   },
 
-  /* Apply: commit changes */
   apply(projectId, opts){
     opts = opts || {};
     const preserveCrit = opts.preserveCritical !== false;
@@ -6389,12 +5770,11 @@ const Leveling = {
       const worst = det.alerts[0];
       const delayResult = this.tryFix(projectId, worst, preserveCrit);
       if (!delayResult.ok){
-        log.push({ type: 'unresolved', resKode: worst.kode, tanggal: worst.tanggal_terburuk, reason: delayResult.reason });
+        log.push({ type: 'unresolved', reason: delayResult.reason });
         break;
       }
       log.push({
         type: 'delayed',
-        taskId: delayResult.task.id,
         kode: delayResult.task.kode_wbs,
         uraian: delayResult.task.uraian,
         delayDays: delayResult.delayDays
@@ -6411,7 +5791,6 @@ const Leveling = {
     const resKode = worst.kode;
     const worstDate = worst.tanggal_terburuk;
 
-    // Cari task kandidat: aktif di tanggal worstDate, non-critical, pakai resource tsb
     const candidates = [];
     DB.project_wbs.forEach(t => {
       if (t.project_id !== projectId || t.is_group) return;
@@ -6427,19 +5806,16 @@ const Leveling = {
     });
 
     if (!candidates.length){
-      return { ok:false, reason: 'Tidak ada task non-kritis dengan slack yang pakai resource ini di tanggal tsb' };
+      return { ok:false, reason: 'Tidak ada task non-kritis dengan slack' };
     }
 
-    // Sort: float terbanyak dulu → delay dulu
     candidates.sort((a, b) => num(b.float_total) - num(a.float_total));
     const chosen = candidates[0];
 
-    // Delay 1 hari kerja via SNET
     const curStart = new Date(chosen.tgl_mulai_rencana + 'T00:00:00');
     const newStart = WorkingCalendar.addWorkDays(curStart, 1, cal);
     const newISO = WorkingCalendar.fmt(newStart);
 
-    // Kalau constraint SNET sudah ada dan lebih besar, jangan overwrite
     if (chosen.constraint_type === 'SNET' && chosen.constraint_date && chosen.constraint_date >= newISO){
       return { ok:false, reason: 'Task sudah di-delay sampai ' + chosen.constraint_date };
     }
@@ -6463,22 +5839,6 @@ const Leveling = {
     });
   },
 
-  computeKPI(projectId){
-    const proj = DB.projects.find(p => p.id === projectId);
-    const items = DB.project_wbs.filter(w => w.project_id === projectId && !w.is_group);
-    const critical = items.filter(w => num(w.is_critical) === 1).length;
-    const finish = items.reduce((m, w) => {
-      const f = w.tgl_selesai_rencana || '';
-      return f > m ? f : m;
-    }, '');
-    return {
-      total: items.length,
-      critical,
-      finish
-    };
-  },
-
-  /* UI: buka modal */
   openUI(projectId){
     const det = OverAllocationDetector.detect(projectId);
     const alertCount = det.ok ? det.alerts.length : 0;
@@ -6489,30 +5849,23 @@ const Leveling = {
         '<div class="lvl-item"><div class="lbl">Max Iterasi</div><div class="val"><input type="number" id="lvl_maxiter" value="20" min="5" max="50" style="width:70px;padding:3px 6px;font-size:12px"></div></div>' +
         '<div class="lvl-item"><div class="lbl">Preserve Critical</div><div class="val"><input type="checkbox" id="lvl_preserve" checked style="width:18px;height:18px;accent-color:#2f81f7"></div></div>' +
       '</div>' +
-      '<div style="margin-bottom:10px;font-size:11.5px;color:var(--muted);line-height:1.6">' +
-        '<b style="color:#7cb3ff">Algoritma:</b> Greedy. Untuk setiap over-allocation terparah, ' +
-        'cari task non-kritis dengan slack terbanyak yang aktif di tanggal tsb, delay 1 hari via constraint SNET. ' +
-        'Iterasi sampai bersih atau batas iterasi tercapai.' +
-      '</div>' +
       '<div style="display:flex;gap:8px;margin-bottom:12px">' +
-        '<button class="btn" id="lvl_preview_btn" style="background:linear-gradient(135deg,#a855f7,#7c3aed);border-color:transparent;color:#fff">🔍 Preview (What-If)</button>' +
+        '<button class="btn" id="lvl_preview_btn" style="background:linear-gradient(135deg,#a855f7,#7c3aed);border-color:transparent;color:#fff">🔍 Preview</button>' +
         '<button class="btn" id="lvl_apply_btn" style="background:linear-gradient(135deg,#16a34a,#0f8a3f);border-color:transparent;color:#fff">✅ Apply Leveling</button>' +
       '</div>' +
       '<div class="level-list" id="lvl_list">' +
         (alertCount === 0
-          ? '<div class="lv-row lv-empty">✅ Tidak ada over-allocation — jadwal sudah seimbang</div>'
+          ? '<div class="lv-row lv-empty">✅ Tidak ada over-allocation</div>'
           : '<div class="lv-row lv-empty">Klik <b>Preview</b> atau <b>Apply</b> untuk memulai</div>') +
       '</div>';
 
     openModal('⚖ Resource Leveling', body, () => {});
 
-    // Hide default Submit button (kita pakai tombol sendiri)
     const submitBtn = document.getElementById('mSubmit');
     if (submitBtn) submitBtn.style.display = 'none';
     const cancelBtn = document.getElementById('mCancel');
     if (cancelBtn) cancelBtn.textContent = 'Tutup';
 
-    // Wire
     document.getElementById('lvl_preview_btn').onclick = () => {
       const previewMaxIter = parseInt(document.getElementById('lvl_maxiter').value, 10) || 20;
       const previewPreserve = document.getElementById('lvl_preserve').checked;
@@ -6539,7 +5892,7 @@ const Leveling = {
 
   renderLog(result){
     if (!result.log.length){
-      return '<div class="lv-row lv-empty">✅ Tidak ada yang perlu di-delay — jadwal sudah optimal</div>';
+      return '<div class="lv-row lv-empty">✅ Tidak ada yang perlu di-delay</div>';
     }
     return result.log.map(entry => {
       if (entry.type === 'delayed'){
@@ -6561,17 +5914,14 @@ const Leveling = {
   }
 };
 
-
 /* =====================================================================
-   BAGIAN 10 — SYNC MANAGER (Phase 5)
-   Partial payload · Version guard · Soft lock
+   SYNC MANAGER
    ===================================================================== */
 const SyncManager = {
 
   CLIENT_ID: 'cli_' + Date.now().toString(36) + '_' +
              Math.random().toString(36).slice(2, 7),
 
-  /* ── Strip field transien & cache turunan sebelum kirim ── */
   sanitize(db){
     if (!db || typeof db !== 'object') return db;
     const FORBIDDEN = new Set([
@@ -6603,13 +5953,10 @@ const SyncManager = {
     } catch(e){ return -1; }
   },
 
-  /* ── Push dengan version guard ── */
   async push(db, settings, opts){
     opts = opts || {};
     const clean = this.sanitize(db);
     const sizeKB = this.estimateSizeKB(clean);
-    if (sizeKB > 3000) console.warn('[SyncManager] payload besar:', sizeKB, 'KB');
-    console.log('[SyncManager] push payload:', sizeKB, 'KB');
 
     const baseVersion = opts.force ? null : (STATE.dbVersion ?? null);
 
@@ -6627,7 +5974,6 @@ const SyncManager = {
     return Object.assign(out, { sizeKB });
   },
 
-  /* ── Pull ── */
   async pull(){
     const out = await sheetRequest('pull', {});
     if (out.ok && typeof out.dbVersion === 'number'){
@@ -6636,7 +5982,6 @@ const SyncManager = {
     return out;
   },
 
-  /* ── Soft lock ── */
   async lock(ttlMs){
     const out = await sheetRequest('softLock', {
       clientId: this.CLIENT_ID, ttlMs: ttlMs || 120000
@@ -6682,7 +6027,7 @@ const SyncManager = {
 };
 
 /* =====================================================================
-   BAGIAN 11 — UNDO/REDO KEYBOARD SHORTCUTS + TOPBAR WIRING (Fase 4C)
+   UNDO/REDO KEYBOARD SHORTCUTS
    ===================================================================== */
 (function wireUndoGlobal(){
   function refreshUndoUI(){
@@ -6695,7 +6040,7 @@ const SyncManager = {
   function renderHistoryMenu(){
     const menu = document.getElementById('historyMenu');
     if (!menu) return;
-    let html = '<div class="hist-title">Riwayat Perubahan (terbaru di atas)</div>';
+    let html = '<div class="hist-title">Riwayat Perubahan</div>';
     if (!Undo.undoStack.length && !Undo.redoStack.length){
       html += '<div class="hist-empty">Belum ada riwayat</div>';
     } else {
@@ -6710,7 +6055,6 @@ const SyncManager = {
     }
     menu.innerHTML = html;
 
-    // Click handlers — clicking jumps to that point (undo/redo repeatedly)
     menu.querySelectorAll('.hist-item').forEach(item => {
       item.onclick = () => {
         const targetIdx = parseInt(item.getAttribute('data-hist-idx'), 10);
@@ -6730,7 +6074,6 @@ const SyncManager = {
     }
   });
 
-  // Wire buttons after DOM ready
   function wire(){
     const bU = document.getElementById('btnUndo');
     const bR = document.getElementById('btnRedo');
@@ -6776,7 +6119,6 @@ const SyncManager = {
         menu.classList.toggle('show');
       };
     }
-    // Click outside → close menu
     document.addEventListener('click', (e) => {
       if (!menu) return;
       if (!e.target.closest('.history-wrap')) menu.classList.remove('show');
@@ -6785,19 +6127,16 @@ const SyncManager = {
     refreshUndoUI();
   }
 
-  // Global keyboard shortcuts
   document.addEventListener('keydown', e => {
     const isMac = /Mac|iPhone|iPad/.test(navigator.platform);
     const mod = isMac ? e.metaKey : e.ctrlKey;
     if (!mod) return;
-    // Skip kalau sedang fokus input/textarea
     const tag = (e.target && e.target.tagName) || '';
     const isInput = tag === 'INPUT' || tag === 'TEXTAREA' || e.target.isContentEditable;
 
     if (!e.shiftKey && e.key.toLowerCase() === 'z'){
       e.preventDefault();
       if (isInput && e.target.type === 'text'){
-        // Biarkan browser handle native undo di text input
         return;
       }
       const label = Undo.undo();
@@ -6830,17 +6169,16 @@ const SyncManager = {
 })();
 
 /* =====================================================================
-   FASE 5A — EXPORT EXCEL (SheetJS multi-sheet)
+   EXPORT EXCEL
    ===================================================================== */
 const ExportExcel = {
   exportProject(projectId){
-    if (typeof XLSX === 'undefined'){ toast('SheetJS belum dimuat (cek koneksi)', false); return; }
+    if (typeof XLSX === 'undefined'){ toast('SheetJS belum dimuat', false); return; }
     const proj = DB.projects.find(p => p.id === projectId);
     if (!proj){ toast('Proyek tidak ditemukan', false); return; }
 
     const wb = XLSX.utils.book_new();
 
-    /* Sheet 1 — Info Proyek */
     const infoRows = [
       ['Kode Proyek', proj.kode],
       ['Nama', proj.nama],
@@ -6853,121 +6191,26 @@ const ExportExcel = {
       ['Tgl Selesai', proj.tgl_selesai || ''],
       ['Durasi (hari)', num(proj.durasi_hari)],
       ['Durasi (minggu)', num(proj.durasi_minggu)],
-      ['Hari Kerja Efektif', num(proj.durasi_kerja)],
-      ['Status', proj.status || ''],
-      ['Diekspor', new Date().toLocaleString('id-ID')]
+      ['Status', proj.status || '']
     ];
     const wsInfo = XLSX.utils.aoa_to_sheet(infoRows);
     wsInfo['!cols'] = [{ wch:22 }, { wch:60 }];
     XLSX.utils.book_append_sheet(wb, wsInfo, 'Info');
 
-    /* Sheet 2 — WBS + Biaya */
     const wbsRows = Calc.wbsRows(projectId);
     const wbsData = wbsRows.map(w => ({
       'Kode': w.kode_wbs,
       'Uraian': w.uraian,
-      'STA': w.sta || '',
       'Satuan': w.satuan || '',
       'Vol RAB': num(w.volume_rab),
-      'HPS RAB': Math.round(num(w.harga_satuan_rab)),
       'Total RAB': Math.round(num(w.total_rab)),
       'Vol RAP': num(w.volume_rap),
-      'HPS RAP': Math.round(num(w.harga_satuan_rap)),
       'Total RAP': Math.round(num(w.total_rap)),
-      'Deviasi Rp': Math.round(num(w.deviasi)),
-      'Deviasi %': +num(w.deviasi_pct).toFixed(2),
-      'Durasi (hari)': num(w.durasi_hari) || num(w.duration) || 1,
-      'Mulai': w.tgl_mulai_rencana || '',
-      'Selesai': w.tgl_selesai_rencana || '',
-      'Float': num(w.float_total ?? w.total_float),
-      'Kritis': num(w.is_critical) === 1 ? 'YA' : '',
-      'Pred': w.predecessor ? ((DB.project_wbs.find(x=>x.id===w.predecessor)?.kode_wbs)||'') + ' ' + (w.pred_type||'FS') : ''
+      'Deviasi Rp': Math.round(num(w.deviasi))
     }));
     const wsWBS = XLSX.utils.json_to_sheet(wbsData);
-    wsWBS['!cols'] = [
-      { wch:10 }, { wch:42 }, { wch:22 }, { wch:8 },
-      { wch:10 }, { wch:14 }, { wch:16 },
-      { wch:10 }, { wch:14 }, { wch:16 },
-      { wch:14 }, { wch:10 },
-      { wch:11 }, { wch:12 }, { wch:12 }, { wch:8 }, { wch:8 }, { wch:14 }
-    ];
     XLSX.utils.book_append_sheet(wb, wsWBS, 'WBS');
 
-    /* Sheet 3 — Resources */
-    const resData = DB.master_resources.map(r => ({
-      'Kode': r.kode,
-      'Nama': r.nama,
-      'Jenis': r.jenis,
-      'Satuan': r.satuan,
-      'Harga RAB': Math.round(num(r.harga_rab)),
-      'Harga RAP': Math.round(num(r.harga_rap)),
-      'Kapasitas/hari': num(r.kapasitas_harian)
-    }));
-    const wsRes = XLSX.utils.json_to_sheet(resData);
-    wsRes['!cols'] = [{ wch:10 }, { wch:36 }, { wch:10 }, { wch:8 }, { wch:14 }, { wch:14 }, { wch:14 }];
-    XLSX.utils.book_append_sheet(wb, wsRes, 'Resources');
-
-    /* Sheet 4 — Baseline & Variance (kalau ada) */
-    if (Baseline.isSet(projectId, 1) || Baseline.isSet(projectId, 2) || Baseline.isSet(projectId, 3)){
-      const baselineIdx = Baseline.isSet(projectId, 3) ? 3 : Baseline.isSet(projectId, 2) ? 2 : 1;
-      const vars = Baseline.variance(projectId, baselineIdx);
-      const varData = vars.map(v => ({
-        'Kode': v.w.kode_wbs,
-        'Uraian': v.w.uraian,
-        'Baseline Mulai': v.bStart,
-        'Baseline Selesai': v.bFinish,
-        'Current Mulai': v.cStart,
-        'Current Selesai': v.cFinish,
-        'Slip (hari)': v.slip === null ? '' : v.slip,
-        'Slip Start': v.slipStart === null ? '' : v.slipStart
-      }));
-      const wsBL = XLSX.utils.json_to_sheet(varData);
-      wsBL['!cols'] = [
-        { wch:10 }, { wch:42 },
-        { wch:14 }, { wch:14 },
-        { wch:14 }, { wch:14 },
-        { wch:10 }, { wch:10 }
-      ];
-      XLSX.utils.book_append_sheet(wb, wsBL, 'Baseline BL' + baselineIdx);
-    }
-
-    /* Sheet 5 — Resource Loading */
-    const rl = ResourceLoader.load(projectId, { granularity: 'weekly', mode: 'rab' });
-    if (rl.ok){
-      const loadData = rl.buckets.map(b => ({
-        'Periode': b.bucket_key,
-        'Mulai': b.tanggal_mulai,
-        'Selesai': b.tanggal_selesai,
-        'Upah': Math.round(b.upah),
-        'Bahan': Math.round(b.bahan),
-        'Alat': Math.round(b.alat),
-        'Total': Math.round(b.upah + b.bahan + b.alat)
-      }));
-      const wsLoad = XLSX.utils.json_to_sheet(loadData);
-      wsLoad['!cols'] = [{ wch:10 }, { wch:12 }, { wch:12 }, { wch:14 }, { wch:14 }, { wch:14 }, { wch:14 }];
-      XLSX.utils.book_append_sheet(wb, wsLoad, 'Resource Loading');
-    }
-
-    /* Sheet 6 — Progress */
-    const progRows = DB.progress.filter(p => p.project_id === projectId);
-    if (progRows.length){
-      const progData = progRows.map(p => {
-        const w = DB.project_wbs.find(x => x.id === p.wbs_id);
-        return {
-          'Minggu': num(p.minggu),
-          'Kode WBS': w ? w.kode_wbs : '',
-          'Uraian': w ? w.uraian : '',
-          'Satuan': w ? w.satuan : '',
-          'Volume': num(p.volume),
-          'Tanggal': p.tanggal || ''
-        };
-      });
-      const wsProg = XLSX.utils.json_to_sheet(progData);
-      wsProg['!cols'] = [{ wch:8 }, { wch:10 }, { wch:36 }, { wch:8 }, { wch:10 }, { wch:12 }];
-      XLSX.utils.book_append_sheet(wb, wsProg, 'Progress');
-    }
-
-    /* Write file */
     const fn = 'MK-' + proj.kode + '-' + new Date().toISOString().slice(0,10) + '.xlsx';
     XLSX.writeFile(wb, fn);
     toast('✅ Excel diexport: ' + fn);
@@ -6975,8 +6218,7 @@ const ExportExcel = {
 };
 
 /* =====================================================================
-   FASE 5B — EXPORT GOOGLE CALENDAR (.ics)
-   Milestone = task dengan duration = 0
+   EXPORT GOOGLE CALENDAR (.ics)
    ===================================================================== */
 const CalendarExport = {
   exportICS(projectId){
@@ -6990,7 +6232,7 @@ const CalendarExport = {
     );
 
     if (!milestones.length){
-      toast('Tidak ada milestone (task durasi = 0) untuk diexport', false);
+      toast('Tidak ada milestone', false);
       return;
     }
 
@@ -7001,30 +6243,19 @@ const CalendarExport = {
     lines.push('CALSCALE:GREGORIAN');
     lines.push('METHOD:PUBLISH');
     lines.push('X-WR-CALNAME:' + this._esc(proj.kode + ' — ' + proj.nama));
-    lines.push('X-WR-TIMEZONE:Asia/Jakarta');
 
     const stamp = this._fmt(new Date(), true);
-    const cal = WorkingCalendar.get(proj.calendar_id);
 
     milestones.forEach(w => {
       const d = new Date(w.tgl_mulai_rencana + 'T00:00:00');
       const dEnd = new Date(d); dEnd.setDate(dEnd.getDate() + 1);
       const uid = 'mk-' + w.id + '@mk-v1.local';
-      const desc = 'Kode: ' + (w.kode_wbs||'') + '\\n' +
-                   'Uraian: ' + (w.uraian||'') + '\\n' +
-                   'STA: ' + (w.sta||'-') + '\\n' +
-                   'Volume RAB: ' + num(w.volume_rab) + ' ' + (w.satuan||'') + '\\n' +
-                   'Status: MILESTONE';
       lines.push('BEGIN:VEVENT');
       lines.push('UID:' + uid);
       lines.push('DTSTAMP:' + stamp);
       lines.push('DTSTART;VALUE=DATE:' + this._fmt(d, false));
       lines.push('DTEND;VALUE=DATE:' + this._fmt(dEnd, false));
       lines.push('SUMMARY:' + this._esc('📌 ' + (w.kode_wbs||'') + ' — ' + (w.uraian||'')));
-      lines.push('DESCRIPTION:' + desc);
-      lines.push('CATEGORIES:Milestone Proyek');
-      lines.push('STATUS:CONFIRMED');
-      lines.push('TRANSP:TRANSPARENT');
       lines.push('END:VEVENT');
     });
 
@@ -7035,7 +6266,7 @@ const CalendarExport = {
     a.href = URL.createObjectURL(blob);
     a.download = 'milestones-' + proj.kode + '-' + today() + '.ics';
     a.click();
-    toast('✅ ' + milestones.length + ' milestone diexport ke .ics');
+    toast('✅ ' + milestones.length + ' milestone diexport');
   },
 
   _fmt(d, isDateTime){
@@ -7059,8 +6290,7 @@ const CalendarExport = {
 };
 
 /* =====================================================================
-   FASE 5C — LIVE COLLABORATION (polling dengan adaptive backoff)
-   Koreksi 1C: berhenti spam endpoint mati
+   LIVE COLLABORATION
    ===================================================================== */
 const LiveSync = {
   INTERVAL_MS: 30000,
@@ -7135,7 +6365,6 @@ const LiveSync = {
         return;
       }
 
-      // Endpoint sehat → reset backoff
       this._resetBackoff();
 
       const remoteVer = out.dbVersion;
@@ -7180,7 +6409,7 @@ const LiveSync = {
       b.className = 'remote-banner';
       b.id = 'remoteBanner';
       b.innerHTML =
-        '<span>🔄 <b>Data di server diperbarui</b> (v' + remoteVer + '). Klik untuk sinkronisasi.</span>' +
+        '<span>🔄 <b>Data di server diperbarui</b> (v' + remoteVer + ').</span>' +
         '<button class="remote-btn-pull">Pull Sekarang</button>' +
         '<button class="remote-btn-later">Nanti</button>';
       document.body.appendChild(b);
@@ -7195,7 +6424,7 @@ const LiveSync = {
 };
 
 /* =====================================================================
-   FASE 5D — MOBILE VIEW
+   MOBILE VIEW
    ===================================================================== */
 const MobileView = {
   init(){
@@ -7208,7 +6437,6 @@ const MobileView = {
       btn.textContent = tabs.classList.contains('open') ? '✕ Tutup' : '☰ Menu';
     };
 
-    // Tutup menu saat tab dipilih
     document.querySelectorAll('.tab').forEach(t => {
       t.addEventListener('click', () => {
         if (window.innerWidth <= 768){
@@ -7218,7 +6446,6 @@ const MobileView = {
       });
     });
 
-    // Auto-close saat layar dibesarkan
     window.addEventListener('resize', () => {
       if (window.innerWidth > 768){
         tabs.classList.remove('open');
@@ -7229,20 +6456,16 @@ const MobileView = {
 };
 
 /* =====================================================================
-   FASE 5E — EXECUTIVE DASHBOARD (multi-project)
+   EXECUTIVE DASHBOARD
    ===================================================================== */
 const ExecDashboard = {
   render(){
     if (!DB.projects.length){
       document.getElementById('execKPI').innerHTML =
         '<div class="kpi"><div class="lbl">Status</div><div class="val">Belum ada proyek</div></div>';
-      document.getElementById('tblExecPortfolio').innerHTML =
-        '<tbody><tr><td class="empty">Tambahkan proyek untuk melihat dashboard executive.</td></tr></tbody>';
-      document.getElementById('execAlerts').innerHTML = '';
       return;
     }
 
-    // Kumpulkan KPI per proyek
     const rows = DB.projects.map(p => {
       const t = Calc.totals(p.id);
       const nilaiKontrak = num(p.nilai_kontrak);
@@ -7250,7 +6473,6 @@ const ExecDashboard = {
       const margin = t.margin_pct;
       const sisaKontrak = netto - t.rap;
 
-      // Baseline slip
       let baselineIdx = 0;
       if (Baseline.isSet(p.id, 3)) baselineIdx = 3;
       else if (Baseline.isSet(p.id, 2)) baselineIdx = 2;
@@ -7258,8 +6480,7 @@ const ExecDashboard = {
       let kpi = null;
       if (baselineIdx) kpi = Baseline.kpi(p.id, baselineIdx);
 
-      // Health score
-      const marginScore   = Math.min(100, Math.max(0, margin * 8.33));   // 12% = 100
+      const marginScore   = Math.min(100, Math.max(0, margin * 8.33));
       const scheduleScore = kpi ? Math.max(0, 100 - kpi.avgSlip * 10) : 80;
       const budgetScore   = sisaKontrak >= 0 ? 100 : Math.max(0, 100 + sisaKontrak/1e6);
       const health = Math.round((marginScore * 0.4 + scheduleScore * 0.3 + budgetScore * 0.3));
@@ -7273,13 +6494,11 @@ const ExecDashboard = {
         proj: p,
         rab: t.rab, rap: t.rap, dev: t.dev,
         nilaiKontrak, netto, sisaKontrak,
-        margin,
-        baselineIdx, kpi,
+        margin, baselineIdx, kpi,
         health, healthLbl, healthCls
       };
     });
 
-    // ── KPI Cards ──
     const totalPortfolio = rows.reduce((s,r) => s + r.nilaiKontrak, 0);
     const totalRAB       = rows.reduce((s,r) => s + r.rab, 0);
     const totalRAP       = rows.reduce((s,r) => s + r.rap, 0);
@@ -7296,7 +6515,6 @@ const ExecDashboard = {
       '<div class="kpi k2">' +
         '<div class="lbl">Nilai Portofolio</div>' +
         '<div class="val">' + rp(totalPortfolio) + '</div>' +
-        '<div class="sub">Total kontrak incl. PPN</div>' +
       '</div>' +
       '<div class="kpi k3">' +
         '<div class="lbl">Total RAB</div>' +
@@ -7306,37 +6524,25 @@ const ExecDashboard = {
       '<div class="kpi ' + (totalDev >= 0 ? 'k5' : 'k4') + '">' +
         '<div class="lbl">Deviasi Portofolio</div>' +
         '<div class="val ' + (totalDev >= 0 ? 'pos' : 'neg') + '">' + rp(totalDev) + '</div>' +
-        '<div class="sub ' + (totalDev >= 0 ? 'pos' : 'neg') + '">' +
-          (totalRAB > 0 ? fmt(totalDev/totalRAB*100, 2) : '0.00') + '% dari RAB' +
-        '</div>' +
       '</div>';
 
-    // ── Tabel Portfolio ──
     const head = '<thead><tr>' +
       '<th>Kode</th><th>Nama</th><th>Status</th>' +
       '<th class="num">Nilai Kontrak</th>' +
       '<th class="num">RAB</th><th class="num">RAP</th>' +
       '<th class="num">Margin %</th>' +
-      '<th class="num">Sisa Kontrak</th>' +
-      '<th class="center">Baseline</th>' +
       '<th class="center">Health</th>' +
     '</tr></thead>';
 
     const body = rows.map(r => {
-      const isActive = r.proj.id === STATE.activeProject;
-      return '<tr class="exec-row ' + (isActive ? 'is-active' : '') + '" data-exec-prj="' + r.proj.id + '">' +
+      return '<tr class="exec-row" data-exec-prj="' + r.proj.id + '">' +
         '<td><b>' + esc(r.proj.kode) + '</b></td>' +
         '<td>' + esc(r.proj.nama) + '</td>' +
-        '<td><span class="badge ' + (r.proj.status === 'Selesai' ? 'b-ok' : r.proj.status === 'Ditunda' ? 'b-danger' : 'b-warn') + '">' +
-          esc(r.proj.status || '-') + '</span></td>' +
+        '<td><span class="badge">' + esc(r.proj.status || '-') + '</span></td>' +
         '<td class="num">' + rp(r.nilaiKontrak) + '</td>' +
         '<td class="num">' + rp(r.rab) + '</td>' +
         '<td class="num">' + rp(r.rap) + '</td>' +
-        '<td class="num ' + (r.margin >= 8 ? 'pos' : r.margin >= 5 ? '' : 'neg') + '">' +
-          fmt(r.margin, 2) + '%</td>' +
-        '<td class="num ' + (r.sisaKontrak >= 0 ? 'pos' : 'neg') + '">' +
-          rp(r.sisaKontrak) + '</td>' +
-        '<td class="center">' + (r.baselineIdx ? 'BL' + r.baselineIdx : '—') + '</td>' +
+        '<td class="num">' + fmt(r.margin, 2) + '%</td>' +
         '<td class="center">' +
           '<span class="exec-health ' + r.healthCls + '">' + r.healthLbl + ' ' + r.health + '</span>' +
         '</td>' +
@@ -7345,157 +6551,19 @@ const ExecDashboard = {
 
     document.getElementById('tblExecPortfolio').innerHTML = head + '<tbody>' + body + '</tbody>';
 
-    // Click → switch project
     document.querySelectorAll('[data-exec-prj]').forEach(tr => {
       tr.onclick = () => {
         STATE.activeProject = tr.getAttribute('data-exec-prj');
         $('#activeProject').value = STATE.activeProject;
         switchTab('dashboard');
         renderAll();
-        toast('Beralih ke proyek: ' + (activeProj()?.kode || ''));
       };
     });
-
-    // ── Chart Perbandingan ──
-    const cv = document.getElementById('chartExecCompare');
-    if (cv){
-      if (STATE.chartExec) STATE.chartExec.destroy();
-      STATE.chartExec = new Chart(cv.getContext('2d'), {
-        type: 'bar',
-        data: {
-          labels: rows.map(r => r.proj.kode),
-          datasets: [
-            { label:'Nilai Kontrak', data: rows.map(r => r.nilaiKontrak),
-              backgroundColor:'rgba(47,129,247,.75)', borderRadius:6 },
-            { label:'Total RAB', data: rows.map(r => r.rab),
-              backgroundColor:'rgba(26,188,156,.75)', borderRadius:6 },
-            { label:'Total RAP', data: rows.map(r => r.rap),
-              backgroundColor:'rgba(245,158,11,.75)', borderRadius:6 }
-          ]
-        },
-        options: {
-          responsive:true, maintainAspectRatio:false,
-          plugins: {
-            legend: { labels:{color:'#e6edf7', font:{size:11}} },
-            tooltip: { callbacks:{ label: c => c.dataset.label + ': ' + rp(c.parsed.y) } }
-          },
-          scales: {
-            x: { ticks:{color:'#8fa3c4'}, grid:{display:false} },
-            y: { ticks:{color:'#8fa3c4', callback:v => 'Rp ' + (v/1e9).toFixed(2) + ' M'},
-                 grid:{color:'rgba(36,54,92,.5)'} }
-          }
-        }
-      });
-    }
-
-    // ── Alerts ──
-    const alerts = [];
-    rows.forEach(r => {
-      if (r.sisaKontrak < 0){
-        alerts.push('<div class="alert"><span>🚨</span><div><b>' + esc(r.proj.kode) + '</b> — Total RAP melampaui nilai kontrak netto (' + rp(r.sisaKontrak) + '). Segera review BQ & koefisien.</div></div>');
-      }
-      if (r.margin < 5 && r.rab > 0){
-        alerts.push('<div class="alert warn"><span>⚠</span><div><b>' + esc(r.proj.kode) + '</b> — Margin rendah (' + fmt(r.margin,2) + '%). Target 8–12%.</div></div>');
-      }
-      if (r.kpi && r.kpi.late > 0){
-        alerts.push('<div class="alert warn"><span>⏰</span><div><b>' + esc(r.proj.kode) + '</b> — ' + r.kpi.late + ' task telat vs Baseline BL' + r.baselineIdx + ' (avg slip ' + fmt(r.kpi.avgSlip,1) + ' hari).</div></div>');
-      }
-      if (r.healthLbl === 'KRITIS'){
-        alerts.push('<div class="alert"><span>🔴</span><div><b>' + esc(r.proj.kode) + '</b> — Health score KRITIS (' + r.health + '). Cek margin, baseline, dan resource allocation.</div></div>');
-      }
-    });
-    document.getElementById('execAlerts').innerHTML = alerts.length
-      ? alerts.join('')
-      : '<div class="alert ok"><span>✅</span><div><b>Semua proyek dalam kondisi sehat.</b></div></div>';
   }
 };
 
 /* =====================================================================
-   FASE 5 — EVENT WIRING (init)
-   ===================================================================== */
-(function wireFase5(){
-  function ready(fn){
-    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', fn);
-    else fn();
-  }
-
-  ready(() => {
-    // ── Mobile ──
-    if (typeof MobileView !== 'undefined') MobileView.init();
-
-    // ── Tombol Export Excel ──
-    const btnXlsx = document.getElementById('btnExcel');
-    if (btnXlsx){
-      btnXlsx.onclick = () => {
-        if (!STATE.activeProject){ toast('Pilih proyek aktif dulu', false); return; }
-        ExportExcel.exportProject(STATE.activeProject);
-      };
-    }
-
-    // ── Tombol iCal ──
-    const btnIcal = document.getElementById('btnIcal');
-    if (btnIcal){
-      btnIcal.onclick = () => {
-        if (!STATE.activeProject){ toast('Pilih proyek aktif dulu', false); return; }
-        CalendarExport.exportICS(STATE.activeProject);
-      };
-    }
-
-    // ── Live indicator klik → toggle panel? ──
-    const ind = document.getElementById('liveIndicator');
-    if (ind){
-      ind.onclick = () => {
-        if (!SET.sheetUrl){ toast('URL Apps Script belum diatur (tab Pengaturan)', false); return; }
-        LiveSync.tick();
-      };
-    }
-
-    // ── Executive refresh ──
-    const btnExec = document.getElementById('btnExecRefresh');
-    if (btnExec) btnExec.onclick = () => { ExecDashboard.render(); toast('Executive dashboard di-refresh'); };
-
-    // ── Start LiveSync ──
-    setTimeout(() => LiveSync.start(), 1500);
-
-    // ── Pause LiveSync saat tab disembunyikan ──
-    document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'visible') LiveSync.resume();
-      else LiveSync.pause();
-    });
-
-    // ── Hook switchTab → Executive (CHAIN, jangan overwrite) ──
-    if (typeof switchTab === 'function'){
-      var _prevSwitchTabF5 = window.switchTab;
-      window.switchTab = function(name){
-        if (typeof _prevSwitchTabF5 === 'function') _prevSwitchTabF5.apply(this, arguments);
-        if (name === 'executive') ExecDashboard.render();
-      };
-    }
-
-    // ── Hook renderAll → Executive (CHAIN) ──
-    if (typeof renderAll === 'function'){
-      var _prevRenderAllF5 = window.renderAll;
-      window.renderAll = function(){
-        if (typeof _prevRenderAllF5 === 'function') _prevRenderAllF5.apply(this, arguments);
-        var cur = document.querySelector('.tab.active')?.dataset.tab;
-        if (cur === 'executive') ExecDashboard.render();
-      };
-    }
-
-    // ── Hook renderAll → pastikan Executive ikut (DIPINDAH KE SINI) ──
-    if (typeof window._origRenderAll === 'undefined'){
-      window._origRenderAll = renderAll;
-      window.renderAll = function(){
-        window._origRenderAll();
-        const cur = document.querySelector('.tab.active')?.dataset.tab;
-        if (cur === 'executive') ExecDashboard.render();
-      };
-    }
-  });
-})();
-
-/* =====================================================================
-   FASE 6B — EVM VIEW (render dashboard EVM)
+   EVM VIEW
    ===================================================================== */
 const EVMView = {
   render(){
@@ -7512,179 +6580,31 @@ const EVMView = {
     const e = Calc.evm(pid);
     if (!e.ok) return;
 
-    /* ── KPI cards ── */
     const spiCls = e.SPI >= 0.95 ? 'good' : e.SPI >= 0.85 ? 'warn' : 'bad';
     const cpiCls = e.CPI >= 0.95 ? 'good' : e.CPI >= 0.85 ? 'warn' : 'bad';
-    const svCls  = e.SV  >= 0 ? 'good' : 'bad';
-    const cvCls  = e.CV  >= 0 ? 'good' : 'bad';
-    const vacCls = e.VAC >= 0 ? 'good' : 'bad';
-
-    const fmtIdx = v => v.toFixed(3);
-    const fmtRp  = v => rp(v);
 
     wrap.innerHTML =
       '<div class="evm-kpi ' + spiCls + '">' +
-        '<div class="icon">⏱</div>' +
-        '<div class="lbl">SPI · Schedule Performance</div>' +
-        '<div class="val ' + spiCls + '">' + fmtIdx(e.SPI) + '</div>' +
-        '<div class="sub">' + (e.SPI >= 0.95 ? '✅ On Schedule' : e.SPI >= 0.85 ? '⚠ Sedikit telat' : '🔴 Terlambat signifikan') + '</div>' +
+        '<div class="lbl">SPI</div>' +
+        '<div class="val ' + spiCls + '">' + e.SPI.toFixed(3) + '</div>' +
       '</div>' +
       '<div class="evm-kpi ' + cpiCls + '">' +
-        '<div class="icon">💰</div>' +
-        '<div class="lbl">CPI · Cost Performance</div>' +
-        '<div class="val ' + cpiCls + '">' + fmtIdx(e.CPI) + '</div>' +
-        '<div class="sub">' + (e.CPI >= 0.95 ? '✅ On Budget' : e.CPI >= 0.85 ? '⚠ Over budget tipis' : '🔴 Over budget besar') + '</div>' +
-      '</div>' +
-      '<div class="evm-kpi ' + svCls + '">' +
-        '<div class="icon">📅</div>' +
-        '<div class="lbl">Schedule Variance (Rp)</div>' +
-        '<div class="val ' + svCls + '">' + (e.SV >= 0 ? '+' : '') + fmtRp(e.SV) + '</div>' +
-        '<div class="sub">EV − PV · Forecast selesai: <b>' + esc(e.forecastFinish) + '</b></div>' +
-      '</div>' +
-      '<div class="evm-kpi ' + cvCls + '">' +
-        '<div class="icon">📊</div>' +
-        '<div class="lbl">Cost Variance (Rp)</div>' +
-        '<div class="val ' + cvCls + '">' + (e.CV >= 0 ? '+' : '') + fmtRp(e.CV) + '</div>' +
-        '<div class="sub">EV − AC · Rencana selesai: ' + esc(e.plannedFinish) + '</div>' +
+        '<div class="lbl">CPI</div>' +
+        '<div class="val ' + cpiCls + '">' + e.CPI.toFixed(3) + '</div>' +
       '</div>' +
       '<div class="evm-kpi">' +
-        '<div class="icon">🎯</div>' +
-        '<div class="lbl">BAC · Budget at Completion</div>' +
-        '<div class="val">' + fmtRp(e.BAC) + '</div>' +
-        '<div class="sub">Budget awal (Total RAB)</div>' +
-      '</div>' +
-      '<div class="evm-kpi ' + cpiCls + '">' +
-        '<div class="icon">🔮</div>' +
-        '<div class="lbl">EAC · Estimate at Completion</div>' +
-        '<div class="val ' + cpiCls + '">' + fmtRp(e.EAC) + '</div>' +
-        '<div class="sub">Prediksi biaya akhir · ETC: ' + fmtRp(e.ETC) + '</div>' +
-      '</div>' +
-      '<div class="evm-kpi ' + vacCls + '">' +
-        '<div class="icon">⚖</div>' +
-        '<div class="lbl">VAC · Variance at Completion</div>' +
-        '<div class="val ' + vacCls + '">' + (e.VAC >= 0 ? '+' : '') + fmtRp(e.VAC) + '</div>' +
-        '<div class="sub">' + (e.VAC >= 0 ? '✅ Di bawah anggaran' : '🔴 Over anggaran') + '</div>' +
+        '<div class="lbl">EAC</div>' +
+        '<div class="val">' + rp(e.EAC) + '</div>' +
       '</div>' +
       '<div class="evm-kpi">' +
-        '<div class="icon">📈</div>' +
-        '<div class="lbl">Baseline Aktif</div>' +
-        '<div class="val">' + (e.baselineIdx ? 'BL' + e.baselineIdx : '—') + '</div>' +
-        '<div class="sub">' + (e.baselineIdx ? 'Kurva baseline aktif' : 'Set baseline untuk variance') + '</div>' +
+        '<div class="lbl">VAC</div>' +
+        '<div class="val">' + rp(e.VAC) + '</div>' +
       '</div>';
-
-    /* ── Trend chart: SPI & CPI ── */
-    const cv1 = document.getElementById('chartEvmTrend');
-    if (cv1){
-      if (STATE.chartEvmTrend) STATE.chartEvmTrend.destroy();
-      STATE.chartEvmTrend = new Chart(cv1.getContext('2d'), {
-        type: 'line',
-        data: {
-          labels: e.weeks.map(w => 'M' + w.week),
-          datasets: [
-            { label:'SPI', data: e.weeks.map(w => +w.SPI.toFixed(3)),
-              borderColor:'#2f81f7', backgroundColor:'rgba(47,129,247,.14)',
-              tension:.35, borderWidth:2.5, pointRadius:3, fill:false },
-            { label:'CPI', data: e.weeks.map(w => +w.CPI.toFixed(3)),
-              borderColor:'#1abc9c', backgroundColor:'rgba(26,188,156,.14)',
-              tension:.35, borderWidth:2.5, pointRadius:3, fill:false },
-            { label:'Target (1.0)', data: e.weeks.map(() => 1),
-              borderColor:'#f59e0b', borderDash:[6,4], borderWidth:1.5,
-              pointRadius:0, fill:false }
-          ]
-        },
-        options: {
-          responsive:true, maintainAspectRatio:false,
-          plugins:{
-            legend:{labels:{color:'#e6edf7', font:{size:11}}},
-            tooltip:{callbacks:{label:c => c.dataset.label + ': ' + c.parsed.y.toFixed(3)}}
-          },
-          scales:{
-            x:{ticks:{color:'#8fa3c4'}, grid:{color:'rgba(36,54,92,.5)'}},
-            y:{ticks:{color:'#8fa3c4', callback:v => v.toFixed(2)},
-               grid:{color:'rgba(36,54,92,.5)'}, beginAtZero:false, suggestedMin:0.5}
-          }
-        }
-      });
-    }
-
-    /* ── Variance chart: SV & CV per minggu ── */
-    const cv2 = document.getElementById('chartEvmVariance');
-    if (cv2){
-      if (STATE.chartEvmVariance) STATE.chartEvmVariance.destroy();
-      STATE.chartEvmVariance = new Chart(cv2.getContext('2d'), {
-        type: 'bar',
-        data: {
-          labels: e.weeks.map(w => 'M' + w.week),
-          datasets: [
-            { label:'SV (Jadwal)', data: e.weeks.map(w => Math.round(w.SV)),
-              backgroundColor: e.weeks.map(w => w.SV >= 0 ? 'rgba(34,197,94,.65)' : 'rgba(220,38,38,.65)'),
-              borderRadius:4 },
-            { label:'CV (Biaya)', data: e.weeks.map(w => Math.round(w.CV)),
-              backgroundColor: e.weeks.map(w => w.CV >= 0 ? 'rgba(47,129,247,.65)' : 'rgba(245,158,11,.65)'),
-              borderRadius:4 }
-          ]
-        },
-        options: {
-          responsive:true, maintainAspectRatio:false,
-          plugins:{
-            legend:{labels:{color:'#e6edf7', font:{size:11}}},
-            tooltip:{callbacks:{label:c => c.dataset.label + ': ' + rp(c.parsed.y)}}
-          },
-          scales:{
-            x:{ticks:{color:'#8fa3c4'}, grid:{display:false}},
-            y:{ticks:{color:'#8fa3c4', callback:v => 'Rp ' + (v/1e6).toFixed(0) + 'jt'},
-               grid:{color:'rgba(36,54,92,.5)'}}
-          }
-        }
-      });
-    }
-
-    /* ── EVM table ── */
-    const head = '<thead><tr>' +
-      '<th>Minggu</th>' +
-      '<th class="num">PV</th>' +
-      '<th class="num">EV</th>' +
-      '<th class="num">AC</th>' +
-      (e.baselineIdx ? '<th class="num">Baseline</th>' : '') +
-      '<th class="num">SV</th>' +
-      '<th class="num">CV</th>' +
-      '<th class="num">SPI</th>' +
-      '<th class="num">CPI</th>' +
-    '</tr></thead>';
-
-    const body = e.weeks.map(w => {
-      const spiC = w.SPI >= 0.95 ? 'spi-ok' : w.SPI >= 0.85 ? 'spi-warn' : 'spi-bad';
-      const cpiC = w.CPI >= 0.95 ? 'cpi-ok' : w.CPI >= 0.85 ? 'cpi-warn' : 'cpi-bad';
-      return '<tr class="evm-row">' +
-        '<td><b>M' + w.week + '</b></td>' +
-        '<td class="num">' + rp(w.PV) + '</td>' +
-        '<td class="num">' + rp(w.EV) + '</td>' +
-        '<td class="num">' + rp(w.AC) + '</td>' +
-        (e.baselineIdx ? '<td class="num">' + rp(w.BL) + '</td>' : '') +
-        '<td class="num ' + (w.SV >= 0 ? 'pos' : 'neg') + '">' + rp(w.SV) + '</td>' +
-        '<td class="num ' + (w.CV >= 0 ? 'pos' : 'neg') + '">' + rp(w.CV) + '</td>' +
-        '<td class="num ' + spiC + '">' + w.SPI.toFixed(3) + '</td>' +
-        '<td class="num ' + cpiC + '">' + w.CPI.toFixed(3) + '</td>' +
-      '</tr>';
-    }).join('');
-
-    const totalCols = 8 + (e.baselineIdx ? 1 : 0);
-    const foot = '<tfoot><tr class="evm-forecast">' +
-      '<td colspan="' + (totalCols) + '" style="text-align:right;padding:12px">' +
-        '<b style="color:#a855f7">📌 FORECAST:</b> ' +
-        'EAC = <b>' + rp(e.EAC) + '</b> · ' +
-        'ETC = <b>' + rp(e.ETC) + '</b> · ' +
-        'VAC = <b class="' + (e.VAC >= 0 ? 'pos' : 'neg') + '">' + rp(e.VAC) + '</b> · ' +
-        'Selesai = <b>' + esc(e.forecastFinish) + '</b>' +
-      '</td>' +
-    '</tr></tfoot>';
-
-    document.getElementById('tblEvm').innerHTML = head + '<tbody>' + body + '</tbody>' + foot;
   }
 };
 
 /* =====================================================================
-   FASE 6C — IMPORT EXCEL BQ
+   IMPORT EXCEL BQ
    ===================================================================== */
 const ImportExcel = {
   _workbook: null,
@@ -7701,23 +6621,15 @@ const ImportExcel = {
       '<div class="imp-dropzone" id="impDrop">' +
         '<div class="imp-icon">📥</div>' +
         '<div class="imp-title">Drop file XLSX atau klik untuk pilih</div>' +
-        '<div class="imp-hint">Format: .xlsx, .xls · Kolom minimal: <b>Kode</b>, <b>Uraian</b>, <b>Volume</b></div>' +
       '</div>' +
       '<input type="file" id="impFile" accept=".xlsx,.xls" style="display:none">' +
-      '<div style="text-align:center;margin-bottom:14px">' +
-        '<button class="btn btn-sm" id="impTemplate" style="background:linear-gradient(135deg,#16a34a,#0f8a3f);border-color:transparent;color:#fff">📄 Download Template XLSX</button>' +
-      '</div>' +
       '<div id="impStep2" style="display:none"></div>';
 
     openModal('📥 Import BQ dari Excel', body, () => {});
 
-    // Hide default submit
     const submitBtn = document.getElementById('mSubmit');
     if (submitBtn) submitBtn.style.display = 'none';
-    const cancelBtn = document.getElementById('mCancel');
-    if (cancelBtn) cancelBtn.textContent = 'Batal';
 
-    // Wire drop zone
     const drop = document.getElementById('impDrop');
     const input = document.getElementById('impFile');
     drop.onclick = () => input.click();
@@ -7733,24 +6645,6 @@ const ImportExcel = {
       const f = e.target.files[0];
       if (f) this._parseFile(f, projectId);
     };
-
-    // Template
-    document.getElementById('impTemplate').onclick = () => this._downloadTemplate();
-  },
-
-  _downloadTemplate(){
-    const wb = XLSX.utils.book_new();
-    const sample = [
-      ['Kode', 'Uraian', 'STA', 'Satuan', 'Volume RAB', 'Volume RAP', 'AHSP Kode'],
-      ['I.1', 'Galian tanah biasa', 'STA 0+000 - 0+100', 'm3', 1200, 1250, '1.1.1'],
-      ['I.2', 'Timbunan & pemadatan', 'STA 0+000 - 0+100', 'm3', 800, 820, '1.1.2'],
-      ['II.1', 'Beton struktur K-225', 'STA 0+000 - 0+100', 'm3', 150, 155, '1.2.1']
-    ];
-    const ws = XLSX.utils.aoa_to_sheet(sample);
-    ws['!cols'] = [{ wch:10 }, { wch:40 }, { wch:24 }, { wch:8 }, { wch:12 }, { wch:12 }, { wch:12 }];
-    XLSX.utils.book_append_sheet(wb, ws, 'BQ Template');
-    XLSX.writeFile(wb, 'template-bq.xlsx');
-    toast('Template didownload');
   },
 
   _parseFile(file, projectId){
@@ -7762,10 +6656,7 @@ const ImportExcel = {
         const sheetName = wb.SheetNames[0];
         const sheet = wb.Sheets[sheetName];
         const rows = XLSX.utils.sheet_to_json(sheet, { header:1, defval:'' });
-        if (rows.length < 2){
-          toast('File kosong atau tidak ada data', false);
-          return;
-        }
+        if (rows.length < 2){ toast('File kosong', false); return; }
         this._workbook = wb;
         this._sheetName = sheetName;
         this._headers = rows[0].map(h => String(h||'').trim());
@@ -7790,11 +6681,11 @@ const ImportExcel = {
     };
     return {
       kode:    find(['kode', 'id', 'code', 'no']),
-      uraian:  find(['uraian', 'nama', 'name', 'item', 'pekerjaan', 'description']),
-      sta:     find(['sta', 'lokasi', 'location']),
-      satuan:  find(['satuan', 'unit', 'uom']),
-      volRAB:  find(['vrab', 'volume', 'qty', 'kuantitas', 'quantity']),
-      volRAP:  find(['vrap', 'volume2', 'rap']),
+      uraian:  find(['uraian', 'nama', 'name', 'item', 'pekerjaan']),
+      sta:     find(['sta', 'lokasi']),
+      satuan:  find(['satuan', 'unit']),
+      volRAB:  find(['vrab', 'volume', 'qty']),
+      volRAP:  find(['vrap', 'rap']),
       ahsp:    find(['ahsp'])
     };
   },
@@ -7809,61 +6700,28 @@ const ImportExcel = {
         '<option value="' + i + '"' + (selIdx === i ? ' selected' : '') + '>' + esc(h || 'Kolom ' + (i+1)) + '</option>'
       ).join('');
 
-    // Preview 5 baris pertama
-    const preview = this._rows.slice(0, 8).map((r, i) =>
-      '<tr>' +
-      '<td><b>' + (i + 1) + '</b></td>' +
-      this._headers.map((_, ci) => '<td>' + esc(String(r[ci]||'').substring(0, 40)) + '</td>').join('') +
-      '</tr>'
-    ).join('');
-
     wrap.innerHTML =
       '<div class="imp-summary">' +
         '<div class="imp-stat"><div class="lbl">File</div><div class="val" style="font-size:12px">' + esc(fileName) + '</div></div>' +
-        '<div class="imp-stat"><div class="lbl">Sheet</div><div class="val" style="font-size:12px">' + esc(this._sheetName) + '</div></div>' +
         '<div class="imp-stat"><div class="lbl">Total Baris</div><div class="val">' + this._rows.length + '</div></div>' +
-        '<div class="imp-stat"><div class="lbl">Total Kolom</div><div class="val">' + this._headers.length + '</div></div>' +
       '</div>' +
-
       '<div class="imp-mapper">' +
-        '<h4>🔗 Mapping Kolom</h4>' +
         '<div class="imp-map-grid">' +
           '<div class="imp-map-item"><label>Kode WBS *</label><select class="imp-map" data-field="kode">' + headerOpts(this._map.kode) + '</select></div>' +
           '<div class="imp-map-item"><label>Uraian *</label><select class="imp-map" data-field="uraian">' + headerOpts(this._map.uraian) + '</select></div>' +
-          '<div class="imp-map-item"><label>STA</label><select class="imp-map" data-field="sta">' + headerOpts(this._map.sta) + '</select></div>' +
           '<div class="imp-map-item"><label>Satuan</label><select class="imp-map" data-field="satuan">' + headerOpts(this._map.satuan) + '</select></div>' +
           '<div class="imp-map-item"><label>Volume RAB</label><select class="imp-map" data-field="volRAB">' + headerOpts(this._map.volRAB) + '</select></div>' +
-          '<div class="imp-map-item"><label>Volume RAP</label><select class="imp-map" data-field="volRAP">' + headerOpts(this._map.volRAP) + '</select></div>' +
-          '<div class="imp-map-item"><label>Kode AHSP</label><select class="imp-map" data-field="ahsp">' + headerOpts(this._map.ahsp) + '</select></div>' +
         '</div>' +
       '</div>' +
-
-      '<div class="panel-head" style="margin-bottom:6px"><h3 style="font-size:12px">👁 Preview (8 baris pertama)</h3></div>' +
-      '<div class="imp-preview">' +
-        '<table>' +
-          '<thead><tr><th style="width:40px">#</th>' +
-            this._headers.map(h => '<th>' + esc(h || '—') + '</th>').join('') +
-          '</tr></thead>' +
-          '<tbody>' + preview + '</tbody>' +
-        '</table>' +
-      '</div>' +
-
       '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px">' +
-        '<button class="btn" id="impBack">← Ganti File</button>' +
         '<button class="btn btn-ok" id="impCommit">✅ Import ke WBS</button>' +
       '</div>';
 
-    // Wire mapper change
     wrap.querySelectorAll('.imp-map').forEach(sel => {
       sel.onchange = () => {
         this._map[sel.getAttribute('data-field')] = parseInt(sel.value, 10);
       };
     });
-
-    document.getElementById('impBack').onclick = () => {
-      wrap.style.display = 'none';
-      document.getElementById('impFile').value = '';
-    };
 
     document.getElementById('impCommit').onclick = () => this._commit(projectId);
   },
@@ -7872,33 +6730,22 @@ const ImportExcel = {
     if (this._map.kode < 0){ toast('Kolom "Kode WBS" wajib di-map', false); return; }
     if (this._map.uraian < 0){ toast('Kolom "Uraian" wajib di-map', false); return; }
 
-    if (typeof Undo !== 'undefined') Undo.snapshot('Import BQ ' + this._rows.length + ' baris');
+    if (typeof Undo !== 'undefined') Undo.snapshot('Import BQ');
 
-    // Build AHSP map kode → id
-    const ahspByKode = {};
-    DB.ahsp_headers.forEach(a => { ahspByKode[String(a.kode).trim().toLowerCase()] = a.id; });
-
-    // Ambil urutan terakhir
     let maxUrut = DB.project_wbs
       .filter(w => w.project_id === projectId)
       .reduce((m, w) => Math.max(m, num(w.urut)||0), 0);
 
     let added = 0;
-    let skipped = 0;
     this._rows.forEach(r => {
       const kode = String(r[this._map.kode] || '').trim();
       const uraian = String(r[this._map.uraian] || '').trim();
-      if (!kode || !uraian){ skipped++; return; }
+      if (!kode || !uraian) return;
 
-      const sta = this._map.sta >= 0 ? String(r[this._map.sta] || '').trim() : '';
       const satuan = this._map.satuan >= 0 ? String(r[this._map.satuan] || '').trim() : '';
       const volRAB = this._map.volRAB >= 0 ? num(r[this._map.volRAB]) : 0;
-      const volRAP = this._map.volRAP >= 0 ? num(r[this._map.volRAP]) : volRAB;
-      const ahspKode = this._map.ahsp >= 0 ? String(r[this._map.ahsp] || '').trim().toLowerCase() : '';
 
-      // Detect group by kode (romawi saja, atau ada titik)
       const isGroup = /^[IVX]+$/i.test(kode) || (!satuan && volRAB === 0);
-      const ahspId = ahspKode ? (ahspByKode[ahspKode] || '') : '';
 
       maxUrut++;
       DB.project_wbs.push({
@@ -7906,11 +6753,10 @@ const ImportExcel = {
         project_id: projectId,
         kode_wbs: kode,
         uraian,
-        sta,
         satuan,
         volume_rab: volRAB,
-        volume_rap: volRAP,
-        ahsp_id: ahspId,
+        volume_rap: volRAB,
+        ahsp_id: '',
         parent_id: '',
         is_group: isGroup ? 1 : 0,
         urut: maxUrut,
@@ -7924,25 +6770,68 @@ const ImportExcel = {
 
     runCPM(projectId);
     saveDB();
-
-    const ganttEl = document.getElementById('ganttContainer');
-    if (ganttEl) GanttView.mount(ganttEl, projectId, { mode:'rab', zoom: ganttEl._lastZoom || 'weekly' });
-
     closeModal();
     renderWbs();
-    toast('✅ ' + added + ' baris di-import' + (skipped ? ' · ' + skipped + ' dilewati' : ''));
-
-    // Reset state
-    this._workbook = null;
-    this._rows = [];
-    this._headers = [];
-    this._map = null;
+    toast('✅ ' + added + ' baris di-import');
   }
 };
 
 /* =====================================================================
-   FASE 6 — HOOK: render dashboard EVM + tombol import
+   EVENT WIRING FASE 5-6
    ===================================================================== */
+(function wireFase5(){
+  function ready(fn){
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', fn);
+    else fn();
+  }
+
+  ready(() => {
+    if (typeof MobileView !== 'undefined') MobileView.init();
+
+    const btnXlsx = document.getElementById('btnExcel');
+    if (btnXlsx){
+      btnXlsx.onclick = () => {
+        if (!STATE.activeProject){ toast('Pilih proyek aktif dulu', false); return; }
+        ExportExcel.exportProject(STATE.activeProject);
+      };
+    }
+
+    const btnIcal = document.getElementById('btnIcal');
+    if (btnIcal){
+      btnIcal.onclick = () => {
+        if (!STATE.activeProject){ toast('Pilih proyek aktif dulu', false); return; }
+        CalendarExport.exportICS(STATE.activeProject);
+      };
+    }
+
+    const ind = document.getElementById('liveIndicator');
+    if (ind){
+      ind.onclick = () => {
+        if (!SET.sheetUrl){ toast('URL Apps Script belum diatur', false); return; }
+        LiveSync.tick();
+      };
+    }
+
+    const btnExec = document.getElementById('btnExecRefresh');
+    if (btnExec) btnExec.onclick = () => { ExecDashboard.render(); toast('Executive dashboard di-refresh'); };
+
+    setTimeout(() => LiveSync.start(), 1500);
+
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') LiveSync.resume();
+      else LiveSync.pause();
+    });
+
+    if (typeof switchTab === 'function'){
+      var _prevSwitchTabF5 = window.switchTab;
+      window.switchTab = function(name){
+        if (typeof _prevSwitchTabF5 === 'function') _prevSwitchTabF5.apply(this, arguments);
+        if (name === 'executive') ExecDashboard.render();
+      };
+    }
+  });
+})();
+
 (function wireFase6(){
   function ready(fn){
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', fn);
@@ -7950,36 +6839,26 @@ const ImportExcel = {
   }
 
   ready(() => {
-    // Tombol Import BQ
     const btn = document.getElementById('btnImportBQ');
     if (btn) btn.onclick = () => {
       if (!STATE.activeProject){ toast('Pilih proyek dulu', false); return; }
       ImportExcel.open(STATE.activeProject);
     };
 
-    // Tombol EVM info
     const btnInfo = document.getElementById('btnEvmInfo');
     if (btnInfo) btnInfo.onclick = () => {
       openModal('ℹ Tentang EVM',
         '<p style="font-size:13px;line-height:1.7;color:var(--txt)">' +
-          '<b>Earned Value Management (EVM)</b> adalah metode mengukur performa proyek dengan membandingkan 3 nilai:<br><br>' +
-          '• <b>PV (Planned Value)</b> — Nilai pekerjaan yang <i>seharusnya</i> selesai per rencana<br>' +
-          '• <b>EV (Earned Value)</b> — Nilai pekerjaan yang <i>sudah</i> dikerjakan (bobot RAB × progress)<br>' +
-          '• <b>AC (Actual Cost)</b> — Biaya aktual yang sudah dikeluarkan<br><br>' +
-          '<b>Indeks:</b><br>' +
-          '• <b>SPI = EV / PV</b> → &lt;1 = telat, ≥1 = on/ahead schedule<br>' +
-          '• <b>CPI = EV / AC</b> → &lt;1 = over budget, ≥1 = hemat<br><br>' +
-          '<b>Forecast:</b><br>' +
+          '<b>Earned Value Management (EVM)</b> adalah metode mengukur performa proyek.<br><br>' +
+          '• <b>SPI = EV / PV</b> → &lt;1 = telat<br>' +
+          '• <b>CPI = EV / AC</b> → &lt;1 = over budget<br>' +
           '• <b>EAC = BAC / CPI</b> → prediksi biaya akhir<br>' +
-          '• <b>VAC = BAC − EAC</b> → selisih terhadap anggaran<br><br>' +
-          '<i style="color:var(--muted)">Catatan: AC dihitung dari RAP × progress (approximation karena sistem tidak mencatat biaya aktual per transaksi).</i>' +
         '</p>',
         () => {}
       );
       setTimeout(() => { document.getElementById('mSubmit').style.display = 'none'; }, 10);
     };
 
-    // ── Hook renderDashboard → EVM (CHAIN) ──
     if (typeof renderDashboard === 'function'){
       var _prevRenderDashboardF6 = window.renderDashboard;
       window.renderDashboard = function(){
