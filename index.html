@@ -406,7 +406,8 @@
       <div><h2>Input Progress Mingguan</h2><p>Volume aktual terpasang per item WBS</p></div>
       <div class="row">
         <button class="btn btn-primary" id="btnAddProg">+ Progress</button>
-        <button class="btn btn-ok" id="btnProgressWizard" style="background:linear-gradient(135deg,#a855f7,#7c3aed);border-color:transparent;color:#fff">📊 Progress Wizard</button>
+         <button class="btn btn-ok" id="btnProgressWizard" style="background:linear-gradient(135deg,#a855f7,#7c3aed);border-color:transparent;color:#fff">📊 Progress Wizard</button>
+         <button class="btn" id="btnPrintReport" style="background:linear-gradient(135deg,#dc2626,#b91c1c);border-color:transparent;color:#fff">🖨 Cetak Laporan</button>>
       </div>
     </div>
     <div class="tw" style="max-height:40vh; overflow-y:auto;"><table id="tblProg"></table></div>
@@ -3683,6 +3684,23 @@ document.addEventListener('DOMContentLoaded', function() {
   if (reportTypeEl) {
     updateReportPeriodOptions();
   }
+  
+     // Hubungkan tombol Cetak Laporan ke ReportGenerator
+      const btnPrintReport = document.getElementById('btnPrintReport');
+      if (btnPrintReport) {
+        btnPrintReport.onclick = () => {
+          const pid = (typeof STATE !== 'undefined') ? STATE.activeProject : null;
+          if (!pid) {
+            toast('Pilih proyek dulu', false);
+            return;
+          }
+          if (typeof ReportGenerator !== 'undefined' && ReportGenerator.openHarian) {
+            ReportGenerator.openHarian(pid);
+          } else {
+            toast('Modul ReportGenerator belum siap', false);
+          }
+        };
+      }
 });
 </script>
 </body>
