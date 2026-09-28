@@ -407,7 +407,7 @@
       <div class="row">
         <button class="btn btn-primary" id="btnAddProg">+ Progress</button>
          <button class="btn btn-ok" id="btnProgressWizard" style="background:linear-gradient(135deg,#a855f7,#7c3aed);border-color:transparent;color:#fff">📊 Progress Wizard</button>
-         <button class="btn" id="btnPrintReport" style="background:linear-gradient(135deg,#dc2626,#b91c1c);border-color:transparent;color:#fff">🖨 Cetak Laporan</button>>
+         <button class="btn" id="btnPrintReport" style="background:linear-gradient(135deg,#dc2626,#b91c1c);border-color:transparent;color:#fff">🖨 Cetak Laporan</button>
       </div>
     </div>
     <div class="tw" style="max-height:40vh; overflow-y:auto;"><table id="tblProg"></table></div>
@@ -3685,7 +3685,7 @@ document.addEventListener('DOMContentLoaded', function() {
     updateReportPeriodOptions();
   }
   
-     // Hubungkan tombol Cetak Laporan ke ReportGenerator
+      // Hubungkan tombol Cetak Laporan ke ReportGenerator (dengan sistem retry)
       const btnPrintReport = document.getElementById('btnPrintReport');
       if (btnPrintReport) {
         btnPrintReport.onclick = () => {
@@ -3694,11 +3694,23 @@ document.addEventListener('DOMContentLoaded', function() {
             toast('Pilih proyek dulu', false);
             return;
           }
-          if (typeof ReportGenerator !== 'undefined' && ReportGenerator.openHarian) {
-            ReportGenerator.openHarian(pid);
-          } else {
-            toast('Modul ReportGenerator belum siap', false);
-          }
+
+          // Fungsi untuk mencoba membuka laporan
+          const tryOpenReport = (attempt = 0) => {
+            if (typeof ReportGenerator !== 'undefined' && ReportGenerator.openHarian) {
+              // Modul siap, buka laporan
+              ReportGenerator.openHarian(pid);
+            } else if (attempt < 15) {
+              // Modul belum siap, tunggu 300ms dan coba lagi (max 4.5 detik)
+              console.log('⏳ Menunggu ReportGenerator siap... Percobaan ke-' + (attempt + 1));
+              setTimeout(() => tryOpenReport(attempt + 1), 300);
+            } else {
+              // Gagal setelah 15 kali percobaan
+              toast('⚠ Modul ReportGenerator gagal dimuat. Cek Console (F12).', false);
+            }
+          };
+          
+          tryOpenReport();
         };
       }
 });
