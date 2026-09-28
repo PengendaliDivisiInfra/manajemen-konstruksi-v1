@@ -194,6 +194,7 @@
         <div class="row">
           <button class="btn btn-primary" id="btnAddWbs">+ Item WBS</button>
           <button class="btn" id="btnAddWbsGroup">+ Grup</button>
+          <button class="btn" id="btnGenerateWbsTemplate" style="background:linear-gradient(135deg,#a855f7,#7c3aed);border-color:transparent;color:#fff">⚡ Generate WBS</button> 
           <button class="btn" id="btnImportBQ" style="background:linear-gradient(135deg,#a855f7,#7c3aed);border-color:transparent;color:#fff">📥 Import BQ (XLSX)</button>
           <button class="btn btn-ok" id="btnRunCPMWBS">⚡ Recalculate CPM</button>
         </div>
@@ -634,6 +635,7 @@
 <script src="PhotoManager.js"></script>       
 <script src="ReportGenerator.js"></script>    
 <script src="ImportProgressExcel.js"></script>
+<script src="WbsTemplate.js"></script>
 
 <!-- ═══════════════════════════════════════════════════════════
      FASE 1C OVERRIDE — MS Project Style Dependency Arrows
@@ -3733,6 +3735,20 @@ document.addEventListener('DOMContentLoaded', function() {
           tryOpenReport();
         };
       }
+});
+</script>
+  <script>
+document.addEventListener('DOMContentLoaded', function(){
+  const btn = document.getElementById('btnGenerateWbsTemplate');
+  if (btn){
+    btn.onclick = function(){
+      const pid = (typeof STATE !== 'undefined') ? STATE.activeProject : null;
+      if (!pid){ toast('Pilih proyek dulu', false); return; }
+      WbsTemplate.openDialog(pid);
+    };
+  }
+  console.log('%c[WbsTemplate.js] ✅ Modul Generate WBS terpasang',
+    'color:#a855f7;font-weight:bold;font-size:12px');
 });
 </script>
 </body>
