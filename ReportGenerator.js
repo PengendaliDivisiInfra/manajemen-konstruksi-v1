@@ -309,24 +309,25 @@
       var logoKontraktor = meta.logo_kontraktor ? '<img src="' + meta.logo_kontraktor + '" class="rg-logo" />' : '<div class="rg-logo-ph"></div>';
 
       // TTD
-    function ttdBlock(title, data){
-      var nikStr = String(data.nik || '').trim();
-      var nikHTML = nikStr !== ''
-        ? '<div class="rg-ttd-nik">NIP/NIK: ' + _esc(nikStr) + '</div>'
-        : '';
-      var namaStr = String(data.nama || '').trim();
-      var namaHTML = namaStr !== ''
-        ? '<b>' + _esc(namaStr) + '</b>'
-        : '<b style="letter-spacing:1px">................................</b>';
-      return '' +
-        '<div class="rg-ttd">' +
-          (title ? '<div class="rg-ttd-title" style="font-style:italic; margin-bottom:4px; font-size:10px; color:#333;">' + _esc(title) + '</div>' : '') +
-          '<div class="rg-ttd-jabatan">' + _esc(data.jabatan || '') + '</div>' +
-          '<div class="rg-ttd-space"></div>' +
-          '<div class="rg-ttd-nama">' + namaHTML + '</div>' +
-          nikHTML +
-        '</div>';
-    }
+      function ttdBlock(title, data){
+        var nikStr = String(data.nik || '').trim();
+        var nikHTML = nikStr !== ''
+          ? '<div class="rg-ttd-nik">NIP/NIK: ' + _esc(nikStr) + '</div>'
+          : '';
+        var namaStr = String(data.nama || '').trim();
+        var namaHTML = namaStr !== ''
+          ? '<b>' + _esc(namaStr) + '</b>'
+          : '<b style="letter-spacing:1px">................................</b>';
+        return '' +
+          '<div class="rg-ttd">' +
+            (title ? '<div class="rg-ttd-title" style="font-style:italic; margin-bottom:4px; font-size:10px; color:#333;">' + _esc(title) + '</div>' : '') +
+            '<div class="rg-ttd-jabatan">' + _esc(data.jabatan || '') + '</div>' +
+            '<div class="rg-ttd-space"></div>' +
+            '<div class="rg-ttd-nama">' + namaHTML + '</div>' +
+            nikHTML +
+          '</div>';
+      }
+
       return '' +
         '<div class="rg-page">' +
 
@@ -432,7 +433,7 @@
               : '<div class="rg-empty-note">Tidak ada foto dokumentasi pada tanggal ini.</div>'
             ) +
             
-            /* ═══ TANDA TANGAN (Tanpa Label C.2) ═══ */
+            /* ═══ TANDA TANGAN ═══ */
             '<div class="rg-subsection-divider" style="margin: 24px 0 16px 0;"></div>' +
             '<div class="rg-subsection-label">Tanda Tangan</div>' +
             
@@ -613,7 +614,7 @@
       }, 5000);
     }
 
-         /* ═══════════════════════════════════════════════════════════
+    /* ═══════════════════════════════════════════════════════════
        PREVIEW PDF — modal review sebelum download
        ═══════════════════════════════════════════════════════════ */
 
@@ -752,7 +753,7 @@
     function getPDFStyles(){
       return '' +
         '* { box-sizing: border-box; }' +
-        '.rg-page, .rg-page * { color: #111 !important; }' +          /* ← FIX 3 */
+        '.rg-page, .rg-page * { color: #111 !important; }' +
         '.rg-page { margin: 0; padding: 0; background: #ffffff; font-family: Arial, sans-serif; font-size: 10.5px; line-height: 1.4; }' +
         '.rg-page { padding: 0; background: #fff; }' +
 
@@ -812,7 +813,7 @@
         /* Footer */
         '.rg-footer { margin-top: 16px; padding-top: 6px; border-top: 1px dashed #999; font-size: 8.5px; color: #666; text-align: right; }' +
 
-                 /* ═══ PROFESSIONAL SPACING ═══ */
+        /* PROFESSIONAL SPACING */
         '.rg-section-title { margin: 18px 0 10px 0; padding: 6px 12px; font-size: 11px; }' +
         '.rg-header { padding-bottom: 10px; margin-bottom: 4px; }' +
         '.rg-hr { margin: 6px 0 16px 0; height: 3px; }' +
@@ -823,7 +824,7 @@
         '.rg-summary { margin-bottom: 20px; }' +
         '.rg-summary td { padding: 8px 10px; }' +
 
-        /* ═══ SUB-SECTION (Lampiran) ═══ */
+        /* SUB-SECTION (Lampiran) */
         '.rg-subsection-label { font-size: 10.5px; font-weight: 700; color: #1f4e79; ' +
           'margin: 14px 0 8px 0; padding-left: 8px; border-left: 3px solid #4a90d9; ' +
           'text-transform: uppercase; letter-spacing: .4px; }' +
@@ -831,13 +832,13 @@
         '.rg-empty-note { font-size: 10px; font-style: italic; color: #777; ' +
           'text-align: center; padding: 14px; background: #f8f9fb; border-radius: 4px; margin-bottom: 14px; }' +
 
-        /* ═══ PHOTO GRID IMPROVED ═══ */
+        /* PHOTO GRID IMPROVED */
         '.rg-photo-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 16px; }' +
         '.rg-photo-item { border: 1px solid #ccc; padding: 5px; background: #fff; border-radius: 4px; page-break-inside: avoid; }' +
         '.rg-photo-item img { width: 100%; height: 140px; object-fit: cover; display: block; border-radius: 2px; }' +
         '.rg-photo-cap { font-size: 9.5px; color: #333; margin-top: 4px; line-height: 1.35; min-height: 24px; font-weight: 500; }' +
 
-        /* ═══ TTD IMPROVED ═══ */
+        /* TTD IMPROVED */
         '.rg-ttd-wrap { display: flex; justify-content: space-between; gap: 24px; margin-top: 14px; page-break-inside: avoid; }' +
         '.rg-ttd-col { flex: 1; text-align: center; font-size: 10.5px; }' +
         '.rg-ttd { padding: 8px 4px; }' +
@@ -860,7 +861,7 @@
       harian: function(pid, tgl){ generateHarian(pid, tgl); }
     };
 
-    // Inject tombol "🖨 Cetak Laporan" di tab Progress
+    // Inject tombol "🖨 Cetak Laporan" di tab Progress (fallback jika index.html tidak punya)
     function injectPrintButton(){
       var headerRow = document.querySelector('#sec-progress .panel:first-child .panel-head .row');
       if (!headerRow) return;
@@ -889,14 +890,14 @@
 
     console.log('%c[ReportGenerator.js] ✅ Report Generator installed',
       'color:#dc2626;font-weight:bold;font-size:13px');
-  }
+  } // <-- PENUTUP install()
 
   if (document.readyState === 'loading'){
     document.addEventListener('DOMContentLoaded', function(){ bootstrap(0); });
   } else {
     bootstrap(0);
   }
-})();
+})(); // <-- PENUTUP IIFE
 
 /* =====================================================================
    ADD-ON: LAPORAN MINGGUAN & BULANAN
