@@ -66,7 +66,7 @@
 
 <main>
 
-  <!-- ===================== EXECUTIVE (multi-project) ===================== -->
+  <!-- ===================== EXECUTIVE ===================== -->
   <section class="section" id="sec-executive">
     <div class="panel">
       <div class="panel-head">
@@ -119,7 +119,6 @@
       <div id="alertWrap"></div>
     </div>
 
-    <!-- ============ FASE 6B — EARNED VALUE MANAGEMENT ============ -->
     <div class="panel" style="margin-top:18px">
       <div class="panel-head">
         <div>
@@ -167,8 +166,8 @@
   <section class="section" id="sec-ahsp">
     <div class="panel">
       <div class="panel-head">
-        <div><h2>Template AHSP (Master)</h2><p>Rumus koefisien standar Permen PUPR</p></div>
-        <button class="btn btn-primary" id="btnAddAhsp">+ AHSP</button>
+        <div><h2>Template AHSP (Per-Proyek)</h2><p>AHSP terisolasi per proyek · data dari Master PUPR SDA</p></div>
+        <button class="btn btn-primary" id="btnAddAhsp">+ AHSP dari Master</button>
       </div>
       <div class="tw"><table id="tblAhsp"></table></div>
     </div>
@@ -190,7 +189,7 @@
   <section class="section" id="sec-wbs">
     <div class="panel">
       <div class="panel-head">
-        <div><h2>WBS / Bill of Quantity</h2><p>Pemetaan volume berbasis STA dengan Schedule Fields</p></div>
+        <div><h2>WBS / Bill of Quantity</h2><p>Inline editable · Hierarki 3-level deduktif · Auto-save</p></div>
         <div class="row">
           <button class="btn btn-primary" id="btnAddWbs">+ Item WBS</button>
           <button class="btn" id="btnAddWbsGroup">+ Grup</button>
@@ -237,14 +236,14 @@
 
     <div class="panel">
       <div class="panel-head">
-        <div><h2>Time-Phased Resource Loading</h2><p>Kebutuhan Upah, Bahan &amp; Alat per periode (read-only terhadap RAB/RAP)</p></div>
+        <div><h2>Time-Phased Resource Loading</h2><p>Kebutuhan Upah, Bahan &amp; Alat per periode</p></div>
       </div>
       <div class="tw" style="max-height:45vh"><table id="tblResourceLoad"></table></div>
     </div>
 
     <div class="panel">
       <div class="panel-head">
-        <div><h2>Kebutuhan per Sumber Daya</h2><p>Total qty, beban puncak harian, dan biaya agregat per resource</p></div>
+        <div><h2>Kebutuhan per Sumber Daya</h2><p>Total qty, beban puncak harian, dan biaya agregat</p></div>
       </div>
       <div class="tw" style="max-height:45vh"><table id="tblResourceByRes"></table></div>
     </div>
@@ -262,13 +261,12 @@
       </div>
       <canvas id="chartResourceLoad" style="max-height:340px"></canvas>
     </div>
+
     <div class="panel">
       <div class="panel-head">
-           <div class="panel">
-      <div class="panel-head">
         <div>
-          <h2>📊 Gantt Chart & Resource Sheet</h2>
-          <p>Batang <span style="color:#2f81f7">biru</span> = normal · <span style="color:#dc2626">merah</span> = jalur kritis · <span style="color:#0f172a">hitam</span> = summary · ◆ = milestone</p>
+          <h2>📊 Gantt Chart &amp; Resource Sheet</h2>
+          <p>Batang <span style="color:#2f81f7">biru</span> = normal · <span style="color:#dc2626">merah</span> = jalur kritis · ◆ = milestone</p>
         </div>
         <div class="sched-view-tabs" id="schedViewTabs">
           <button class="sched-view-btn is-active" data-view="gantt">📅 Gantt</button>
@@ -277,12 +275,7 @@
       </div>
       <div id="ganttContainer"></div>
     </div>
-          <p>Batang <span style="color:#2f81f7">biru</span> = normal · <span style="color:#dc2626">merah</span> = jalur kritis · <span style="color:#0f172a">hitam</span> = summary · ◆ = milestone</p>
-        </div>
-      </div>
-      <div id="ganttContainer"></div>
-    </div>
-    
+
     <div class="panel">
       <div class="panel-head">
         <div><h2>📈 Histogram Kebutuhan Sumber Daya</h2><p>Fluktuasi harian / mingguan per resource</p></div>
@@ -301,17 +294,16 @@
     <div class="panel">
       <div class="panel-head">
         <div><h2>🚨 Pusat Deteksi Bentrok (Over-Allocation)</h2>
-          <p>Resource yang kebutuhannya melampaui <code>kapasitas_harian</code> di master_resources</p></div>
+          <p>Resource yang kebutuhannya melampaui <code>kapasitas_harian</code></p></div>
       </div>
       <div id="overAllocWrap"></div>
     </div>
 
-    <!-- ═══ Fase 1E: Conflict Detection Panel ═══ -->
     <div class="panel">
       <div class="panel-head">
         <div>
           <h2>⚠ Pusat Deteksi Konflik Jadwal</h2>
-          <p>Manual vs Predecessor · Constraint ketat (MSO/MFO/FNLT) vs Predecessor · Negative Float</p>
+          <p>Manual vs Predecessor · Constraint ketat · Negative Float</p>
         </div>
         <button class="btn btn-sm" id="btnConflictRefresh">🔄 Refresh</button>
       </div>
@@ -319,13 +311,13 @@
     </div>
   </section>
 
-<!-- ===================== CASH FLOW & ACTUAL COST ===================== -->
+  <!-- ===================== CASH FLOW ===================== -->
   <section class="section" id="sec-cashflow">
     <div class="panel">
       <div class="panel-head">
         <div>
           <h2>💵 Cash Flow &amp; Actual Cost</h2>
-          <p>Proyeksi Arus Kas Masuk (Termin) vs Keluar (RAP/Actual) per Periode Mingguan</p>
+          <p>Proyeksi Arus Kas Masuk (Termin) vs Keluar (RAP/Actual)</p>
         </div>
         <div class="row">
           <button class="btn" id="btnAutoCalcCF">⚡ Generate Otomatis dari Kurva S</button>
@@ -337,7 +329,7 @@
 
     <div class="panel" style="margin-top:18px">
       <div class="panel-head">
-        <div><h2>Grafik Arus Kas (Cumulative Cash In vs Out)</h2><p>Perbandingan rencana dan realisasi keuangan proyek</p></div>
+        <div><h2>Grafik Arus Kas</h2><p>Perbandingan rencana dan realisasi keuangan proyek</p></div>
       </div>
       <div style="position: relative; height: 320px; width: 100%;">
         <canvas id="chartCashFlow"></canvas>
@@ -346,15 +338,15 @@
 
     <div class="panel" style="margin-top:18px">
       <div class="panel-head">
-        <div><h2>Tabel Rekonsiliasi Arus Kas Mingguan</h2><p>Edit langsung kolom Realisasi atau Keterangan sesuai kondisi riil</p></div>
+        <div><h2>Tabel Rekonsiliasi Arus Kas Mingguan</h2><p>Edit langsung sesuai kondisi riil</p></div>
       </div>
       <div class="tw" style="max-height:45vh">
-        <table id="tblCashFlow" class="table" style="width: 100%; border-collapse: collapse;"></table>
+        <table id="tblCashFlow" class="table"></table>
       </div>
     </div>
   </section>
 
-  <!-- ===================== WORKING CALENDAR ===================== -->
+  <!-- ===================== CALENDAR ===================== -->
   <section class="section" id="sec-calendar">
     <div class="panel">
       <div class="panel-head">
@@ -364,8 +356,6 @@
       <div class="tw"><table id="tblCalendars"></table></div>
       <p class="hint">
         <b>Work Days</b>: 0=Minggu, 1=Senin, 2=Selasa, 3=Rabu, 4=Kamis, 5=Jumat, 6=Sabtu.
-        Pisahkan dengan koma (misal: <code>1,2,3,4,5</code> untuk Senin–Jumat).
-        Kalender <b>default</b> digunakan bila proyek tidak menentukan kalender khusus.
       </p>
     </div>
   </section>
@@ -400,41 +390,39 @@
   </section>
 
   <!-- ===================== PROGRESS ===================== -->
-<section class="section" id="sec-progress">
-  <!-- PANEL 1: LAPORAN PROGRES (menggantikan "Input Progress Mingguan") -->
-  <div class="panel">
-    <div class="panel-head">
-      <div>
-        <h2>📊 Laporan Progres</h2>
-        <p>Volume aktual terpasang per item WBS — otomatis terakumulasi per periode</p>
+  <section class="section" id="sec-progress">
+    <!-- PANEL 1: LAPORAN PROGRES -->
+    <div class="panel">
+      <div class="panel-head">
+        <div>
+          <h2>📊 Laporan Progres</h2>
+          <p>Volume aktual terpasang per item WBS — otomatis terakumulasi per periode</p>
+        </div>
+        <div id="progressToolbar"></div>
       </div>
-      <div id="progressToolbar"></div>
+      <div class="tw" style="max-height:50vh; overflow:auto;">
+        <table id="tblProg"></table>
+      </div>
     </div>
-    <div class="tw" style="max-height:50vh; overflow:auto;">
-      <table id="tblProg"></table>
-    </div>
-  </div>
 
-  <!-- PANEL 2: S-CURVE -->
-  <div class="panel" style="margin-top:18px">
-    <div class="panel-head">
-      <div><h2>Kurva S — Rencana vs Aktual (Detail)</h2><p>Analisis performa jadwal berdasarkan bobot pekerjaan</p></div>
+    <!-- PANEL 2: S-CURVE -->
+    <div class="panel" style="margin-top:18px">
+      <div class="panel-head">
+        <div><h2>Kurva S — Rencana vs Aktual (Detail)</h2><p>Analisis performa jadwal berdasarkan bobot pekerjaan</p></div>
+      </div>
+      <div style="position:relative; height:350px; width:100%;">
+        <canvas id="chartProgressScurve"></canvas>
+      </div>
     </div>
-    <div style="position:relative; height:350px; width:100%;">
-      <canvas id="chartProgressScurve"></canvas>
-    </div>
-  </div>
 
-  <!-- PANEL 3: TABEL DEVIASI -->
-  <div class="panel" style="margin-top:18px">
-    <div class="panel-head">
-      <div><h2>Analisis Deviasi Progres</h2><p>Perbandingan bobot rencana vs aktual per item WBS</p></div>
+    <!-- PANEL 3: TABEL DEVIASI -->
+    <div class="panel" style="margin-top:18px">
+      <div class="panel-head">
+        <div><h2>Analisis Deviasi Progres</h2><p>Perbandingan bobot rencana vs aktual per item WBS</p></div>
+      </div>
+      <div class="tw" style="max-height:45vh; overflow-y:auto;"><table id="tblProgressVariance"></table></div>
     </div>
-    <div class="tw" style="max-height:45vh; overflow-y:auto;">
-      <table id="tblProgressVariance"></table>
-    </div>
-  </div>
-</section>
+  </section>
 
   <!-- ===================== REKONSILIASI ===================== -->
   <section class="section" id="sec-recon">
@@ -494,7 +482,7 @@
     </div>
   </section>
 
-  <!-- ===================== LEMBAR AHSP PUPR ===================== -->
+  <!-- ===================== LEMBAR AHSP ===================== -->
   <section class="section" id="sec-lembar">
     <div class="panel no-print">
       <div class="panel-head">
@@ -530,7 +518,7 @@
       <div class="row">
         <div class="field" style="flex:3">
           <label class="f">URL Web App Apps Script</label>
-          <input id="setUrl" placeholder="https://script.google.com/macros/s/AKfycbwYvThLZbTt5APGR9zyWCwTcdyGlXAJRFxxDPP_kku97A4XfMhseneUP5vkxXyEUaPeTQ/exec" />
+          <input id="setUrl" placeholder="https://script.google.com/macros/s/…/exec" />
         </div>
         <button class="btn btn-ok" id="btnPush">⬆ Push ke Sheet</button>
         <button class="btn" id="btnPull">⬇ Pull dari Sheet</button>
@@ -540,7 +528,6 @@
         Status lock: <b id="lockStatusLabel">—</b>
       </p>
       </div>
-      <p class="hint">Tempelkan URL hasil Deploy Apps Script (akses: Anyone).</p>
       <div class="sep"></div>
       <div class="row">
         <div class="field"><label class="f">Overhead &amp; Margin Default (%)</label><input id="setOh" type="number" step="0.01" /></div>
@@ -553,18 +540,18 @@
         <button class="btn" id="btnSeed">🌱 Muat Data Contoh</button>
       </div>
       <div class="panel">
-      <div class="panel-head">
-        <div><h2>👥 Manajemen Pengguna</h2><p>Kelola akses user dan proyek</p></div>
-        <button class="btn btn-primary" id="btnAddUser">+ User Baru</button>
-      </div>
-      <div class="tw"><table id="tblUsers"></table></div>
+        <div class="panel-head">
+          <div><h2>👥 Manajemen Pengguna</h2><p>Kelola akses user dan proyek</p></div>
+          <button class="btn btn-primary" id="btnAddUser">+ User Baru</button>
+        </div>
+        <div class="tw"><table id="tblUsers"></table></div>
       </div>
     </div>
   </section>
 
 </main>
 
-<!-- ═══ Fase 2F — Task Inspector Panel ═══ -->
+<!-- ===================== TASK INSPECTOR ===================== -->
 <div class="ti-panel" id="taskInspectorPanel"></div>
 
 <!-- ===================== MODAL ===================== -->
@@ -582,17 +569,47 @@
   </div>
 </div>
 
+<!-- ===================== MODAL LAPORAN PERIODIK ===================== -->
+<div class="overlay" id="reportPeriodikModal">
+  <div class="modal">
+    <div class="modal-head">
+      <h3>🖨 Cetak Laporan Periodik</h3>
+      <button class="x" onclick="document.getElementById('reportPeriodikModal').classList.remove('show')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="row" style="margin-bottom: 15px;">
+        <div class="field" style="flex:1;">
+          <label class="f">Jenis Laporan</label>
+          <select id="reportType" style="width:100%;">
+            <option value="mingguan">Laporan Mingguan</option>
+            <option value="bulanan">Laporan Bulanan</option>
+          </select>
+        </div>
+        <div class="field" style="flex:1;">
+          <label class="f">Pilih Periode</label>
+          <select id="reportPeriod" style="width:100%;"></select>
+        </div>
+      </div>
+      <p class="hint">Laporan akan dibuka di tab baru dan otomatis memicu dialog print (Save as PDF).</p>
+    </div>
+    <div class="modal-foot">
+      <button class="btn" onclick="document.getElementById('reportPeriodikModal').classList.remove('show')">Batal</button>
+      <button class="btn btn-primary" id="btnGenerateReport">🖨 Cetak Laporan</button>
+    </div>
+  </div>
+</div>
+
 <!-- ===================== TOAST ===================== -->
 <div class="toast" id="toast"></div>
 
-<!-- ===================== SCRIPTS ===================== -->
+<!-- =====================================================================
+     SCRIPTS — INIT SETTINGS + LOAD MODULES
+     ===================================================================== -->
 <script>
   // =========================================================
   // KONFIGURASI DEFAULT API URL (AMAN & PERMANEN)
   // =========================================================
-  // PASTIKAN URL INI SELALU SAMA DENGAN YANG ADA DI APPS SCRIPT (Manage Deployments)
-  var urlDefault = 'https://script.google.com/macros/s/AKfycbxflhzF7dTFWUptMQ8SEyh4MVtGPDDARP62qk4AZ04NtLDZM-Q8ldFHSysmtp5ujGBP/exec'; 
-  
+  var urlDefault = 'https://script.google.com/macros/s/AKfycbxflhzF7dTFWUptMQ8SEyh4MVtGPDDARP62qk4AZ04NtLDZM-Q8ldFHSysmtp5ujGBP/exec';
   var setKey = 'mk_v1_settings_v1';
   var existingSet = localStorage.getItem(setKey);
   var setData = { overhead: 10, ppn: 11, sheetUrl: urlDefault };
@@ -600,11 +617,10 @@
   if (existingSet) {
     try {
       var parsed = JSON.parse(existingSet);
-      // KUNCI PERBAIKAN: Selalu timpa jika URL di localStorage berbeda dengan urlDefault
       if (!parsed.sheetUrl || parsed.sheetUrl !== urlDefault) {
         parsed.sheetUrl = urlDefault;
         localStorage.setItem(setKey, JSON.stringify(parsed));
-        console.log('✅ [Init] URL lama terdeteksi, berhasil diperbarui ke URL terbaru.');
+        console.log('✅ [Init] URL diperbarui ke versi terbaru.');
       }
     } catch(e) {
       localStorage.setItem(setKey, JSON.stringify(setData));
@@ -617,6 +633,8 @@
     localStorage.setItem('mk_v1_sheet_url', urlDefault);
   }
 </script>
+
+<!-- ═══ EXTERNAL MODULES ═══ -->
 <script src="Schedule.js"></script>
 <script src="LoadingIndicator.js"></script>
 <script src="EmptyState.js"></script>
@@ -632,189 +650,119 @@
 <script src="ProgressManager.js"></script>
 <script src="BulkProgressInput.js"></script>
 <script src="ProjectMeta.js"></script>
-<script src="PhotoManager.js"></script>       
-<script src="ReportGenerator.js"></script>    
+<script src="PhotoManager.js"></script>
+<script src="ReportGenerator.js"></script>
 <script src="ImportProgressExcel.js"></script>
 <script src="WbsTemplate.js"></script>
-<script src="AhspMaster.js"></script>   <!-- ⬅️ BARU -->
-<script src="WbsTable.js"></script>     <!-- ⬅️ BARU -->
+<script src="AhspMaster.js"></script>
+<script src="WbsTable.js"></script>
 
 <!-- ═══════════════════════════════════════════════════════════
      FASE 1C OVERRIDE — MS Project Style Dependency Arrows
-     Non-invasive: Schedule.js tidak disentuh
      ═══════════════════════════════════════════════════════════ -->
 <script>
 let _retryCount1C = 0;
 function apply(){
   if (typeof GanttView === 'undefined' || typeof CPM === 'undefined'){
     _retryCount1C++;
-    if (_retryCount1C > 25){   // ← 25 × 200ms = 5 detik max
-      console.warn('[1C] Menyerah setelah ' + _retryCount1C + ' percobaan. Schedule.js tidak load.');
+    if (_retryCount1C > 25){
+      console.warn('[1C] Menyerah setelah ' + _retryCount1C + ' percobaan.');
       return;
-    }
-    if (_retryCount1C <= 3 || _retryCount1C % 5 === 0){
-      console.warn('[1C] Retry #' + _retryCount1C + ' — GanttView/CPM belum siap');
     }
     setTimeout(apply, 200);
     return;
   }
-
-    GanttView.drawDependencies = function(ctx, state, posMap, rowH){
-      const {nodes} = state;
-      const visibleNodes = state.visibleNodes.filter(n => !n.isGroupHeader);
-
-      const nodeById = {};
-      const nodeByKode = {};
-      nodes.forEach(n => {
-        nodeById[n.id] = n;
-        if (n.kode) nodeByKode[String(n.kode).trim()] = n;
-      });
-
-      const ARROW = 7, GAP = 5, ROUTE_OFFSET = 12, DETOUR_EXTRA = 24;
-
-      ctx.save();
-      ctx.lineWidth = 1.5;
-      ctx.lineCap   = 'round';
-      ctx.lineJoin  = 'round';
-
-      const drawnEdges = new Set();
-
-      visibleNodes.forEach(succNode => {
-        if (succNode.isGroupHeader) return;
-        const succRaw = succNode.raw || {};
-        if (!succRaw.predecessor) return;
-
-        const rels = CPM.getRelationships(succRaw);
-        if (!rels || !rels.length) return;
-
-        const s = posMap[succNode.id];
-        if (!s) return;
-
-        rels.forEach(rel => {
-          const predRef = rel.predRef;
-          const predNode = nodeById[predRef] || nodeByKode[String(predRef).trim()];
-          if (!predNode) return;
-
-          const p = posMap[predNode.id];
-          if (!p) return;
-
-          const type = (rel.type || 'FS').toUpperCase();
-          const edgeKey = predNode.id + '>' + succNode.id + ':' + type;
-          if (drawnEdges.has(edgeKey)) return;
-          drawnEdges.add(edgeKey);
-
-          const isCrit = succNode.isCritical || predNode.isCritical;
-          const pMidY = p.y + rowH / 2;
-          const sMidY = s.y + rowH / 2;
-
-          let sx, sy, tx, ty, arrowDir;
-          switch (type){
-            case 'SS': sx = p.x1 - GAP; sy = pMidY; tx = s.x1 - GAP; ty = sMidY; arrowDir = 'right'; break;
-            case 'FF': sx = p.x2 + GAP; sy = pMidY; tx = s.x2 + GAP; ty = sMidY; arrowDir = 'left';  break;
-            case 'SF': sx = p.x1 - GAP; sy = pMidY; tx = s.x2 + GAP; ty = sMidY; arrowDir = 'left';  break;
-            default:   sx = p.x2 + GAP; sy = pMidY; tx = s.x1 - GAP; ty = sMidY; arrowDir = 'right'; break;
-          }
-
-          const strokeColor = isCrit ? '#dc2626' : '#94a3b8';
-          ctx.strokeStyle = strokeColor;
-          ctx.fillStyle   = strokeColor;
-
-          GanttView._drawDependencyPath(ctx, {
-            sx, sy, tx, ty, type, arrowDir,
-            ARROW, ROUTE_OFFSET, DETOUR_EXTRA
-          });
-        });
-      });
-      ctx.restore();
-    };
-
-    GanttView._drawDependencyPath = function(ctx, o){
-      const { sx, sy, tx, ty, type, arrowDir, ARROW, ROUTE_OFFSET, DETOUR_EXTRA } = o;
-      const sameRow = Math.abs(sy - ty) < 2;
-      const stopX = arrowDir === 'right' ? tx - ARROW : tx + ARROW;
-
-      if (sameRow){
-        ctx.beginPath();
-        ctx.moveTo(sx, sy);
-        ctx.lineTo(stopX, ty);
-        ctx.stroke();
-        GanttView._drawArrowHead(ctx, tx, ty, arrowDir, ARROW);
-        return;
-      }
-
-      if (type === 'FS' || type === 'SF'){
-        if (sx < stopX){
-          const midX = (sx + stopX) / 2;
-          ctx.beginPath();
-          ctx.moveTo(sx, sy);
-          ctx.lineTo(midX, sy);
-          ctx.lineTo(midX, ty);
-          ctx.lineTo(stopX, ty);
-          ctx.stroke();
-        } else {
-          const detourX = Math.max(sx, stopX) + DETOUR_EXTRA;
-          ctx.beginPath();
-          ctx.moveTo(sx, sy);
-          ctx.lineTo(detourX, sy);
-          ctx.lineTo(detourX, ty);
-          ctx.lineTo(stopX, ty);
-          ctx.stroke();
+  GanttView.drawDependencies = function(ctx, state, posMap, rowH){
+    const {nodes} = state;
+    const visibleNodes = state.visibleNodes.filter(n => !n.isGroupHeader);
+    const nodeById = {}, nodeByKode = {};
+    nodes.forEach(n => {
+      nodeById[n.id] = n;
+      if (n.kode) nodeByKode[String(n.kode).trim()] = n;
+    });
+    const ARROW = 7, GAP = 5, ROUTE_OFFSET = 12, DETOUR_EXTRA = 24;
+    ctx.save();
+    ctx.lineWidth = 1.5; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    const drawnEdges = new Set();
+    visibleNodes.forEach(succNode => {
+      if (succNode.isGroupHeader) return;
+      const succRaw = succNode.raw || {};
+      if (!succRaw.predecessor) return;
+      const rels = CPM.getRelationships(succRaw);
+      if (!rels || !rels.length) return;
+      const s = posMap[succNode.id];
+      if (!s) return;
+      rels.forEach(rel => {
+        const predNode = nodeById[rel.predRef] || nodeByKode[String(rel.predRef).trim()];
+        if (!predNode) return;
+        const p = posMap[predNode.id];
+        if (!p) return;
+        const type = (rel.type || 'FS').toUpperCase();
+        const edgeKey = predNode.id + '>' + succNode.id + ':' + type;
+        if (drawnEdges.has(edgeKey)) return;
+        drawnEdges.add(edgeKey);
+        const isCrit = succNode.isCritical || predNode.isCritical;
+        const pMidY = p.y + rowH / 2;
+        const sMidY = s.y + rowH / 2;
+        let sx, sy, tx, ty, arrowDir;
+        switch (type){
+          case 'SS': sx = p.x1 - GAP; sy = pMidY; tx = s.x1 - GAP; ty = sMidY; arrowDir = 'right'; break;
+          case 'FF': sx = p.x2 + GAP; sy = pMidY; tx = s.x2 + GAP; ty = sMidY; arrowDir = 'left';  break;
+          case 'SF': sx = p.x1 - GAP; sy = pMidY; tx = s.x2 + GAP; ty = sMidY; arrowDir = 'left';  break;
+          default:   sx = p.x2 + GAP; sy = pMidY; tx = s.x1 - GAP; ty = sMidY; arrowDir = 'right'; break;
         }
-      } else if (type === 'SS'){
-        const detourX = Math.min(sx, stopX) - ROUTE_OFFSET;
-        ctx.beginPath();
-        ctx.moveTo(sx, sy);
-        ctx.lineTo(detourX, sy);
-        ctx.lineTo(detourX, ty);
-        ctx.lineTo(stopX, ty);
-        ctx.stroke();
-      } else if (type === 'FF'){
-        const detourX = Math.max(sx, stopX) + ROUTE_OFFSET;
-        ctx.beginPath();
-        ctx.moveTo(sx, sy);
-        ctx.lineTo(detourX, sy);
-        ctx.lineTo(detourX, ty);
-        ctx.lineTo(stopX, ty);
-        ctx.stroke();
-      }
-
-      GanttView._drawArrowHead(ctx, tx, ty, arrowDir, ARROW);
-    };
-
-    GanttView._drawArrowHead = function(ctx, x, y, dir, size){
-      ctx.beginPath();
-      if (dir === 'right'){
-        ctx.moveTo(x, y);
-        ctx.lineTo(x - size, y - size * 0.55);
-        ctx.lineTo(x - size, y + size * 0.55);
-      } else if (dir === 'left'){
-        ctx.moveTo(x, y);
-        ctx.lineTo(x + size, y - size * 0.55);
-        ctx.lineTo(x + size, y + size * 0.55);
-      } else if (dir === 'down'){
-        ctx.moveTo(x, y);
-        ctx.lineTo(x - size * 0.55, y - size);
-        ctx.lineTo(x + size * 0.55, y - size);
+        const strokeColor = isCrit ? '#dc2626' : '#94a3b8';
+        ctx.strokeStyle = strokeColor;
+        ctx.fillStyle   = strokeColor;
+        GanttView._drawDependencyPath(ctx, { sx, sy, tx, ty, type, arrowDir, ARROW, ROUTE_OFFSET, DETOUR_EXTRA });
+      });
+    });
+    ctx.restore();
+  };
+  GanttView._drawDependencyPath = function(ctx, o){
+    const { sx, sy, tx, ty, type, arrowDir, ARROW, ROUTE_OFFSET, DETOUR_EXTRA } = o;
+    const sameRow = Math.abs(sy - ty) < 2;
+    const stopX = arrowDir === 'right' ? tx - ARROW : tx + ARROW;
+    if (sameRow){
+      ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(stopX, ty); ctx.stroke();
+      GanttView._drawArrowHead(ctx, tx, ty, arrowDir, ARROW); return;
+    }
+    if (type === 'FS' || type === 'SF'){
+      if (sx < stopX){
+        const midX = (sx + stopX) / 2;
+        ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(midX, sy); ctx.lineTo(midX, ty); ctx.lineTo(stopX, ty); ctx.stroke();
       } else {
-        ctx.moveTo(x, y);
-        ctx.lineTo(x - size * 0.55, y + size);
-        ctx.lineTo(x + size * 0.55, y + size);
+        const detourX = Math.max(sx, stopX) + DETOUR_EXTRA;
+        ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(detourX, sy); ctx.lineTo(detourX, ty); ctx.lineTo(stopX, ty); ctx.stroke();
       }
-      ctx.closePath();
-      ctx.fill();
-    };
-
-    console.log('%c[1C Override] Dependency arrows upgraded → MS Project style',
-      'color:#22c55e;font-weight:bold');
-  }
-
-  if (document.readyState === 'loading'){
-    document.addEventListener('DOMContentLoaded', apply);
-  } else {
-    apply();
-  }
+    } else if (type === 'SS'){
+      const detourX = Math.min(sx, stopX) - ROUTE_OFFSET;
+      ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(detourX, sy); ctx.lineTo(detourX, ty); ctx.lineTo(stopX, ty); ctx.stroke();
+    } else if (type === 'FF'){
+      const detourX = Math.max(sx, stopX) + ROUTE_OFFSET;
+      ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(detourX, sy); ctx.lineTo(detourX, ty); ctx.lineTo(stopX, ty); ctx.stroke();
+    }
+    GanttView._drawArrowHead(ctx, tx, ty, arrowDir, ARROW);
+  };
+  GanttView._drawArrowHead = function(ctx, x, y, dir, size){
+    ctx.beginPath();
+    if (dir === 'right'){ ctx.moveTo(x, y); ctx.lineTo(x - size, y - size * 0.55); ctx.lineTo(x - size, y + size * 0.55); }
+    else if (dir === 'left'){ ctx.moveTo(x, y); ctx.lineTo(x + size, y - size * 0.55); ctx.lineTo(x + size, y + size * 0.55); }
+    else if (dir === 'down'){ ctx.moveTo(x, y); ctx.lineTo(x - size * 0.55, y - size); ctx.lineTo(x + size * 0.55, y - size); }
+    else { ctx.moveTo(x, y); ctx.lineTo(x - size * 0.55, y + size); ctx.lineTo(x + size * 0.55, y + size); }
+    ctx.closePath(); ctx.fill();
+  };
+  console.log('%c[1C Override] ✅ Dependency arrows MS Project style',
+    'color:#22c55e;font-weight:bold');
+}
+if (document.readyState === 'loading'){
+  document.addEventListener('DOMContentLoaded', apply);
+} else { apply(); }
 </script>
 
+<!-- ═══════════════════════════════════════════════════════════
+     CORE APP — DB Layer, Seed, Calc, Render UI, Event Wiring
+     ═══════════════════════════════════════════════════════════ -->
 <script>
 /* =====================================================================
    CORE APP — DB Layer, Seed, Calc, Render UI, Event Wiring
@@ -873,6 +821,7 @@ const today = () => new Date().toISOString().slice(0,10);
 
 function toast(msg, ok=true){
   const t = $('#toast');
+  if (!t) return;
   t.textContent = msg;
   t.style.borderLeftColor = ok ? 'var(--ok)' : 'var(--danger)';
   t.classList.add('show');
@@ -880,8 +829,8 @@ function toast(msg, ok=true){
   t._tm = setTimeout(()=>t.classList.remove('show'), 2600);
 }
 
-  /* ═══════════════════════════════════════════════════════════
-   DATE WIDGET (Fase 2G) — Format "dd Mmm yyyy" untuk semua form
+/* ═══════════════════════════════════════════════════════════
+   DATE WIDGET — Format "dd Mmm yyyy"
    ═══════════════════════════════════════════════════════════ */
 const _MONTHS_SHORT = ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'];
 
@@ -896,7 +845,6 @@ function _fmtDateDisplay(iso){
   return String(d).padStart(2,'0') + ' ' + _MONTHS_SHORT[m-1] + ' ' + y;
 }
 
-/* Generate HTML untuk date widget: native input (tersembunyi) + face (tampilan) */
 function _dateWidgetHTML(id, isoValue, opts){
   opts = opts || {};
   const readonly    = !!opts.readonly;
@@ -918,7 +866,6 @@ function _dateWidgetHTML(id, isoValue, opts){
   );
 }
 
-/* Sinkronkan face dari native input value */
 function _syncDateWidgetFace(native){
   if (!native) return;
   const wrap = native.closest('.dw-wrap');
@@ -936,7 +883,6 @@ function _syncDateWidgetFace(native){
   }
 }
 
-/* Init semua date widget dalam container */
 function _initDateWidgets(container){
   (container || document).querySelectorAll('.dw-wrap').forEach(wrap => {
     const native = wrap.querySelector('.dw-native');
@@ -952,9 +898,10 @@ function _initDateWidgets(container){
 let DB = null;
 let SET = { overhead: 10, ppn: 11, sheetUrl: '' };
 let STATE = {
-  activeProject: '', chartS: null, chartC: null, chartRL: null,
+  activeProject: '',
+  chartS: null, chartC: null, chartRL: null,
   chartGantt: null, chartHist: null,
-  dbVersion: null      // ← versi terakhir dari server
+  dbVersion: null
 };
 
 function emptyDB(){
@@ -965,7 +912,7 @@ function emptyDB(){
     projects: [],
     project_ahsp_details: [],
     project_wbs: [],
-    photos: [],
+    photos: [],           // ⬅️ WAJIB: cegah error DB.photos.filter
     progress: [],
     bj_material: [],
     beton_presets: [],
@@ -990,16 +937,13 @@ function loadDB(){
     if (raw){
       DB = JSON.parse(raw);
       ['master_resources','ahsp_headers','ahsp_details_master','projects',
-       'project_ahsp_details','project_wbs','progress'].forEach(k => {
+       'project_ahsp_details','project_wbs','progress','photos'].forEach(k => {
         if (!DB[k]) DB[k] = [];
       });
       ['bj_material','beton_presets','bekisting_breakdown','reconciliation',
-       'working_calendars','holidays'].forEach(k => {
+       'working_calendars','holidays','users'].forEach(k => {
         if (!DB[k]) DB[k] = [];
       });
-      
-      if (!DB.users) DB.users = []; 
-      if (!DB.photos) DB.photos = []; 
       return true;
     }
   } catch(e){ console.error(e); }
@@ -1015,7 +959,6 @@ function loadSET(){
 function seedData(){
   DB = emptyDB();
 
-  /* ---- MASTER RESOURCES ---- */
   const res = [];
   const addRes = o => { o.id = uid('res'); res.push(o); return o; };
 
@@ -1034,58 +977,21 @@ function seedData(){
   const rAir     = addRes({kode:'M.06', nama:'Air Kerja',                jenis:'bahan', satuan:'liter',harga_rab:25,    harga_rap:20});
   const rKayu    = addRes({kode:'M.07', nama:'Kayu Perancah / Bekisting',jenis:'bahan', satuan:'m3',  harga_rab:2450000,harga_rap:2200000});
 
-  const rExc = addRes({
-    kode:'E.01', nama:'Excavator PC-200 (0,8 m³)', jenis:'alat', satuan:'jam',
-    harga_rab:485000, harga_rap:425000, hitung_q:1, jenis_alat:'excavator',
-    kapasitas_bucket:0.8, faktor_bucket:0.90, faktor_efisiensi:0.75,
-    waktu_siklus:24, faktor_koreksi:1.00, faktor_konversi:1.00,
-    ket_koreksi:'Kondisi normal'
-  });
-  const rBuldo = addRes({
-    kode:'E.02', nama:'Bulldozer D6 (Komatsu)', jenis:'alat', satuan:'jam',
-    harga_rab:520000, harga_rap:465000, hitung_q:1, jenis_alat:'bulldozer',
-    kapasitas_bucket:3.4, faktor_bucket:0.85, faktor_efisiensi:0.75,
-    waktu_siklus:45, faktor_koreksi:1.00, faktor_konversi:1.25,
-    ket_koreksi:'Kondisi normal'
-  });
-  const rDT = addRes({
-    kode:'E.03', nama:'Dump Truck 8 m³', jenis:'alat', satuan:'jam',
-    harga_rab:395000, harga_rap:350000, hitung_q:1, jenis_alat:'dump_truck',
-    kapasitas_bucket:8, faktor_bucket:0.95, faktor_efisiensi:0.80,
-    waktu_siklus:420, faktor_koreksi:1.00, faktor_konversi:1.00,
-    ket_koreksi:'Jarak angkut 5 km'
-  });
-  const rVibro = addRes({
-    kode:'E.04', nama:'Vibratory Roller 8-10 Ton', jenis:'alat', satuan:'jam',
-    harga_rab:420000, harga_rap:375000, hitung_q:1, jenis_alat:'vibratory_roller',
-    kapasitas_bucket:1.8, faktor_bucket:1.00, faktor_efisiensi:0.83,
-    waktu_siklus:6, faktor_koreksi:1.00, faktor_konversi:1.00,
-    ket_koreksi:'Lebar pemadatan 1,8 m'
-  });
-  const rMixer = addRes({
-    kode:'E.05', nama:'Concrete Mixer 0,4 m³', jenis:'alat', satuan:'jam',
-    harga_rab:185000, harga_rap:165000, hitung_q:1, jenis_alat:'mixer',
-    kapasitas_bucket:0.4, faktor_bucket:0.80, faktor_efisiensi:0.75,
-    waktu_siklus:180, faktor_koreksi:1.00, faktor_konversi:1.00,
-    ket_koreksi:'Kondisi normal'
-  });
-  const rPompa = addRes({
-    kode:'E.06', nama:'Pompa Air 4 inch', jenis:'alat', satuan:'jam',
-    harga_rab:145000, harga_rap:128000, hitung_q:0, jenis_alat:'pompa',
-    kapasitas_bucket:0, faktor_bucket:0, faktor_efisiensi:0,
-    waktu_siklus:0, faktor_koreksi:1.00, faktor_konversi:1.00,
-    ket_koreksi:'Debit 30 l/detik'
-  });
+  const rExc = addRes({kode:'E.01', nama:'Excavator PC-200 (0,8 m³)', jenis:'alat', satuan:'jam', harga_rab:485000, harga_rap:425000, hitung_q:1, jenis_alat:'excavator', kapasitas_bucket:0.8, faktor_bucket:0.90, faktor_efisiensi:0.75, waktu_siklus:24, faktor_koreksi:1.00, faktor_konversi:1.00, ket_koreksi:'Kondisi normal'});
+  const rBuldo = addRes({kode:'E.02', nama:'Bulldozer D6 (Komatsu)', jenis:'alat', satuan:'jam', harga_rab:520000, harga_rap:465000, hitung_q:1, jenis_alat:'bulldozer', kapasitas_bucket:3.4, faktor_bucket:0.85, faktor_efisiensi:0.75, waktu_siklus:45, faktor_koreksi:1.00, faktor_konversi:1.25, ket_koreksi:'Kondisi normal'});
+  const rDT = addRes({kode:'E.03', nama:'Dump Truck 8 m³', jenis:'alat', satuan:'jam', harga_rab:395000, harga_rap:350000, hitung_q:1, jenis_alat:'dump_truck', kapasitas_bucket:8, faktor_bucket:0.95, faktor_efisiensi:0.80, waktu_siklus:420, faktor_koreksi:1.00, faktor_konversi:1.00, ket_koreksi:'Jarak angkut 5 km'});
+  const rVibro = addRes({kode:'E.04', nama:'Vibratory Roller 8-10 Ton', jenis:'alat', satuan:'jam', harga_rab:420000, harga_rap:375000, hitung_q:1, jenis_alat:'vibratory_roller', kapasitas_bucket:1.8, faktor_bucket:1.00, faktor_efisiensi:0.83, waktu_siklus:6, faktor_koreksi:1.00, faktor_konversi:1.00, ket_koreksi:'Lebar pemadatan 1,8 m'});
+  const rMixer = addRes({kode:'E.05', nama:'Concrete Mixer 0,4 m³', jenis:'alat', satuan:'jam', harga_rab:185000, harga_rap:165000, hitung_q:1, jenis_alat:'mixer', kapasitas_bucket:0.4, faktor_bucket:0.80, faktor_efisiensi:0.75, waktu_siklus:180, faktor_koreksi:1.00, faktor_konversi:1.00, ket_koreksi:'Kondisi normal'});
+  const rPompa = addRes({kode:'E.06', nama:'Pompa Air 4 inch', jenis:'alat', satuan:'jam', harga_rab:145000, harga_rap:128000, hitung_q:0, jenis_alat:'pompa', kapasitas_bucket:0, faktor_bucket:0, faktor_efisiensi:0, waktu_siklus:0, faktor_koreksi:1.00, faktor_konversi:1.00, ket_koreksi:'Debit 30 l/detik'});
 
   DB.master_resources = res;
 
-  /* ---- AHSP HEADERS ---- */
   const ahsp = [];
   const addAhsp = (kode,nama,satuan,kategori,oh) => {
     const a = {id:uid('ahsp'), kode, nama, satuan, kategori, overhead:oh, sumber:'Permen PUPR SDA'};
     ahsp.push(a); return a;
   };
-  const A1 = addAhsp('1.1.1','Pekerjaan Galian Tanah Biasa (Manual + Alat)','m3','Pekerjaan Tanah',10);
+  const A1 = addAhsp('1.1.1','Pekerjaan Galian Tanah Biasa','m3','Pekerjaan Tanah',10);
   const A2 = addAhsp('1.1.2','Pekerjaan Timbunan / Pemadatan Tanah','m3','Pekerjaan Tanah',10);
   const A3 = addAhsp('1.2.1','Pekerjaan Beton Struktur K-225','m3','Pekerjaan Beton',12);
   const A4 = addAhsp('1.2.2','Pekerjaan Pembesian Beton Bertulang','kg','Pekerjaan Beton',11);
@@ -1094,57 +1000,37 @@ function seedData(){
   const A7 = addAhsp('1.5.1','Pekerjaan Dewatering / Pompa Air','jam','Pekerjaan Persiapan',8);
   DB.ahsp_headers = ahsp;
 
-  /* ---- AHSP DETAILS MASTER ---- */
   const det = [];
-  const addDet = (ahspId, resId, k, ket) => det.push({
-    id:uid('dt'), ahsp_id:ahspId, resource_id:resId, koefisien:k, keterangan:ket||''
-  });
-
-  addDet(A1.id, rExc.id,   0, 'Koef. otomatis dari Q alat');
-  addDet(A1.id, rPekerja.id,0.35, 'Finishing manual');
+  const addDet = (ahspId, resId, k, ket) => det.push({id:uid('dt'), ahsp_id:ahspId, resource_id:resId, koefisien:k, keterangan:ket||''});
+  addDet(A1.id, rExc.id,   0, 'Koef otomatis');
+  addDet(A1.id, rPekerja.id,0.35, 'Finishing');
   addDet(A1.id, rMandor.id, 0.035,'Pengawasan');
-
-  addDet(A2.id, rBuldo.id,  0, 'Koef. otomatis dari Q alat');
-  addDet(A2.id, rVibro.id,  0, 'Koef. otomatis dari Q alat');
-  addDet(A2.id, rDT.id,     0, 'Koef. otomatis dari Q alat');
-  addDet(A2.id, rPekerja.id,0.20,'Perataan manual');
-  addDet(A2.id, rMandor.id, 0.02,'Pengawasan');
-  addDet(A2.id, rAir.id,    120,'Penyiraman');
-
-  addDet(A3.id, rSemen.id,   371, 'Komposisi 1 m³ beton');
+  addDet(A3.id, rSemen.id,   371, 'Komposisi');
   addDet(A3.id, rPasir.id,   0.52,'Komposisi');
   addDet(A3.id, rKerikil.id, 0.78,'Komposisi');
   addDet(A3.id, rAir.id,     215, 'FAS 0,58');
-  addDet(A3.id, rMixer.id,   0,   'Koef. otomatis dari Q alat');
+  addDet(A3.id, rMixer.id,   0,   'Koef alat');
   addDet(A3.id, rPekerja.id, 1.30,'Penuangan');
-  addDet(A3.id, rTukang.id,  0.35,'Finishing');
   addDet(A3.id, rMandor.id,  0.06,'Pengawasan');
-
-  addDet(A4.id, rBesi.id,    1.05,'Termasuk waste 5%');
-  addDet(A4.id, rTukangB.id, 0.025,'Perakitan');
-  addDet(A4.id, rPekerja.id, 0.015,'Bantu angkat');
+  addDet(A4.id, rBesi.id,    1.05,'Waste 5%');
+  addDet(A4.id, rPekerja.id, 0.015,'Bantu');
   addDet(A4.id, rMandor.id,  0.003,'Pengawasan');
-
-  addDet(A5.id, rBatu.id,    1.20,'Volume termasuk siar');
-  addDet(A5.id, rSemen.id,   163, 'Mortar 1:4');
-  addDet(A5.id, rPasir.id,   0.43,'Mortar 1:4');
-  addDet(A5.id, rAir.id,     90,  'Air kerja');
-  addDet(A5.id, rTukang.id,  1.20,'Pemasangan');
-  addDet(A5.id, rPekerja.id, 2.40,'Angkut & bantu');
+  addDet(A5.id, rBatu.id,    1.20,'Volume');
+  addDet(A5.id, rSemen.id,   163, 'Mortar');
+  addDet(A5.id, rPasir.id,   0.43,'Mortar');
+  addDet(A5.id, rAir.id,     90,  'Air');
+  addDet(A5.id, rTukang.id,  1.20,'Pasang');
+  addDet(A5.id, rPekerja.id, 2.40,'Angkut');
   addDet(A5.id, rMandor.id,  0.12,'Pengawasan');
-
-  addDet(A6.id, rKayu.id,    0.045,'Kayu + paku');
-  addDet(A6.id, rTukang.id,  0.35, 'Pasang & bongkar');
-  addDet(A6.id, rPekerja.id, 0.50, 'Bantu');
+  addDet(A6.id, rKayu.id,    0.045,'Kayu');
+  addDet(A6.id, rTukang.id,  0.35,'Pasang-bongkar');
+  addDet(A6.id, rPekerja.id, 0.50,'Bantu');
   addDet(A6.id, rMandor.id,  0.035,'Pengawasan');
-
-  addDet(A7.id, rPompa.id,   1.00, 'Sewa per jam');
-  addDet(A7.id, rOperator.id,0.12, 'Operator');
-  addDet(A7.id, rPembantu.id,0.12, 'Pembantu');
-
+  addDet(A7.id, rPompa.id,   1.00,'Sewa');
+  addDet(A7.id, rOperator.id,0.12,'Operator');
+  addDet(A7.id, rPembantu.id,0.12,'Pembantu');
   DB.ahsp_details_master = det;
 
-  /* ---- PROJECT ---- */
   const proj = {
     id: uid('prj'),
     kode: 'SDA-2024-001',
@@ -1164,40 +1050,29 @@ function seedData(){
     status: 'Berjalan'
   };
   DB.projects = [proj];
-
   cloneAhspToProject(proj.id);
 
-  /* ---- WBS with Schedule Fields ---- */
-  const gTanah = {id:uid('wbs'), project_id:proj.id, kode_wbs:'I', uraian:'PEKERJAAN PERSIAPAN & TANAH', sta:'-', satuan:'', volume_rab:0, volume_rap:0, ahsp_id:'', parent_id:'', is_group:1, urut:1};
-  const gBeton = {id:uid('wbs'), project_id:proj.id, kode_wbs:'II', uraian:'PEKERJAAN BETON & PASANGAN', sta:'-', satuan:'', volume_rab:0, volume_rap:0, ahsp_id:'', parent_id:'', is_group:1, urut:2};
+  const gTanah = {id:uid('wbs'), project_id:proj.id, kode_wbs:'I', uraian:'PEKERJAAN PERSIAPAN & TANAH', sta:'-', satuan:'', volume_rab:0, volume_rap:0, ahsp_id:'', parent_id:'', is_group:1, urut:1, wbs_level:1};
+  const gBeton = {id:uid('wbs'), project_id:proj.id, kode_wbs:'II', uraian:'PEKERJAAN BETON & PASANGAN', sta:'-', satuan:'', volume_rab:0, volume_rap:0, ahsp_id:'', parent_id:'', is_group:1, urut:2, wbs_level:1};
+  const w1 = {id:uid('wbs'), project_id:proj.id, kode_wbs:'I.1', uraian:'Galian tanah biasa saluran', sta:'STA 0+000 - 0+850', satuan:'m3', volume_rab:3820, volume_rap:4180, ahsp_id:A1.id, parent_id:gTanah.id, urut:3, duration:14, predecessor:'', pred_type:'FS', lag_days:0, wbs_level:2};
+  const w2 = {id:uid('wbs'), project_id:proj.id, kode_wbs:'I.2', uraian:'Timbunan & pemadatan tanggul', sta:'STA 0+000 - 0+850', satuan:'m3', volume_rab:2150, volume_rap:2320, ahsp_id:A2.id, parent_id:gTanah.id, urut:4, duration:10, predecessor:w1.id, pred_type:'FS', lag_days:0, wbs_level:2};
+  const w4 = {id:uid('wbs'), project_id:proj.id, kode_wbs:'II.1', uraian:'Beton struktur K-225 lining', sta:'STA 0+000 - 0+850', satuan:'m3', volume_rab:685, volume_rap:700, ahsp_id:A3.id, parent_id:gBeton.id, urut:6, duration:30, predecessor:w2.id, pred_type:'FS', lag_days:0, wbs_level:2};
+  const w5 = {id:uid('wbs'), project_id:proj.id, kode_wbs:'II.2', uraian:'Pembesian beton bertulang', sta:'STA 0+000 - 0+850', satuan:'kg', volume_rab:54800, volume_rap:55600, ahsp_id:A4.id, parent_id:gBeton.id, urut:7, duration:25, predecessor:w4.id, pred_type:'SS', lag_days:-5, wbs_level:2};
 
-  const w1 = {id:uid('wbs'), project_id:proj.id, kode_wbs:'I.1', uraian:'Galian tanah biasa saluran', sta:'STA 0+000 - 0+850', satuan:'m3', volume_rab:3820, volume_rap:4180, ahsp_id:A1.id, parent_id:gTanah.id, urut:3, duration:14, predecessor:'', pred_type:'FS', lag_days:0};
-  const w2 = {id:uid('wbs'), project_id:proj.id, kode_wbs:'I.2', uraian:'Timbunan & pemadatan tanggul', sta:'STA 0+000 - 0+850', satuan:'m3', volume_rab:2150, volume_rap:2320, ahsp_id:A2.id, parent_id:gTanah.id, urut:4, duration:10, predecessor:w1.id, pred_type:'FS', lag_days:0};
-  const w3 = {id:uid('wbs'), project_id:proj.id, kode_wbs:'I.3', uraian:'Dewatering selama pelaksanaan', sta:'STA 0+000 - 0+850', satuan:'jam', volume_rab:1200, volume_rap:1460, ahsp_id:A7.id, parent_id:gTanah.id, urut:5, duration:60, predecessor:'', pred_type:'FS', lag_days:0};
-  const w4 = {id:uid('wbs'), project_id:proj.id, kode_wbs:'II.1', uraian:'Beton struktur K-225 lining', sta:'STA 0+000 - 0+850', satuan:'m3', volume_rab:685, volume_rap:700, ahsp_id:A3.id, parent_id:gBeton.id, urut:6, duration:30, predecessor:w2.id, pred_type:'FS', lag_days:0};
-  const w5 = {id:uid('wbs'), project_id:proj.id, kode_wbs:'II.2', uraian:'Pembesian beton bertulang', sta:'STA 0+000 - 0+850', satuan:'kg', volume_rab:54800, volume_rap:55600, ahsp_id:A4.id, parent_id:gBeton.id, urut:7, duration:25, predecessor:w4.id, pred_type:'SS', lag_days:-5};
-  const w6 = {id:uid('wbs'), project_id:proj.id, kode_wbs:'II.3', uraian:'Pasangan batu belah 1:4', sta:'STA 0+000 - 0+850', satuan:'m3', volume_rab:412, volume_rap:430, ahsp_id:A5.id, parent_id:gBeton.id, urut:8, duration:18, predecessor:w4.id, pred_type:'FS', lag_days:3};
-  const w7 = {id:uid('wbs'), project_id:proj.id, kode_wbs:'II.4', uraian:'Bekisting / perancah', sta:'STA 0+000 - 0+850', satuan:'m2', volume_rab:1840, volume_rap:1920, ahsp_id:A6.id, parent_id:gBeton.id, urut:9, duration:22, predecessor:w4.id, pred_type:'FS', lag_days:0};
+  DB.project_wbs = [gTanah, gBeton, w1, w2, w4, w5];
 
-  DB.project_wbs = [gTanah, gBeton, w1, w2, w3, w4, w5, w6, w7];
-
-  /* ---- PROGRESS ---- */
   const prog = [];
   const mkProg = (wbsId, minggu, vol) => prog.push({id:uid('pg'), project_id:proj.id, wbs_id:wbsId, minggu, volume:vol, tanggal:today()});
   for (let m=1;m<=6;m++){
     mkProg(w1.id, m, 380 + (m*22));
     mkProg(w2.id, m, 210 + (m*14));
-    mkProg(w3.id, m, 120 + (m*8));
   }
   for (let m=4;m<=6;m++){
     mkProg(w4.id, m, 60 + (m*9));
     mkProg(w5.id, m, 4200 + (m*380));
-    mkProg(w6.id, m, 32 + (m*6));
-    mkProg(w7.id, m, 160 + (m*22));
   }
   DB.progress = prog;
 
-  /* ---- RECON & CALENDAR ---- */
   DB.bj_material         = JSON.parse(JSON.stringify(BJ_DEFAULT));
   DB.beton_presets       = JSON.parse(JSON.stringify(BETON_PRESETS_DEFAULT));
   DB.bekisting_breakdown = JSON.parse(JSON.stringify(BEKISTING_BREAKDOWN_DEFAULT));
@@ -1205,9 +1080,7 @@ function seedData(){
 
   seedCalendarDefaults();
 
-  // Initial CPM
   DB.projects.forEach(p => runCPM(p.id));
-
   saveDB();
 }
 
@@ -1359,8 +1232,6 @@ const Calc = {
     }
     return {labels, planned, actual};
   },
-
-  /* ── FASE 6B: EVM (Earned Value Management) ── */
   evm(projectId){
     const proj = DB.projects.find(p => p.id === projectId);
     if (!proj) return { ok:false };
@@ -1369,7 +1240,6 @@ const Calc = {
     const BAC = tasks.reduce((s,r) => s + r.total_rab, 0);
     const totalRAP = tasks.reduce((s,r) => s + r.total_rap, 0);
 
-    // Baseline aktif
     let baselineIdx = 0;
     if (typeof Baseline !== 'undefined'){
       if (Baseline.isSet(projectId, 3)) baselineIdx = 3;
@@ -1377,56 +1247,29 @@ const Calc = {
       else if (Baseline.isSet(projectId, 1)) baselineIdx = 1;
     }
 
-    // Pre-index progress
     const progByTask = {};
     DB.progress.filter(p => p.project_id === projectId).forEach(p => {
       if (!progByTask[p.wbs_id]) progByTask[p.wbs_id] = [];
       progByTask[p.wbs_id].push({m: num(p.minggu), v: num(p.volume)});
     });
 
-    // Siapkan baseline % untuk setiap minggu (untuk kurva baseline)
-    // Gunakan interpolation linear dari baseline start/finish
-    const baselineCurve = [];
-    if (baselineIdx){
-      const cal = WorkingCalendar.get(proj.calendar_id);
-      for (let w = 1; w <= durasi; w++){
-        let blPct = 0;
-        tasks.forEach(r => {
-          const fS = Baseline.fieldFor(baselineIdx, 'start');
-          const fF = Baseline.fieldFor(baselineIdx, 'finish');
-          const bS = r[fS], bF = r[fF];
-          if (!bS || !bF){ blPct += r.total_rab * (w/durasi); return; }
-          const totalDays = Math.max(1, WorkingCalendar.diffDays(bS, bF, cal, 'working'));
-          const daysFromStart = Math.round((w - 1) * 7 * totalDays / Math.max(1, durasi * 7));
-          blPct += r.total_rab * Math.min(1, daysFromStart / totalDays);
-        });
-        baselineCurve.push(blPct);
-      }
-    }
-
     const weeks = [];
     for (let w = 1; w <= durasi; w++){
-      let PV = 0, EV = 0, AC = 0, BL = baselineIdx ? baselineCurve[w-1] : 0;
-
+      let PV = 0, EV = 0, AC = 0;
       tasks.forEach(r => {
         const progList = progByTask[r.id] || [];
         const volProg = progList.filter(x => x.m <= w).reduce((s,x) => s + x.v, 0);
         const targetRAB = num(r.volume_rab) || 1;
-        const targetRAP = num(r.volume_rap) || 1;
         const actualPct = Math.min(1, volProg / targetRAB);
         const planPct = Math.min(1, w / durasi);
-
         PV += r.total_rab * planPct;
         EV += r.total_rab * actualPct;
         AC += r.total_rap * actualPct;
       });
-
-      const SV = EV - PV;
-      const CV = EV - AC;
+      const SV = EV - PV, CV = EV - AC;
       const SPI = PV > 0 ? EV / PV : 1;
       const CPI = AC > 0 ? EV / AC : 1;
-
-      weeks.push({ week: w, PV, EV, AC, SV, CV, SPI, CPI, BL });
+      weeks.push({ week: w, PV, EV, AC, SV, CV, SPI, CPI });
     }
 
     const last = weeks[weeks.length - 1] || { PV:0, EV:0, AC:0, SPI:1, CPI:1, SV:0, CV:0 };
@@ -1434,7 +1277,6 @@ const Calc = {
     const ETC = Math.max(0, EAC - last.AC);
     const VAC = BAC - EAC;
 
-    // Forecast finish date (jika SPI < 1 → proyek telat)
     let forecastFinish = proj.tgl_selesai || '';
     if (last.SPI > 0 && proj.tgl_mulai){
       const cal = WorkingCalendar.get(proj.calendar_id);
@@ -1444,15 +1286,10 @@ const Calc = {
       forecastFinish = WorkingCalendar.fmt(fd);
     }
 
-    return {
-      ok: true,
-      BAC, totalRAP, durasi, weeks, baselineIdx,
+    return { ok: true, BAC, totalRAP, durasi, weeks, baselineIdx,
       SPI: last.SPI, CPI: last.CPI, SV: last.SV, CV: last.CV,
       PV: last.PV, EV: last.EV, AC: last.AC,
-      EAC, ETC, VAC,
-      forecastFinish,
-      plannedFinish: proj.tgl_selesai || ''
-    };
+      EAC, ETC, VAC, forecastFinish, plannedFinish: proj.tgl_selesai || '' };
   }
 };
 
@@ -1505,7 +1342,7 @@ function renderProjectSelector(){
 function switchTab(name){
   $$('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === name));
   $$('.section').forEach(s => s.classList.toggle('active', s.id === 'sec-' + name));
-  
+
   if (name === 'dashboard') renderDashboard();
   if (name === 'resources') renderResources();
   if (name === 'ahsp')      renderAhspTab();
@@ -1514,12 +1351,12 @@ function switchTab(name){
   if (name === 'calendar')  renderCalendars();
   if (name === 'holidays')  renderHolidays();
   if (name === 'analysis')  renderAnalysis();
-    if (name === 'progress') {
+  if (name === 'progress') {
     if (typeof ProgressManager !== 'undefined') {
-      ProgressManager.renderToolbar(STATE.activeProject);
-      ProgressManager.renderTable(STATE.activeProject);
-      ProgressManager.renderScurve(STATE.activeProject);
-      ProgressManager.renderVariance(STATE.activeProject);
+      if (ProgressManager.renderToolbar) ProgressManager.renderToolbar(STATE.activeProject);
+      if (ProgressManager.renderTable)   ProgressManager.renderTable(STATE.activeProject);
+      if (ProgressManager.renderScurve)  ProgressManager.renderScurve(STATE.activeProject);
+      if (ProgressManager.renderVariance) ProgressManager.renderVariance(STATE.activeProject);
     }
   }
   if (name === 'projects')  renderProjects();
@@ -1527,10 +1364,8 @@ function switchTab(name){
   if (name === 'recon')     { if (!DB.bj_material) seedReconMasterData(); renderReconRekap(); }
   if (name === 'lembar')    { initLembar(); }
 
-  // ═══ TAMBAHKAN BARIS INI ═══
-  // Terapkan ulang izin setiap kali pindah tab
   if (typeof applyPermissions === 'function') {
-    setTimeout(applyPermissions, 100); 
+    setTimeout(applyPermissions, 100);
   }
 }
 
@@ -1545,15 +1380,18 @@ function renderDashboard(){
   const pid = STATE.activeProject;
   const proj = activeProj();
   if (!pid || !proj){
-    $('#kpiWrap').innerHTML = `<div class="kpi"><div class="lbl">Status</div><div class="val">Belum ada proyek</div></div>`;
-    $('#alertWrap').innerHTML = `<div class="alert ok">Silakan buat proyek pada tab <b>Proyek</b>.</div>`;
+    const kw = $('#kpiWrap');
+    if (kw) kw.innerHTML = `<div class="kpi"><div class="lbl">Status</div><div class="val">Belum ada proyek</div></div>`;
+    const aw = $('#alertWrap');
+    if (aw) aw.innerHTML = `<div class="alert ok">Silakan buat proyek pada tab <b>Proyek</b>.</div>`;
     return;
   }
   const t = Calc.totals(pid);
   const nilaiKontrak = num(proj.nilai_kontrak);
   const nilaiKontrakNetto = nilaiKontrak / (1 + num(SET.ppn)/100);
 
-  $('#kpiWrap').innerHTML = `
+  const kw = $('#kpiWrap');
+  if (kw) kw.innerHTML = `
     <div class="kpi">
       <div class="lbl">Nilai Kontrak</div>
       <div class="val">${rp(nilaiKontrak)}</div>
@@ -1594,55 +1432,62 @@ function renderDashboard(){
     alerts.unshift(`<div class="alert"><span>🚨</span><div><b>PERINGATAN</b><br>Total RAP ${rp(t.rap)} melampaui kontrak netto ${rp(nilaiKontrakNetto)}.</div></div>`);
   }
   if (t.margin_pct < 5 && t.rab > 0){
-    alerts.unshift(`<div class="alert warn"><span>⚠</span><div><b>Margin proyek rendah</b> — ${fmt(t.margin_pct,2)}%. Target 8–12%.</div></div>`);
+    alerts.unshift(`<div class="alert warn"><span>⚠</span><div><b>Margin proyek rendah</b> — ${fmt(t.margin_pct,2)}%.</div></div>`);
   }
-  $('#alertWrap').innerHTML = alerts.length ? alerts.join('') :
+  const aw = $('#alertWrap');
+  if (aw) aw.innerHTML = alerts.length ? alerts.join('') :
     `<div class="alert ok"><span>✅</span><div><b>Semua item dalam batas aman.</b></div></div>`;
 
   // Chart S-Curve
   const sc = Calc.scurve(pid);
-  if (STATE.chartS) STATE.chartS.destroy();
-  const ctxS = $('#chartScurve').getContext('2d');
-  STATE.chartS = new Chart(ctxS, {
-    type:'line',
-    data:{ labels: sc.labels, datasets:[
-      {label:'Rencana (%)', data:sc.planned, borderColor:'#2f81f7', backgroundColor:'rgba(47,129,247,.14)', fill:true, tension:.35, borderWidth:2.5, pointRadius:2.5},
-      {label:'Aktual (%)',  data:sc.actual,  borderColor:'#1abc9c', backgroundColor:'rgba(26,188,156,.14)', fill:true, tension:.35, borderWidth:2.5, pointRadius:2.5}
-    ]},
-    options:{ responsive:true, maintainAspectRatio:false,
-      plugins:{ legend:{labels:{color:'#e6edf7', font:{size:11}}},
-        tooltip:{callbacks:{label:c => c.dataset.label + ': ' + fmt(c.parsed.y,2) + '%'}} },
-      scales:{
-        x:{ticks:{color:'#8fa3c4'}, grid:{color:'rgba(36,54,92,.5)'}},
-        y:{ticks:{color:'#8fa3c4', callback:v => v + '%'}, grid:{color:'rgba(36,54,92,.5)'}, beginAtZero:true, max:100}
+  const cvS = $('#chartScurve');
+  if (cvS){
+    if (STATE.chartS) STATE.chartS.destroy();
+    STATE.chartS = new Chart(cvS.getContext('2d'), {
+      type:'line',
+      data:{ labels: sc.labels, datasets:[
+        {label:'Rencana (%)', data:sc.planned, borderColor:'#2f81f7', backgroundColor:'rgba(47,129,247,.14)', fill:true, tension:.35, borderWidth:2.5, pointRadius:2.5},
+        {label:'Aktual (%)',  data:sc.actual,  borderColor:'#1abc9c', backgroundColor:'rgba(26,188,156,.14)', fill:true, tension:.35, borderWidth:2.5, pointRadius:2.5}
+      ]},
+      options:{ responsive:true, maintainAspectRatio:false,
+        plugins:{ legend:{labels:{color:'#e6edf7', font:{size:11}}},
+          tooltip:{callbacks:{label:c => c.dataset.label + ': ' + fmt(c.parsed.y,2) + '%'}} },
+        scales:{
+          x:{ticks:{color:'#8fa3c4'}, grid:{color:'rgba(36,54,92,.5)'}},
+          y:{ticks:{color:'#8fa3c4', callback:v => v + '%'}, grid:{color:'rgba(36,54,92,.5)'}, beginAtZero:true, max:100}
+        }
       }
-    }
-  });
+    });
+  }
 
   // Chart Komposisi
-  if (STATE.chartC) STATE.chartC.destroy();
-  const ctxC = $('#chartCost').getContext('2d');
-  STATE.chartC = new Chart(ctxC, {
-    type:'bar',
-    data:{ labels:['Upah','Bahan','Alat'], datasets:[
-      {label:'RAB', data:[t.upahRAB,t.bahanRAB,t.alatRAB], backgroundColor:'rgba(47,129,247,.75)', borderRadius:6},
-      {label:'RAP', data:[t.upahRAP,t.bahanRAP,t.alatRAP], backgroundColor:'rgba(26,188,156,.75)', borderRadius:6}
-    ]},
-    options:{ responsive:true, maintainAspectRatio:false,
-      plugins:{ legend:{labels:{color:'#e6edf7', font:{size:11}}},
-        tooltip:{callbacks:{label:c => c.dataset.label + ': ' + rp(c.parsed.y)}} },
-      scales:{
-        x:{ticks:{color:'#8fa3c4'}, grid:{display:false}},
-        y:{ticks:{color:'#8fa3c4', callback:v => 'Rp ' + (v/1e6).toFixed(0) + 'jt'}, grid:{color:'rgba(36,54,92,.5)'}}
+  const cvC = $('#chartCost');
+  if (cvC){
+    if (STATE.chartC) STATE.chartC.destroy();
+    STATE.chartC = new Chart(cvC.getContext('2d'), {
+      type:'bar',
+      data:{ labels:['Upah','Bahan','Alat'], datasets:[
+        {label:'RAB', data:[t.upahRAB,t.bahanRAB,t.alatRAB], backgroundColor:'rgba(47,129,247,.75)', borderRadius:6},
+        {label:'RAP', data:[t.upahRAP,t.bahanRAP,t.alatRAP], backgroundColor:'rgba(26,188,156,.75)', borderRadius:6}
+      ]},
+      options:{ responsive:true, maintainAspectRatio:false,
+        plugins:{ legend:{labels:{color:'#e6edf7', font:{size:11}}},
+          tooltip:{callbacks:{label:c => c.dataset.label + ': ' + rp(c.parsed.y)}} },
+        scales:{
+          x:{ticks:{color:'#8fa3c4'}, grid:{display:false}},
+          y:{ticks:{color:'#8fa3c4', callback:v => 'Rp ' + (v/1e6).toFixed(0) + 'jt'}, grid:{color:'rgba(36,54,92,.5)'}}
+        }
       }
-    }
-  });
+    });
+  }
+
+  if (typeof EVMView !== 'undefined' && EVMView.render) EVMView.render();
 }
 
 /* ---------- RENDER RESOURCES ---------- */
 function renderResources(){
-  const fj = $('#fResJenis').value;
-  const q  = ($('#fResSearch').value || '').toLowerCase();
+  const fj = $('#fResJenis')?.value || '';
+  const q  = ($('#fResSearch')?.value || '').toLowerCase();
   let rows = DB.master_resources.slice();
   if (fj) rows = rows.filter(r => r.jenis === fj);
   if (q)  rows = rows.filter(r => (r.kode + ' ' + r.nama).toLowerCase().includes(q));
@@ -1658,7 +1503,7 @@ function renderResources(){
     if (r.jenis === 'alat'){
       const q = Calc.QRAB(r);
       qVal = (num(r.hitung_q) === 1 && q > 0) ? fmt(q,3) : 'manual';
-      param = `V:${fmt(r.kapasitas_bucket,2)} · Fb:${fmt(r.faktor_bucket,2)} · Fa:${fmt(r.faktor_efisiensi,2)} · Ts:${fmt(r.waktu_siklus,0)}s · Fk:${fmt(r.faktor_koreksi,2)}`;
+      param = `V:${fmt(r.kapasitas_bucket,2)} · Fb:${fmt(r.faktor_bucket,2)} · Fa:${fmt(r.faktor_efisiensi,2)} · Ts:${fmt(r.waktu_siklus,0)}s`;
     }
     return `<tr>
       <td><b>${esc(r.kode)}</b></td>
@@ -1675,7 +1520,8 @@ function renderResources(){
       </td>
     </tr>`;
   }).join('');
-  $('#tblRes').innerHTML = head + `<tbody>${body || `<tr><td colspan="9" class="empty">Tidak ada data.</td></tr>`}</tbody>`;
+  const tbl = $('#tblRes');
+  if (tbl) tbl.innerHTML = head + `<tbody>${body || `<tr><td colspan="9" class="empty">Tidak ada data.</td></tr>`}</tbody>`;
 
   $$('[data-edit-res]').forEach(b => b.onclick = () => formResource(b.dataset.editRes));
   $$('[data-del-res]').forEach(b => b.onclick = () => {
@@ -1707,42 +1553,6 @@ function formResource(id){
       <div class="field"><label class="f">Harga RAP (Riil)</label><input id="fr_hrap" type="number" value="${num(r?.harga_rap)}" /></div>
       <div class="field"><label class="f">Kapasitas Harian</label><input id="fr_kap" type="number" step="0.01" value="${num(r?.kapasitas_harian)}" placeholder="0 = tanpa batas" /></div>
     </div>
-    <div id="alatBox" style="display:${isAlat?'block':'none'}">
-      <div class="sep"></div>
-      <p class="hint"><b>Parameter Kapasitas Produksi (RAB)</b> — Q = (V × Fb × Fa × 3600) / (Ts × Fk × Fv)</p>
-      <div class="row">
-        <div class="field"><label class="f">Hitung Q</label>
-          <select id="fr_hq"><option value="1" ${num(r?.hitung_q)===1?'selected':''}>Ya</option><option value="0" ${num(r?.hitung_q)!==1?'selected':''}>Tidak</option></select>
-        </div>
-        <div class="field"><label class="f">Jenis Alat</label>
-          <select id="fr_ja">
-            ${['excavator','bulldozer','dump_truck','vibratory_roller','mixer','pompa','crane','lainnya']
-              .map(j => `<option value="${j}" ${r?.jenis_alat===j?'selected':''}>${j}</option>`).join('')}
-          </select>
-        </div>
-        <div class="field"><label class="f">V (m³)</label><input id="fr_v" type="number" step="0.01" value="${num(r?.kapasitas_bucket)}" /></div>
-        <div class="field"><label class="f">Fb</label><input id="fr_fb" type="number" step="0.01" value="${num(r?.faktor_bucket)||1}" /></div>
-      </div>
-      <div class="row" style="margin-top:12px">
-        <div class="field"><label class="f">Fa</label><input id="fr_fa" type="number" step="0.01" value="${num(r?.faktor_efisiensi)||0.75}" /></div>
-        <div class="field"><label class="f">Ts (detik)</label><input id="fr_ts" type="number" step="0.1" value="${num(r?.waktu_siklus)||30}" /></div>
-        <div class="field"><label class="f">Fk</label><input id="fr_fk" type="number" step="0.01" value="${num(r?.faktor_koreksi)||1}" /></div>
-        <div class="field"><label class="f">Fv</label><input id="fr_fv" type="number" step="0.01" value="${num(r?.faktor_konversi)||1}" /></div>
-      </div>
-      <div class="row" style="margin-top:12px">
-        <div class="field" style="flex:2"><label class="f">Keterangan</label><input id="fr_ket" value="${esc(r?.ket_koreksi||'')}" /></div>
-      </div>
-      <div class="sep"></div>
-      <p class="hint"><b>Parameter Lapangan (RAP)</b> — Hanya memengaruhi RAP</p>
-      <div class="row">
-        <div class="field"><label class="f">Ts Lapangan</label><input id="fr_ts_lap" type="number" step="0.1" value="${num(r?.ts_lapangan)}" /></div>
-        <div class="field"><label class="f">Fk Lapangan</label><input id="fr_fk_lap" type="number" step="0.01" value="${num(r?.fk_lapangan)}" /></div>
-        <div class="field"><label class="f">Fa Lapangan</label><input id="fr_fa_lap" type="number" step="0.01" value="${num(r?.fa_lapangan)}" /></div>
-      </div>
-      <div class="row" style="margin-top:12px">
-        <div class="field" style="flex:2"><label class="f">Catatan Lapangan</label><input id="fr_ket_lap" value="${esc(r?.ket_lapangan||'')}" /></div>
-      </div>
-    </div>
   `;
 
   openModal(id?'Edit Resource':'Tambah Resource', body, () => {
@@ -1758,42 +1568,31 @@ function formResource(id){
       kapasitas_harian: num($('#fr_kap').value)
     };
     if (!obj.kode || !obj.nama){ toast('Kode & Nama wajib diisi', false); return false; }
-    if (jenis === 'alat'){
-      Object.assign(obj, {
-        hitung_q: num($('#fr_hq').value),
-        jenis_alat: $('#fr_ja').value,
-        kapasitas_bucket: num($('#fr_v').value),
-        faktor_bucket: num($('#fr_fb').value),
-        faktor_efisiensi: num($('#fr_fa').value),
-        waktu_siklus: num($('#fr_ts').value),
-        faktor_koreksi: num($('#fr_fk').value),
-        faktor_konversi: num($('#fr_fv').value),
-        ket_koreksi: $('#fr_ket').value.trim(),
-        ts_lapangan: num($('#fr_ts_lap').value) || null,
-        fk_lapangan: num($('#fr_fk_lap').value) || null,
-        fa_lapangan: num($('#fr_fa_lap').value) || null,
-        ket_lapangan: $('#fr_ket_lap').value.trim()
-      });
-    }
     if (r) Object.assign(r, obj); else DB.master_resources.push(obj);
-    AUTOSAVE.clear('form_resource_' + (id || 'new'));
+    if (typeof AUTOSAVE !== 'undefined') AUTOSAVE.clear('form_resource_' + (id || 'new'));
     saveDB(); renderResources(); toast('Resource disimpan');
   });
 
-  $('#fr_jenis').onchange = e => {
-    $('#alatBox').style.display = e.target.value === 'alat' ? 'block' : 'none';
+  const fj = $('#fr_jenis');
+  if (fj) fj.onchange = e => {
+    const isAlatNow = e.target.value === 'alat';
+    const box = $('#alatBox');
+    if (box) box.style.display = isAlatNow ? 'block' : 'none';
   };
-
-  AUTOSAVE.attachForm('form_resource_' + (id || 'new'));
 }
 
-/* ---------- RENDER AHSP ---------- */
+/* ---------- RENDER AHSP (per-project) ---------- */
 function renderAhspTab(){
+  const pid = STATE.activeProject;
+  const filteredAhsp = pid
+    ? DB.ahsp_headers.filter(a => !a.project_id || a.project_id === pid)
+    : DB.ahsp_headers;
+
   const head = `<thead><tr>
     <th>Kode</th><th>Uraian</th><th>Satuan</th><th>Kategori</th>
     <th class="num">Overhead (%)</th><th class="num">Komponen</th><th class="center">Aksi</th>
   </tr></thead>`;
-  const body = DB.ahsp_headers.map(a => {
+  const body = filteredAhsp.map(a => {
     const n = DB.ahsp_details_master.filter(d => d.ahsp_id === a.id).length;
     return `<tr>
       <td><b>${esc(a.kode)}</b></td><td>${esc(a.nama)}</td><td>${esc(a.satuan)}</td>
@@ -1806,7 +1605,8 @@ function renderAhspTab(){
       </td>
     </tr>`;
   }).join('');
-  $('#tblAhsp').innerHTML = head + `<tbody>${body || `<tr><td colspan="7" class="empty">Belum ada AHSP.</td></tr>`}</tbody>`;
+  const tbl = $('#tblAhsp');
+  if (tbl) tbl.innerHTML = head + `<tbody>${body || `<tr><td colspan="7" class="empty">Belum ada AHSP untuk proyek ini.</td></tr>`}</tbody>`;
 
   $$('[data-edit-ahsp]').forEach(b => b.onclick = () => formAhsp(b.dataset.editAhsp));
   $$('[data-del-ahsp]').forEach(b => b.onclick = () => {
@@ -1819,21 +1619,27 @@ function renderAhspTab(){
   });
 
   const ps = $('#ahspProjSel');
-  ps.innerHTML = DB.projects.map(p => `<option value="${p.id}" ${p.id === STATE.activeProject?'selected':''}>${esc(p.kode)}</option>`).join('');
-  if (!ps.value && DB.projects.length) ps.value = DB.projects[0].id;
+  if (ps){
+    ps.innerHTML = DB.projects.map(p => `<option value="${p.id}" ${p.id === STATE.activeProject?'selected':''}>${esc(p.kode)}</option>`).join('');
+    if (!ps.value && DB.projects.length) ps.value = DB.projects[0].id;
+    ps.onchange = () => renderKoefTable();
+  }
 
   const as = $('#ahspSel');
-  as.innerHTML = DB.ahsp_headers.map(a => `<option value="${a.id}">${esc(a.kode)} — ${esc(a.nama)}</option>`).join('');
+  if (as){
+    as.innerHTML = DB.ahsp_headers.map(a => `<option value="${a.id}">${esc(a.kode)} — ${esc(a.nama)}</option>`).join('');
+    as.onchange = () => renderKoefTable();
+  }
 
-  ps.onchange = () => renderKoefTable();
-  as.onchange = () => renderKoefTable();
   renderKoefTable();
 }
 
 function renderKoefTable(){
-  const pid = $('#ahspProjSel').value;
-  const aid = $('#ahspSel').value;
-  if (!pid || !aid){ $('#tblKoef').innerHTML = `<tbody><tr><td class="empty">Pilih proyek dan AHSP.</td></tr></tbody>`; return; }
+  const pid = $('#ahspProjSel')?.value;
+  const aid = $('#ahspSel')?.value;
+  const tblEl = $('#tblKoef');
+  if (!tblEl) return;
+  if (!pid || !aid){ tblEl.innerHTML = `<tbody><tr><td class="empty">Pilih proyek dan AHSP.</td></tr></tbody>`; return; }
 
   const a = DB.ahsp_headers.find(x => x.id === aid);
   const dets = DB.project_ahsp_details.filter(d => d.project_id === pid && d.ahsp_id === aid);
@@ -1855,19 +1661,17 @@ function renderKoefTable(){
     const hRAP = num(d.harga_rap);
     const sRAB = kRAB * hRAB, sRAP = kRAP * hRAP;
     totRAB += sRAB; totRAP += sRAP;
-    const qInfo = (r.jenis === 'alat' && num(r.hitung_q) === 1)
-      ? `<div style="font-size:10px;color:var(--muted)">Q=${fmt(Calc.QRAB(r),3)}/jam</div>` : '';
     return `<tr>
       <td>${esc(r.kode)}</td>
-      <td>${esc(r.nama)}${qInfo}</td>
+      <td>${esc(r.nama)}</td>
       <td><span class="badge b-${r.jenis}">${r.jenis}</span></td>
       <td>${esc(r.satuan)}</td>
       <td class="num">${fmt(kRAB,6)}</td>
-      <td class="num"><input data-krap="${d.id}" type="number" step="0.000001" value="${kRAP}" style="width:110px;text-align:right;padding:4px 6px" /></td>
-      <td class="num"><input data-hrab="${d.id}" type="number" step="1" value="${hRAB}" style="width:120px;text-align:right;padding:4px 6px" /></td>
-      <td class="num"><input data-hrap="${d.id}" type="number" step="1" value="${hRAP}" style="width:120px;text-align:right;padding:4px 6px" /></td>
-      <td class="num" data-srab="${d.id}">${rp(sRAB)}</td>
-      <td class="num" data-srap="${d.id}">${rp(sRAP)}</td>
+      <td class="num">${fmt(kRAP,6)}</td>
+      <td class="num">${rp(hRAB)}</td>
+      <td class="num">${rp(hRAP)}</td>
+      <td class="num">${rp(sRAB)}</td>
+      <td class="num">${rp(sRAP)}</td>
     </tr>`;
   }).join('');
 
@@ -1875,34 +1679,12 @@ function renderKoefTable(){
   const finalRAB = totRAB * (1 + oh/100);
   const foot = `<tfoot>
     <tr style="background:#0e1a30;font-weight:700">
-      <td colspan="8" style="text-align:right;padding:10px">Subtotal Komponen</td>
-      <td class="num">${rp(totRAB)}</td><td class="num">${rp(totRAP)}</td>
-    </tr>
-    <tr style="background:#0e1a30;font-weight:700">
-      <td colspan="8" style="text-align:right;padding:10px">+ Overhead ${fmt(oh,2)}%</td>
+      <td colspan="8" style="text-align:right;padding:10px">Subtotal + Overhead ${fmt(oh,2)}%</td>
       <td class="num">${rp(finalRAB)}</td><td class="num">${rp(totRAP)}</td>
     </tr>
   </tfoot>`;
 
-  $('#tblKoef').innerHTML = head + `<tbody>${rows || `<tr><td colspan="10" class="empty">Tidak ada komponen.</td></tr>`}</tbody>` + foot;
-
-  $$('#tblKoef input').forEach(inp => {
-    inp.oninput = () => {
-      const id = inp.dataset.krap || inp.dataset.hrab || inp.dataset.hrap;
-      const d = DB.project_ahsp_details.find(x => x.id === id);
-      if (!d) return;
-      if (inp.dataset.krap) d.koefisien_rap = num(inp.value);
-      if (inp.dataset.hrab) d.harga_rab = num(inp.value);
-      if (inp.dataset.hrap) d.harga_rap = num(inp.value);
-      const r = DB.master_resources.find(x => x.id === d.resource_id);
-      const sRAB = Calc.koefRAB(d, r) * num(d.harga_rab);
-      const sRAP = Calc.koefRAP(d, r) * num(d.harga_rap);
-      const e1 = document.querySelector(`[data-srab="${d.id}"]`);
-      const e2 = document.querySelector[`data-srap="${d.id}"]`] || document.querySelector(`[data-srap="${d.id}"]`);
-      if (e1) e1.textContent = rp(sRAB);
-      if (e2) e2.textContent = rp(sRAP);
-    };
-  });
+  tblEl.innerHTML = head + `<tbody>${rows || `<tr><td colspan="10" class="empty">Tidak ada komponen.</td></tr>`}</tbody>` + foot;
 }
 
 function formAhsp(id){
@@ -1916,15 +1698,8 @@ function formAhsp(id){
       <div class="field"><label class="f">Satuan</label><input id="fa_satuan" value="${esc(a?.satuan||'m3')}" /></div>
       <div class="field"><label class="f">Kategori</label><input id="fa_kat" value="${esc(a?.kategori||'')}" /></div>
       <div class="field"><label class="f">Overhead (%)</label><input id="fa_oh" type="number" step="0.01" value="${num(a?.overhead ?? SET.overhead)}" /></div>
-      <div class="field"><label class="f">Biaya Umum (%)</label><input id="fa_umum" type="number" step="0.01" value="${num(a?.biaya_umum ?? 2)}" /></div>
-      <div class="field"><label class="f">Margin (%)</label><input id="fa_margin" type="number" step="0.01" value="${num(a?.margin ?? 4)}" /></div>
     </div>
-    <div class="sep"></div>
-    <p class="hint"><b>Komponen Penyusun</b></p>
-    <div id="kompWrap"></div>
-    <button class="btn btn-sm" id="btnAddKomp" style="margin-top:10px">+ Tambah Komponen</button>
   `;
-
   openModal(id?'Edit AHSP':'Tambah AHSP', body, () => {
     const kode = $('#fa_kode').value.trim();
     const nama = $('#fa_nama').value.trim();
@@ -1932,297 +1707,90 @@ function formAhsp(id){
     const ahspId = a?.id || uid('ahsp');
     const obj = {
       id: ahspId, kode, nama,
+      project_id: STATE.activeProject,
       satuan: $('#fa_satuan').value.trim(),
       kategori: $('#fa_kat').value.trim(),
       overhead: num($('#fa_oh').value),
-      biaya_umum: num($('#fa_umum').value),
-      margin: num($('#fa_margin').value),
       sumber: 'Permen PUPR SDA'
     };
     if (a) Object.assign(a, obj); else DB.ahsp_headers.push(obj);
-
-    DB.ahsp_details_master = DB.ahsp_details_master.filter(d => d.ahsp_id !== ahspId);
-    $$('#kompWrap .komp-row').forEach(row => {
-      const rid = row.querySelector('.k-res').value;
-      if (!rid) return;
-      const koef = num(row.querySelector('.k-koef').value);
-      const ket  = row.querySelector('.k-ket').value.trim();
-      DB.ahsp_details_master.push({
-        id: uid('dt'), ahsp_id: ahspId, resource_id: rid, koefisien: koef, keterangan: ket
-      });
-    });
-
     DB.projects.forEach(p => cloneAhspToProject(p.id));
-    AUTOSAVE.clear('form_ahsp_' + (id || 'new'));
     saveDB(); renderAhspTab(); renderResources(); toast('AHSP disimpan');
   });
-
-  const drawKomp = (det) => {
-    const opts = DB.master_resources.map(r =>
-      `<option value="${r.id}" ${det?.resource_id === r.id?'selected':''}>${esc(r.kode)} — ${esc(r.nama)} (${r.jenis}, ${r.satuan})</option>`
-    ).join('');
-    const div = document.createElement('div');
-    div.className = 'komp-row row';
-    div.style.marginBottom = '8px';
-    div.innerHTML = `
-      <select class="k-res" style="flex:3">${opts}</select>
-      <input class="k-koef" type="number" step="0.000001" value="${num(det?.koefisien)}" placeholder="Koef." style="width:120px" />
-      <input class="k-ket" value="${esc(det?.keterangan||'')}" placeholder="Keterangan" style="flex:2" />
-      <button class="btn btn-sm btn-danger k-del">✕</button>
-    `;
-    div.querySelector('.k-del').onclick = () => div.remove();
-    $('#kompWrap').appendChild(div);
-  };
-
-  const existing = id ? DB.ahsp_details_master.filter(d => d.ahsp_id === id) : [];
-  if (existing.length) existing.forEach(d => drawKomp(d));
-  else drawKomp(null);
-  $('#btnAddKomp').onclick = () => drawKomp(null);
-
-  AUTOSAVE.attachForm('form_ahsp_' + (id || 'new'));
 }
 
-/* ---------- RENDER WBS ---------- */
+/* ---------- RENDER WBS (Delegasi ke WbsTable) ---------- */
 function renderWbs(){
   const pid = STATE.activeProject;
-  if (!pid){ $('#tblWbs').innerHTML = `<tbody><tr><td class="empty">Belum ada proyek aktif.</td></tr></tbody>`; return; }
+  const tblEl = $('#tblWbs');
+  if (!tblEl) return;
+
+  if (!pid){
+    tblEl.innerHTML = `<tbody><tr><td class="empty">Belum ada proyek aktif.</td></tr></tbody>`;
+    return;
+  }
 
   runCPM(pid);
   saveDB();
 
-  const rows = Calc.wbsRows(pid);
-  const head = `<thead><tr>
-    <th>Kode</th><th>Uraian</th><th>STA</th>
-    <th class="num">Vol RAB</th><th class="num">Vol RAP</th>
-    <th class="num">Total RAB</th><th class="num">Total RAP</th><th class="num">Dev</th>
-    <th class="center">Pred</th><th class="center">Dur</th>
-    <th class="center">Start</th><th class="center">Finish</th>
-    <th class="center">Float</th><th class="center">Kritis</th>
-    <th class="center">Aksi</th>
-  </tr></thead>`;
+  if (typeof WbsTable !== 'undefined' && WbsTable.render){
+    WbsTable.render('tblWbs', pid);
+  } else {
+    // Fallback: tabel sederhana kalau WbsTable.js belum dimuat
+    tblEl.innerHTML = `<tbody><tr><td class="empty">Modul WbsTable.js belum dimuat.</td></tr></tbody>`;
+  }
 
-  const lvlOf = (w) => {
-    if (w.isGroup) return 'lvl1';
-    if (w.parent_id){
-      const parent = rows.find(x => x.id === w.parent_id);
-      if (parent && parent.isGroup) return 'lvl2';
-      return 'lvl3';
-    }
-    return 'lvl1';
-  };
-
-  const body = rows.map(w => {
-    const cls = lvlOf(w);
-    const raw = DB.project_wbs.find(x => x.id === w.id) || {};
-
-    if (w.isGroup){
-      const children = rows.filter(x => x.parent_id === w.id);
-      const tRAB = children.reduce((s,c) => s + c.total_rab, 0);
-      const tRAP = children.reduce((s,c) => s + c.total_rap, 0);
-      return `<tr class="${cls}">
-        <td>${esc(w.kode_wbs)}</td>
-        <td colspan="13">${esc(w.uraian)}</td>
-        <td class="center">
-          <button class="btn btn-sm" data-edit-wbs="${w.id}">✎</button>
-          <button class="btn btn-sm btn-danger" data-del-wbs="${w.id}">✕</button>
-        </td>
-      </tr>`;
-    }
-
-    const critical = num(raw.is_critical) === 1;
-    const critBadge = critical ? `<span class="badge b-danger">KRITIS</span>` : `<span class="badge b-ok">OK</span>`;
-    const predLabel = raw.predecessor
-      ? (DB.project_wbs.find(x => x.id === raw.predecessor)?.kode_wbs || '?') + ' ' + (raw.pred_type || 'FS')
-      : '—';
-
-    const devCls = w.deviasi >= 0 ? 'pos' : 'neg';
-
-    return `<tr class="${cls}">
-      <td>${esc(w.kode_wbs)}</td>
-      <td>${esc(w.uraian)}</td>
-      <td style="font-size:11px;color:var(--muted)">${esc(w.sta || '-')}</td>
-      <td class="num">${fmt(w.volume_rab,2)}</td>
-      <td class="num">${fmt(w.volume_rap,2)}</td>
-      <td class="num">${rp(w.total_rab)}</td>
-      <td class="num">${rp(w.total_rap)}</td>
-      <td class="num ${devCls}">${rp(w.deviasi)}</td>
-      <td class="center" style="font-size:11px">${esc(predLabel)}</td>
-      <td class="center">${num(raw.duration)||1}h</td>
-      <td class="center" style="font-size:11px">${esc(raw.start_date||'-')}</td>
-      <td class="center" style="font-size:11px">${esc(raw.finish_date||'-')}</td>
-      <td class="center">${fmt(num(raw.total_float),0)}h</td>
-      <td class="center">${critBadge}</td>
-      <td class="center">
-        <button class="btn btn-sm" data-edit-wbs="${w.id}">✎</button>
-        <button class="btn btn-sm btn-danger" data-del-wbs="${w.id}">✕</button>
-      </td>
-    </tr>`;
-  }).join('');
-
-  const total = Calc.totals(pid);
-  const foot = `<tfoot>
-    <tr style="background:#0e1a30;font-weight:800">
-      <td colspan="5" style="text-align:right;padding:12px">TOTAL</td>
-      <td class="num">${rp(total.rab)}</td>
-      <td class="num">${rp(total.rap)}</td>
-      <td class="num ${total.dev>=0?'pos':'neg'}">${rp(total.dev)}</td>
-      <td colspan="6"></td><td></td>
-    </tr>
-  </tfoot>`;
-
-  $('#tblWbs').innerHTML = head + `<tbody>${body || `<tr><td colspan="15" class="empty">Belum ada item WBS.</td></tr>`}</tbody>` + foot;
-
-  $$('[data-edit-wbs]').forEach(b => b.onclick = () => formWbs(b.dataset.editWbs));
-  $$('[data-del-wbs]').forEach(b => b.onclick = () => {
-    if (!confirm('Hapus item WBS ini?')) return;
-    const id = b.dataset.delWbs;
-    if (typeof Undo !== 'undefined') Undo.snapshot('Hapus WBS');
-    DB.project_wbs = DB.project_wbs.filter(x => x.id !== id && x.parent_id !== id);
-    DB.progress = DB.progress.filter(p => p.wbs_id !== id);
-    runCPM(pid);
-    saveDB(); renderWbs(); toast('Item WBS dihapus');
-  });
+  // Wire action buttons (Edit & Delete) setelah WbsTable render
+  setTimeout(() => {
+    $$('[data-edit-wbs]').forEach(b => b.onclick = () => formWbs(b.dataset.editWbs));
+    $$('[data-del-wbs]').forEach(b => b.onclick = () => {
+      if (!confirm('Hapus item WBS ini?')) return;
+      const id = b.dataset.delWbs;
+      if (typeof Undo !== 'undefined') Undo.snapshot('Hapus WBS');
+      DB.project_wbs = DB.project_wbs.filter(x => x.id !== id && x.parent_id !== id);
+      DB.progress = DB.progress.filter(p => p.wbs_id !== id);
+      runCPM(pid); saveDB(); renderWbs(); toast('Item WBS dihapus');
+    });
+  }, 100);
 }
 
-/* ---------- FORM WBS (Fase 1D + 2G: Auto/Manual + Date Widget) ---------- */
+/* ---------- FORM WBS (sederhana) ---------- */
 function formWbs(id, forceGroup){
   const pid = STATE.activeProject;
   if (!pid){ toast('Pilih proyek terlebih dahulu', false); return; }
   const w = id ? DB.project_wbs.find(x => x.id === id) : null;
   const isGroup = forceGroup || (w ? !!w.is_group : false);
-  const proj = activeProj();
 
-  // ── Options ──
   const ahspOpts = DB.ahsp_headers.map(a =>
-    `<option value="${a.id}" ${w?.ahsp_id === a.id?'selected':''}>${esc(a.kode)} — ${esc(a.nama)} (${esc(a.satuan)})</option>`
+    `<option value="${a.id}" ${w?.ahsp_id === a.id?'selected':''}>${esc(a.kode)} — ${esc(a.nama)}</option>`
   ).join('');
-  const grupOpts = `<option value="">— Root —</option>` +
-    DB.project_wbs.filter(x => x.project_id === pid && x.is_group && x.id !== id)
-      .map(g => `<option value="${g.id}" ${w?.parent_id === g.id?'selected':''}>${esc(g.kode_wbs)} — ${esc(g.uraian)}</option>`).join('');
-  const predSuggestions = DB.project_wbs
-    .filter(x => x.project_id === pid && !x.is_group && x.id !== id)
-    .map(x => `<option value="${esc(x.kode_wbs)}"></option>`).join('');
-  const calOpts = (DB.working_calendars || []).map(c =>
-    `<option value="${c.id}" ${(w?.calendar_id || proj?.calendar_id) === c.id?'selected':''}>${esc(c.kode)} — ${esc(c.nama)}</option>`
-  ).join('');
-
-  // ── Mode state ──
-  const schedMode = String(w?.schedule_mode || 'auto').toLowerCase();
-  const isManual = schedMode === 'manual';
-
-  // Start/Finish default
-  const startISO  = isManual ? (w?.manual_start  || w?.tgl_mulai_rencana   || proj?.tgl_mulai || today())
-                             : (w?.tgl_mulai_rencana   || proj?.tgl_mulai || today());
-  const finishISO = isManual ? (w?.manual_finish || w?.tgl_selesai_rencana || today())
-                             : (w?.tgl_selesai_rencana || today());
 
   const body = `
     <div class="row">
-      <div class="field"><label class="f">Kode</label><input id="fw_kode" value="${esc(w?.kode_wbs||'')}" /></div>
+      <div class="field"><label class="f">Kode WBS</label><input id="fw_kode" value="${esc(w?.kode_wbs||'')}" placeholder="1.1 atau 1.1.1" /></div>
       <div class="field" style="flex:3"><label class="f">Uraian</label><input id="fw_uraian" value="${esc(w?.uraian||'')}" /></div>
     </div>
     <div class="row" style="margin-top:12px">
       <div class="field"><label class="f">STA</label><input id="fw_sta" value="${esc(w?.sta||'')}" /></div>
-      <div class="field"><label class="f">Grup</label><select id="fw_parent">${grupOpts}</select></div>
       <div class="field"><label class="f">Tipe</label>
         <select id="fw_group" ${forceGroup?'disabled':''}>
-          <option value="0" ${!isGroup?'selected':''}>Item</option>
-          <option value="1" ${isGroup?'selected':''}>Grup</option>
+          <option value="0" ${!isGroup?'selected':''}>Item / Leaf</option>
+          <option value="1" ${isGroup?'selected':''}>Group / Summary</option>
         </select>
       </div>
     </div>
-    <div id="itemBox" style="display:${isGroup?'none':'block'}">
-      <div class="sep"></div>
+    <div id="itemBox" style="display:${isGroup?'none':'block'}; margin-top:12px">
       <div class="row">
         <div class="field" style="flex:3"><label class="f">Kode AHSP</label><select id="fw_ahsp">${ahspOpts}</select></div>
-        <div class="field"><label class="f">Satuan</label><input id="fw_satuan" value="${esc(w?.satuan||'')}" readonly /></div>
+        <div class="field"><label class="f">Satuan</label><input id="fw_satuan" value="${esc(w?.satuan||'')}" /></div>
       </div>
       <div class="row" style="margin-top:12px">
         <div class="field"><label class="f">Volume RAB</label><input id="fw_vrab" type="number" step="0.01" value="${num(w?.volume_rab)}" /></div>
         <div class="field"><label class="f">Volume RAP</label><input id="fw_vrap" type="number" step="0.01" value="${num(w?.volume_rap)}" /></div>
       </div>
       <div class="row" style="margin-top:12px">
-        <div class="field"><label class="f">HPS RAB</label><input id="fw_hrab" readonly /></div>
-        <div class="field"><label class="f">HPS RAP</label><input id="fw_hrap" readonly /></div>
-      </div>
-
-      <div class="sep"></div>
-      <p class="hint" style="color:var(--acc2)"><b>⚙ Master Schedule</b> — Field ini hanya memengaruhi jadwal, tidak mengubah RAB/RAP</p>
-      <div class="row">
-        <div class="field" style="flex:3">
-          <label class="f">Predecessor (Multi)</label>
-          <input id="fw_pred" list="fw_pred_list"
-                 placeholder="mis. I.1FS+2; I.2SS-1 (kosongkan untuk mulai bebas)"
-                 value="${esc(w?.predecessor||'')}" />
-          <datalist id="fw_pred_list">${predSuggestions}</datalist>
-          <p class="hint" style="margin-top:4px;font-size:10px">
-            Format: <code>KODE[FS|SS|FF|SF][+/-lag]</code> · Multi pakai <code>;</code> sebagai pemisah
-          </p>
-        </div>
-        <div class="field"><label class="f">Tipe Default</label>
-          <select id="fw_pred_type">
-            <option value="FS" ${w?.pred_type==='FS'?'selected':''}>FS</option>
-            <option value="SS" ${w?.pred_type==='SS'?'selected':''}>SS</option>
-            <option value="FF" ${w?.pred_type==='FF'?'selected':''}>FF</option>
-            <option value="SF" ${w?.pred_type==='SF'?'selected':''}>SF</option>
-          </select>
-        </div>
-        <div class="field"><label class="f">Lag Default (hari)</label><input id="fw_lag" type="number" step="1" value="${num(w?.lag_days)||0}" /></div>
-      </div>
-
-      <div class="row" style="margin-top:12px">
-        <div class="field"><label class="f">Durasi (hari kerja)</label><input id="fw_dur" type="number" step="1" min="1" value="${num(w?.duration)||1}" /></div>
-        <div class="field"><label class="f">Kalender</label><select id="fw_cal">${calOpts}</select></div>
-        <div class="field"><label class="f">Work Contour</label>
-          <select id="fw_contour">
-            <option value="">— Ikuti Global —</option>
-            ${Object.keys(WORK_CONTOURS).map(k =>
-              `<option value="${k}" ${w?.work_contour === k ? 'selected' : ''}>${esc(WORK_CONTOURS[k])}</option>`
-            ).join('')}
-          </select>
-        </div>
-      </div>
-
-      <div class="wbs-form-2col${!w?.constraint_type ? ' is-date-hidden' : ''}" id="fw_ct_row">
-        <div class="field"><label class="f">Constraint</label>
-          <select id="fw_ct">
-            <option value="">— Tidak ada —</option>
-            ${Object.keys(CONSTRAINT_TYPES).map(k =>
-              `<option value="${k}" ${w?.constraint_type === k?'selected':''}>${k} — ${CONSTRAINT_TYPES[k]}</option>`
-            ).join('')}
-          </select>
-        </div>
-        <div class="field" id="fw_cd_field">
-          <label class="f">Constraint Date</label>
-          ${_dateWidgetHTML('fw_cd', w?.constraint_date || '', { placeholder: 'Pilih tanggal' })}
-        </div>
-      </div>
-
-      <div class="sep"></div>
-      <p class="hint" style="color:var(--acc2)"><b>⚙ Mode & Timeline</b> — Auto = CPM menghitung tanggal; Manual = tanggal dikunci user</p>
-      <div class="row">
-        <div class="field" style="flex:2">
-          <label class="f">Mode Penjadwalan</label>
-          <select id="fw_sched_mode">
-            <option value="auto"   ${!isManual?'selected':''}>🔄 Auto — ikuti CPM</option>
-            <option value="manual" ${isManual?'selected':''}>🔒 Manual — tanggal dikunci user</option>
-          </select>
-        </div>
-      </div>
-
-      <div class="row" style="margin-top:12px">
-        <div class="field">
-          <label class="f" id="fw_start_label">Start ${isManual ? '(Manual)' : '(Auto)'}</label>
-          ${_dateWidgetHTML('fw_start', startISO, { readonly: !isManual, placeholder: '— Auto —' })}
-        </div>
-        <div class="field">
-          <label class="f" id="fw_finish_label">Finish ${isManual ? '(Manual)' : '(Auto)'}</label>
-          ${_dateWidgetHTML('fw_finish', finishISO, { readonly: !isManual, placeholder: '— Auto —' })}
-        </div>
-        <div class="field">
-          <label class="f">Status</label>
-          <input id="fw_crit" readonly value="${num(w?.is_critical)===1 ? '★ KRITIS' : '— (simpan untuk menghitung)'}" />
-        </div>
+        <div class="field"><label class="f">Durasi (hari)</label><input id="fw_dur" type="number" min="1" value="${num(w?.duration)||1}" /></div>
+        <div class="field"><label class="f">Predecessor</label><input id="fw_pred" value="${esc(w?.predecessor||'')}" placeholder="Kode WBS, mis: 1.1" /></div>
       </div>
     </div>
   `;
@@ -2232,13 +1800,15 @@ function formWbs(id, forceGroup){
     const uraian = $('#fw_uraian').value.trim();
     if (!kode || !uraian){ toast('Kode & uraian wajib', false); return false; }
     const grp = forceGroup ? 1 : num($('#fw_group').value);
+    const lvl = (typeof WbsTemplate !== 'undefined') ? WbsTemplate.parseLevel(kode) : (grp ? 1 : 3);
     const obj = {
       id: w?.id || uid('wbs'),
       project_id: pid,
       kode_wbs: kode, uraian,
       sta: $('#fw_sta').value.trim(),
-      parent_id: $('#fw_parent').value,
+      parent_id: w?.parent_id || '',
       is_group: grp,
+      wbs_level: lvl,
       urut: w?.urut ?? (DB.project_wbs.filter(x => x.project_id === pid).length + 1)
     };
     if (!grp){
@@ -2246,114 +1816,31 @@ function formWbs(id, forceGroup){
       obj.satuan  = $('#fw_satuan').value;
       obj.volume_rab = num($('#fw_vrab').value);
       obj.volume_rap = num($('#fw_vrap').value);
-
-      const schedMode = $('#fw_sched_mode').value || 'auto';
-      writeScheduleField(obj, 'schedule_mode', schedMode);
-      if (schedMode === 'manual'){
-        writeScheduleField(obj, 'manual_start',  $('#fw_start').value  || '');
-        writeScheduleField(obj, 'manual_finish', $('#fw_finish').value || '');
-      } else {
-        writeScheduleField(obj, 'manual_start',  '');
-        writeScheduleField(obj, 'manual_finish', '');
-      }
-
-      writeScheduleField(obj, 'predecessor',      $('#fw_pred').value.trim());
-      writeScheduleField(obj, 'pred_type',        $('#fw_pred_type').value);
-      writeScheduleField(obj, 'lag_days',         num($('#fw_lag').value));
-      writeScheduleField(obj, 'duration',         num($('#fw_dur').value) || 1);
-      writeScheduleField(obj, 'calendar_id',      $('#fw_cal').value);
-      writeScheduleField(obj, 'constraint_type',  $('#fw_ct').value);
-      writeScheduleField(obj, 'constraint_date',  $('#fw_cd').value);
-      writeScheduleField(obj, 'work_contour',     $('#fw_contour').value || '');
+      obj.duration = num($('#fw_dur').value) || 1;
+      const predKode = $('#fw_pred').value.trim();
+      if (predKode){
+        const pred = DB.project_wbs.find(x => x.project_id === pid && x.kode_wbs === predKode);
+        obj.predecessor = pred ? pred.id : predKode;
+      } else obj.predecessor = '';
     } else {
       obj.ahsp_id = ''; obj.satuan = ''; obj.volume_rab = 0; obj.volume_rap = 0;
-      writeScheduleField(obj, 'predecessor', '');
-      writeScheduleField(obj, 'duration', 0);
     }
-    if (typeof Undo !== 'undefined') Undo.snapshot(id ? 'Edit WBS: ' + kode : 'Tambah WBS: ' + kode);
+    if (typeof Undo !== 'undefined') Undo.snapshot(id ? 'Edit WBS' : 'Tambah WBS');
     if (w) Object.assign(w, obj); else DB.project_wbs.push(obj);
-
-    runCPM(pid);
-    AUTOSAVE.clear('form_wbs_' + (id || 'new'));
-    saveDB(); renderWbs(); toast('WBS disimpan & jadwal dihitung ulang');
+    runCPM(pid); saveDB(); renderWbs(); toast('WBS disimpan');
   });
 
-  if (!isGroup){
-    // ── Init date widgets ──
-    _initDateWidgets(document.getElementById('mBody'));
-
-    const sync = () => {
-      const aid = $('#fw_ahsp').value;
-      const a = DB.ahsp_headers.find(x => x.id === aid);
-      if (a) $('#fw_satuan').value = a.satuan;
-      $('#fw_hrab').value = rp(Calc.hargaSatuanRAB(pid, aid));
-      $('#fw_hrap').value = rp(Calc.hargaSatuanRAP(pid, aid));
-    };
-    $('#fw_ahsp').onchange = sync;
-    sync();
-
-    // ── Mode toggle: Start/Finish jadi editable/readonly ──
-    const syncMode = () => {
-      const isManual = $('#fw_sched_mode').value === 'manual';
-      const startNative = $('#fw_start');
-      const finishNative = $('#fw_finish');
-
-      startNative.disabled  = !isManual;
-      finishNative.disabled = !isManual;
-
-      startNative.closest('.dw-wrap').classList.toggle('is-readonly', !isManual);
-      finishNative.closest('.dw-wrap').classList.toggle('is-readonly', !isManual);
-
-      $('#fw_start_label').textContent  = 'Start '  + (isManual ? '(Manual)' : '(Auto)');
-      $('#fw_finish_label').textContent = 'Finish ' + (isManual ? '(Manual)' : '(Auto)');
-
-      // Kalau switch ke Manual & field kosong → pre-fill dari auto
-      if (isManual){
-        if (!startNative.value && w?.tgl_mulai_rencana){
-          startNative.value = w.tgl_mulai_rencana;
-          _syncDateWidgetFace(startNative);
-        }
-        if (!finishNative.value && w?.tgl_selesai_rencana){
-          finishNative.value = w.tgl_selesai_rencana;
-          _syncDateWidgetFace(finishNative);
-        }
-      }
-    };
-    $('#fw_sched_mode').onchange = syncMode;
-    syncMode();
-
-    // ── Opsi B: Auto-hide Constraint Date saat kosong ──
-    const syncConstraint = () => {
-      const ct = $('#fw_ct').value;
-      const row = $('#fw_ct_row');
-      if (!row) return;
-      if (ct){
-        row.classList.remove('is-date-hidden');
-      } else {
-        row.classList.add('is-date-hidden');
-        // Reset date kalau constraint dihapus
-        const native = $('#fw_cd');
-        if (native){
-          native.value = '';
-          _syncDateWidgetFace(native);
-        }
-      }
-    };
-    $('#fw_ct').onchange = syncConstraint;
-    syncConstraint();
-
-    $('#fw_group').onchange = e => {
-      $('#itemBox').style.display = num(e.target.value) === 1 ? 'none' : 'block';
-    };
-  }
-
-  AUTOSAVE.attachForm('form_wbs_' + (id || 'new'));
+  const fg = $('#fw_group');
+  if (fg) fg.onchange = e => {
+    const box = $('#itemBox');
+    if (box) box.style.display = num(e.target.value) === 1 ? 'none' : 'block';
+  };
 }
 
 /* ---------- RENDER ANALYSIS ---------- */
 function renderAnalysis(){
   const pid = STATE.activeProject;
-  if (!pid){ return; }
+  if (!pid) return;
 
   const rows = Calc.wbsRows(pid).filter(r => !r.isGroup);
   const head = `<thead><tr>
@@ -2362,7 +1849,6 @@ function renderAnalysis(){
     <th class="num">Vol RAP</th><th class="num">HPS RAP</th><th class="num">Nilai RAP</th>
     <th class="num">Deviasi (Rp)</th><th class="num">Deviasi (%)</th><th class="center">Status</th>
   </tr></thead>`;
-
   const body = rows.map(r => {
     const st = r.deviasi >= 0 ? `<span class="badge b-ok">AMAN</span>` : `<span class="badge b-danger">OVER</span>`;
     return `<tr>
@@ -2389,7 +1875,8 @@ function renderAnalysis(){
     <td class="num ${t.dev>=0?'pos':'neg'}">${rp(t.dev)}</td>
     <td class="num ${t.dev>=0?'pos':'neg'}">${fmt(t.margin_pct,2)}%</td><td></td>
   </tr></tfoot>`;
-  $('#tblAnalysis').innerHTML = head + `<tbody>${body || `<tr><td colspan="12" class="empty">Belum ada data.</td></tr>`}</tbody>` + foot;
+  const tblA = $('#tblAnalysis');
+  if (tblA) tblA.innerHTML = head + `<tbody>${body || `<tr><td colspan="12" class="empty">Belum ada data.</td></tr>`}</tbody>` + foot;
 
   const proj = activeProj();
   const nilaiKontrak = num(proj?.nilai_kontrak);
@@ -2403,81 +1890,33 @@ function renderAnalysis(){
     ['—', ''],
     ['Total RAB', t.rab],
     ['Total RAP', t.rap],
-    ['Deviasi (RAB − RAP)', t.dev],
+    ['Deviasi', t.dev],
     ['Margin (%)', fmt(t.margin_pct,2)+' %'],
-    ['—',''],
-    ['Upah — RAB', t.upahRAB],
-    ['Bahan — RAB', t.bahanRAB],
-    ['Alat — RAB', t.alatRAB],
-    ['—',''],
-    ['Upah — RAP', t.upahRAP],
-    ['Bahan — RAP', t.bahanRAP],
-    ['Alat — RAP', t.alatRAP],
-    ['—',''],
-    ['Sisa Kontrak (Netto)', nilaiKontrakNetto - t.rap],
     ['Status', (t.rap <= nilaiKontrakNetto) ? 'AMAN' : 'BAHAYA']
   ];
-
   const rk = rekap.map(([k, v]) => {
     if (k === '—') return `<tr><td colspan="2" style="height:6px;background:#0b1220"></td></tr>`;
     const val = typeof v === 'number' ? rp(v) : v;
-    const cls = (k.includes('Deviasi') || k.includes('Margin'))
-      ? (t.dev >= 0 ? 'pos' : 'neg') : (k === 'Status' ? (t.rap <= nilaiKontrakNetto ? 'pos' : 'neg') : '');
-    return `<tr><td style="font-weight:600">${esc(k)}</td><td class="num ${cls}">${val}</td></tr>`;
+    return `<tr><td style="font-weight:600">${esc(k)}</td><td class="num">${val}</td></tr>`;
   }).join('');
-  $('#tblRekap').innerHTML = `<thead><tr><th>Uraian</th><th class="num">Nilai</th></tr></thead><tbody>${rk}</tbody>`;
+  const tblR = $('#tblRekap');
+  if (tblR) tblR.innerHTML = `<thead><tr><th>Uraian</th><th class="num">Nilai</th></tr></thead><tbody>${rk}</tbody>`;
 }
 
-/* ---------- RENDER PROGRESS ---------- */
+/* ---------- PROGRESS (delegasi) ---------- */
 function renderProgress(){
-  const pid = STATE.activeProject;
-  if (!pid){ return; }
-  const items = DB.project_wbs.filter(w => w.project_id === pid && !w.is_group);
-  const rows = DB.progress.filter(p => p.project_id === pid).sort((a,b) => num(a.minggu) - num(b.minggu));
-
-  const head = `<thead><tr>
-    <th>Minggu</th><th>Kode WBS</th><th>Uraian</th><th>Satuan</th>
-    <th class="num">Volume</th><th>Tanggal</th><th class="center">Aksi</th>
-  </tr></thead>`;
-  const body = rows.map(p => {
-    const w = items.find(x => x.id === p.wbs_id);
-    return `<tr>
-      <td class="center"><b>M${esc(p.minggu)}</b></td>
-      <td>${esc(w?.kode_wbs||'-')}</td>
-      <td>${esc(w?.uraian||'-')}</td>
-      <td>${esc(w?.satuan||'-')}</td>
-      <td class="num">${fmt(p.volume,2)}</td>
-      <td>${esc(p.tanggal||'-')}</td>
-      <td class="center">
-        <button class="btn btn-sm" data-edit-pg="${p.id}">✎</button>
-        <button class="btn btn-sm btn-danger" data-del-pg="${p.id}">✕</button>
-      </td>
-    </tr>`;
-  }).join('');
-  $('#tblProg').innerHTML = head + `<tbody>${body || `<tr><td colspan="7" class="empty">Belum ada progress.</td></tr>`}</tbody>`;
-
-  $$('[data-edit-pg]').forEach(b => b.onclick = () => formProgress(b.dataset.editPg));
-  $$('[data-del-pg]').forEach(b => b.onclick = () => {
-    if (!confirm('Hapus progress ini?')) return;
-    if (typeof Undo !== 'undefined') Undo.snapshot('Hapus Progress');
-    DB.progress = DB.progress.filter(x => x.id !== b.dataset.delPg);
-    saveDB(); renderProgress(); toast('Progress dihapus');
-  });
-
-    // ── TAMBAHAN BARU: Render S-Curve ──
-  renderProgressScurve(pid);
-
-  // ── TAMBAHAN BARU: Render Tabel Deviasi ──
-  renderProgressVariance(pid); 
+  if (typeof ProgressManager !== 'undefined' && ProgressManager.renderTable){
+    ProgressManager.renderTable(STATE.activeProject);
+  }
+  if (typeof renderProgressScurve === 'function') renderProgressScurve(STATE.activeProject);
+  if (typeof renderProgressVariance === 'function') renderProgressVariance(STATE.activeProject);
 }
 
-  function renderProgressScurve(projectId) {
+function renderProgressScurve(projectId){
   const sc = Calc.scurve(projectId);
   const ctx = document.getElementById('chartProgressScurve');
   if (!ctx) return;
-
   if (STATE.chartProgScurve) STATE.chartProgScurve.destroy();
-
   STATE.chartProgScurve = new Chart(ctx.getContext('2d'), {
     type: 'line',
     data: {
@@ -2498,7 +1937,7 @@ function renderProgress(){
   });
 }
 
-function renderProgressVariance(projectId) {
+function renderProgressVariance(projectId){
   const items = DB.project_wbs.filter(w => w.project_id === projectId && !w.is_group);
   const proj = DB.projects.find(p => p.id === projectId);
   const durasi = Math.max(1, Math.round(num(proj.durasi_minggu) || 1));
@@ -2506,20 +1945,13 @@ function renderProgressVariance(projectId) {
 
   const rows = items.map(w => {
     const bobot = (num(w.volume_rab) * Calc.hargaSatuanRAB(projectId, w.ahsp_id)) / totalRAB * 100;
-    
-    // Hitung Rencana % (berdasarkan durasi saat ini vs total durasi)
-    // Catatan: Ini pendekatan sederhana. Idealnya berdasarkan start/finish date.
-    const planPct = Math.min(100, (durasi > 0 ? (1 / durasi) * 100 : 0)); // Asumsi merata (Uniform)
-    
-    // Hitung Aktual %
+    const planPct = Math.min(100, (durasi > 0 ? (1 / durasi) * 100 : 0));
     const volProg = DB.progress.filter(p => p.project_id === projectId && p.wbs_id === w.id).reduce((s, p) => s + num(p.volume), 0);
     const actPct = num(w.volume_rab) > 0 ? Math.min(100, (volProg / num(w.volume_rab)) * 100) : 0;
-    
     const dev = actPct - planPct;
     let status = '<span class="badge b-ok">On Schedule</span>';
     if (dev < -5) status = '<span class="badge b-danger">Behind</span>';
     else if (dev > 5) status = '<span class="badge b-warn">Ahead</span>';
-
     return `<tr>
       <td><b>${esc(w.kode_wbs)}</b></td>
       <td>${esc(w.uraian)}</td>
@@ -2544,40 +1976,6 @@ function renderProgressVariance(projectId) {
   if (tbl) tbl.innerHTML = head + `<tbody>${rows || '<tr><td colspan="7" class="empty">Belum ada data WBS.</td></tr>'}</tbody>`;
 }
 
-function formProgress(id){
-  const pid = STATE.activeProject;
-  const p = id ? DB.progress.find(x => x.id === id) : null;
-  const items = DB.project_wbs.filter(w => w.project_id === pid && !w.is_group);
-  const opts = items.map(w => `<option value="${w.id}" ${p?.wbs_id === w.id?'selected':''}>${esc(w.kode_wbs)} — ${esc(w.uraian)}</option>`).join('');
-  const proj = activeProj();
-  const maxM = Math.max(1, Math.round(num(proj?.durasi_minggu)||1));
-
-  const body = `
-    <div class="row">
-      <div class="field" style="flex:3"><label class="f">Item WBS</label><select id="fp_wbs">${opts}</select></div>
-      <div class="field"><label class="f">Minggu ke-</label><input id="fp_m" type="number" min="1" max="${maxM}" value="${num(p?.minggu)||1}" /></div>
-      <div class="field"><label class="f">Volume</label><input id="fp_v" type="number" step="0.01" value="${num(p?.volume)}" /></div>
-      <div class="field"><label class="f">Tanggal</label><input id="fp_t" type="date" value="${esc(p?.tanggal||today())}" /></div>
-    </div>
-  `;
-  openModal(id?'Edit Progress':'Tambah Progress', body, () => {
-    const obj = {
-      id: p?.id || uid('pg'),
-      project_id: pid,
-      wbs_id: $('#fp_wbs').value,
-      minggu: num($('#fp_m').value),
-      volume: num($('#fp_v').value),
-      tanggal: $('#fp_t').value
-    };
-    if (!obj.wbs_id){ toast('Pilih item WBS', false); return false; }
-    if (typeof Undo !== 'undefined') Undo.snapshot(id ? 'Edit Progress M' + obj.minggu : 'Tambah Progress M' + obj.minggu);
-    if (p) Object.assign(p, obj); else DB.progress.push(obj);
-    AUTOSAVE.clear('form_progress_' + (id || 'new'));
-    saveDB(); renderProgress(); toast('Progress disimpan');
-  });
-  AUTOSAVE.attachForm('form_progress_' + (id || 'new'));
-}
-
 /* ---------- RENDER PROJECTS ---------- */
 function renderProjects(){
   const head = `<thead><tr>
@@ -2598,7 +1996,8 @@ function renderProjects(){
       <button class="btn btn-sm btn-danger" data-del-prj="${p.id}">✕</button>
     </td>
   </tr>`).join('');
-  $('#tblProj').innerHTML = head + `<tbody>${body || `<tr><td colspan="9" class="empty">Belum ada proyek.</td></tr>`}</tbody>`;
+  const tbl = $('#tblProj');
+  if (tbl) tbl.innerHTML = head + `<tbody>${body || `<tr><td colspan="9" class="empty">Belum ada proyek.</td></tr>`}</tbody>`;
 
   $$('[data-edit-prj]').forEach(b => b.onclick = () => formProject(b.dataset.editPrj));
   $$('[data-del-prj]').forEach(b => b.onclick = () => {
@@ -2618,7 +2017,6 @@ function formProject(id){
   const calOpts = (DB.working_calendars || []).map(c =>
     `<option value="${c.id}" ${p?.calendar_id === c.id?'selected':''}>${esc(c.kode)} — ${esc(c.nama)}</option>`
   ).join('');
-
   const body = `
     <div class="row">
       <div class="field"><label class="f">Kode Proyek</label><input id="fpj_kode" value="${esc(p?.kode||'')}" /></div>
@@ -2629,14 +2027,8 @@ function formProject(id){
       <div class="field" style="flex:2"><label class="f">Owner</label><input id="fpj_own" value="${esc(p?.owner||'')}" /></div>
     </div>
     <div class="row" style="margin-top:12px">
-      <div class="field"><label class="f">Nilai Kontrak (incl. PPN)</label><input id="fpj_nk" type="number" value="${num(p?.nilai_kontrak)}" /></div>
-      <div class="field"><label class="f">Kalender Kerja</label><select id="fpj_cal">${calOpts}</select></div>
-      <div class="field"><label class="f">Mode Durasi</label>
-        <select id="fpj_mode">
-          <option value="working" ${p?.durasi_mode === 'working'?'selected':''}>Hari Kerja (Weekend dikecualikan)</option>
-          <option value="calendar" ${p?.durasi_mode === 'calendar'?'selected':''}>Hari Kalender (24/7)</option>
-        </select>
-      </div>
+      <div class="field"><label class="f">Nilai Kontrak</label><input id="fpj_nk" type="number" value="${num(p?.nilai_kontrak)}" /></div>
+      <div class="field"><label class="f">Kalender</label><select id="fpj_cal">${calOpts}</select></div>
     </div>
     <div class="row" style="margin-top:12px">
       <div class="field"><label class="f">Tgl Mulai</label><input id="fpj_tm" type="date" value="${esc(p?.tgl_mulai||today())}" /></div>
@@ -2649,163 +2041,49 @@ function formProject(id){
         </select>
       </div>
     </div>
-    <div class="row" style="margin-top:12px">
-      <div class="field"><label class="f">Durasi (hari kalender)</label><input id="fpj_durh" type="number" readonly style="font-weight:700;color:var(--acc2)" /></div>
-      <div class="field"><label class="f">Durasi (minggu) — bisa diedit manual</label><input id="fpj_durw" type="number" min="1" step="1" style="font-weight:700;color:var(--acc2)" /></div>
-      <div class="field"><label class="f">Hari Kerja Efektif</label><input id="fpj_wd" type="number" readonly style="font-weight:700;color:var(--warn)" /></div>
-    </div>
-    ${!p ? `<p class="hint" style="margin-top:12px">⚙ Saat disimpan, sistem otomatis mengkloning template AHSP master ke <code>project_ahsp_details</code>.</p>` : ''}
   `;
-
-  openModal(id?'Edit Proyek':'Proyek Baru', body, async () => {
+  openModal(id?'Edit Proyek':'Proyek Baru', body, () => {
     const kode = $('#fpj_kode').value.trim();
     const nama = $('#fpj_nama').value.trim();
-    if (!kode || !nama){ toast('Kode & nama wajib diisi', false); return false; }
-    
-    const tm = $('#fpj_tm').value;
-    const ts = $('#fpj_ts').value;
-    const calId = $('#fpj_cal').value;
-    const mode = $('#fpj_mode').value;
-
-    // ── PERBAIKAN: Hitung durasi langsung tanpa bergantung pada WorkingCalendar ──
-    let dur = { durasi_hari: 0, durasi_minggu: 0, durasi_kerja: 0 };
-    if (tm && ts) {
-      const d1 = new Date(tm);
-      const d2 = new Date(ts);
-      if (!isNaN(d1.getTime()) && !isNaN(d2.getTime())) {
-        const diffMs = d2.getTime() - d1.getTime();
-        const diffDays = Math.max(0, Math.round(diffMs / (1000 * 60 * 60 * 24)));
-        const diffWeeks = Math.max(1, Math.ceil(diffDays / 7));
-        
-        // Hitung hari kerja efektif (Senin - Jumat)
-        let workDays = 0;
-        const tempDate = new Date(d1);
-        while (tempDate < d2) {
-          const dow = tempDate.getDay();
-          if (dow >= 1 && dow <= 5) workDays++;
-          tempDate.setDate(tempDate.getDate() + 1);
-        }
-        
-        dur = {
-          durasi_hari: diffDays,
-          durasi_minggu: diffWeeks,
-          durasi_kerja: workDays
-        };
+    if (!kode || !nama){ toast('Kode & nama wajib', false); return false; }
+    const tm = $('#fpj_tm').value, ts = $('#fpj_ts').value;
+    let durHari = 0, durMinggu = 0, durKerja = 0;
+    if (tm && ts){
+      const d1 = new Date(tm), d2 = new Date(ts);
+      if (!isNaN(d1) && !isNaN(d2)){
+        durHari = Math.max(0, Math.round((d2 - d1) / 86400000));
+        durMinggu = Math.max(1, Math.ceil(durHari / 7));
+        let wd = 0, t = new Date(d1);
+        while (t < d2){ const d = t.getDay(); if (d >= 1 && d <= 5) wd++; t.setDate(t.getDate() + 1); }
+        durKerja = wd;
       }
     }
-
-    // Cek jika user mengedit manual field minggu
-    const manualWeeks = num($('#fpj_durw').value);
-    if (manualWeeks > 0) {
-      dur.durasi_minggu = manualWeeks;
-    }
-    // ─────────────────────────────────────────────────────────────
-
     const obj = {
       id: p?.id || uid('prj'),
       kode, nama,
       lokasi: $('#fpj_lok').value.trim(),
       owner: $('#fpj_own').value.trim(),
       nilai_kontrak: num($('#fpj_nk').value),
-      calendar_id: calId,
-      durasi_mode: mode,
-      durasi_hari: dur.durasi_hari,
-      durasi_minggu: dur.durasi_minggu,
-      durasi_kerja: dur.durasi_kerja,
+      calendar_id: $('#fpj_cal').value,
+      durasi_mode: 'working',
+      durasi_hari: durHari, durasi_minggu: durMinggu, durasi_kerja: durKerja,
       status: $('#fpj_st').value,
-      tgl_mulai: tm,
-      tgl_selesai: ts,
+      tgl_mulai: tm, tgl_selesai: ts,
       manual_dates: true,
       ppn: num(SET.ppn),
       overhead: num(SET.overhead)
     };
-
-    // Setelah save, skip CPM overwrite kalau manual_dates
-    if (!obj.manual_dates) {
-      runCPM(obj.id);
-    }
-
     if (p) Object.assign(p, obj);
-    else {
-      DB.projects.push(obj);
-      cloneAhspToProject(obj.id);
-      STATE.activeProject = obj.id;
-    }
-    
-    runCPM(obj.id);
-    AUTOSAVE.clear('form_project_' + (id || 'new'));
-    saveDB(); 
-    renderAll(); 
-    toast('Proyek disimpan secara lokal');
-
-    // ── AUTO PUSH KE SERVER ──
-    if (SET.sheetUrl && Auth.token) {
-      toast('Menyinkronkan ke Google Sheets...');
-      try {
-        const res = await SyncManager.pushProject(obj.id, DB);
-        if (res.ok) {
-          toast('✅ Berhasil disinkronkan ke Google Sheets');
-        } else {
-          toast('⚠ Gagal sinkron: ' + res.message, false);
-        }
-      } catch(e) {
-        toast('⚠ Error koneksi ke server', false);
-      }
-    }
+    else { DB.projects.push(obj); cloneAhspToProject(obj.id); STATE.activeProject = obj.id; }
+    runCPM(obj.id); saveDB(); renderAll(); toast('Proyek disimpan');
   });
+}
 
-  const recompute = () => {
-    const tm = $('#fpj_tm').value;
-    const ts = $('#fpj_ts').value;
-    if (tm && ts) {
-      const d1 = new Date(tm);
-      const d2 = new Date(ts);
-      if (!isNaN(d1.getTime()) && !isNaN(d2.getTime())) {
-        const diffMs = d2.getTime() - d1.getTime();
-        const diffDays = Math.max(0, Math.round(diffMs / (1000 * 60 * 60 * 24)));
-        const diffWeeks = Math.max(1, Math.ceil(diffDays / 7));
-        
-        let workDays = 0;
-        const tempDate = new Date(d1);
-        while (tempDate < d2) {
-          const dow = tempDate.getDay();
-          if (dow >= 1 && dow <= 5) workDays++;
-          tempDate.setDate(tempDate.getDate() + 1);
-        }
-        
-        $('#fpj_durh').value = diffDays;
-        $('#fpj_durw').value = diffWeeks;
-        $('#fpj_wd').value   = workDays;
-      }
-    }
-  };
-
-  // ── Pasang event listener ke input tanggal & mode ──
-  ['fpj_tm','fpj_ts','fpj_cal','fpj_mode'].forEach(i => {
-    const el = document.getElementById(i);
-    if (el) el.onchange = recompute;
-  });
-  recompute();
-
-  // Kalau user edit durasi manual, biarkan (tidak ditimpa otomatis)
-  const durWEl = document.getElementById('fpj_durw');
-  if (durWEl){
-    durWEl.addEventListener('input', () => {
-      // Hanya angka yang valid
-      const v = parseInt(durWEl.value, 10);
-      if (isNaN(v) || v < 1) durWEl.value = 1;
-    });
-  }
-  
-  AUTOSAVE.attachForm('form_project_' + (id || 'new'));
-}  // ← INI PENUTUP FUNGSI formProject YANG HILANG
-
-/* ---------- RENDER CALENDARS ---------- */
+/* ---------- CALENDARS ---------- */
 function renderCalendars(){
   const head = `<thead><tr>
     <th>Kode</th><th>Nama</th><th>Work Days</th>
-    <th class="num">Jam/Hari</th><th>Start Hour</th>
-    <th>Keterangan</th><th class="center">Default</th><th class="center">Aksi</th>
+    <th class="num">Jam/Hari</th><th>Keterangan</th><th class="center">Default</th><th class="center">Aksi</th>
   </tr></thead>`;
   const body = (DB.working_calendars || []).map(c => {
     const wdText = String(c.work_days || '').split(',')
@@ -2815,8 +2093,7 @@ function renderCalendars(){
       <td>${esc(c.nama)}</td>
       <td style="font-size:11px">${wdText}</td>
       <td class="num">${fmt(c.jam_per_hari,0)}</td>
-      <td>${esc(c.start_hour||'-')}</td>
-      <td style="font-size:11px;color:var(--muted)">${esc(c.keterangan||'-')}</td>
+      <td style="font-size:11px">${esc(c.keterangan||'-')}</td>
       <td class="center">${num(c.is_default) === 1 ? '<span class="badge b-ok">DEFAULT</span>' : ''}</td>
       <td class="center">
         <button class="btn btn-sm" data-edit-cal="${c.id}">✎</button>
@@ -2824,13 +2101,13 @@ function renderCalendars(){
       </td>
     </tr>`;
   }).join('');
-  $('#tblCalendars').innerHTML = head + `<tbody>${body || `<tr><td colspan="8" class="empty">Belum ada kalender.</td></tr>`}</tbody>`;
+  const tbl = $('#tblCalendars');
+  if (tbl) tbl.innerHTML = head + `<tbody>${body || `<tr><td colspan="7" class="empty">Belum ada kalender.</td></tr>`}</tbody>`;
 
   $$('[data-edit-cal]').forEach(b => b.onclick = () => formCalendar(b.dataset.editCal));
   $$('[data-del-cal]').forEach(b => b.onclick = () => {
     if (!confirm('Hapus kalender ini?')) return;
-    const id = b.dataset.delCal;
-    DB.working_calendars = DB.working_calendars.filter(x => x.id !== id);
+    DB.working_calendars = DB.working_calendars.filter(x => x.id !== b.dataset.delCal);
     saveDB(); renderCalendars(); toast('Kalender dihapus');
   });
 }
@@ -2843,9 +2120,8 @@ function formCalendar(id){
       <div class="field" style="flex:3"><label class="f">Nama</label><input id="fc_nama" value="${esc(c?.nama||'')}" /></div>
     </div>
     <div class="row" style="margin-top:12px">
-      <div class="field"><label class="f">Work Days (0-6, koma)</label><input id="fc_wd" value="${esc(c?.work_days||'1,2,3,4,5')}" placeholder="0=Min, 1=Sen, ..., 6=Sab" /></div>
+      <div class="field"><label class="f">Work Days (0-6)</label><input id="fc_wd" value="${esc(c?.work_days||'1,2,3,4,5')}" /></div>
       <div class="field"><label class="f">Jam/Hari</label><input id="fc_jam" type="number" value="${num(c?.jam_per_hari)||8}" /></div>
-      <div class="field"><label class="f">Start Hour</label><input id="fc_start" value="${esc(c?.start_hour||'08:00')}" /></div>
     </div>
     <div class="row" style="margin-top:12px">
       <div class="field" style="flex:3"><label class="f">Keterangan</label><input id="fc_ket" value="${esc(c?.keterangan||'')}" /></div>
@@ -2859,16 +2135,13 @@ function formCalendar(id){
   `;
   openModal(id?'Edit Kalender':'Tambah Kalender', body, () => {
     const isDef = num($('#fc_def').value) === 1;
-    if (isDef){
-      DB.working_calendars.forEach(x => x.is_default = 0);
-    }
+    if (isDef) DB.working_calendars.forEach(x => x.is_default = 0);
     const obj = {
       id: c?.id || uid('wcal'),
       kode: $('#fc_kode').value.trim(),
       nama: $('#fc_nama').value.trim(),
       work_days: $('#fc_wd').value.trim(),
       jam_per_hari: num($('#fc_jam').value),
-      start_hour: $('#fc_start').value.trim(),
       keterangan: $('#fc_ket').value.trim(),
       is_default: isDef ? 1 : 0
     };
@@ -2878,13 +2151,12 @@ function formCalendar(id){
   });
 }
 
-/* ---------- RENDER HOLIDAYS ---------- */
+/* ---------- HOLIDAYS ---------- */
 function renderHolidays(){
   const fcal = $('#fHolCal')?.value;
   let rows = (DB.holidays || []).slice();
   if (fcal) rows = rows.filter(h => h.calendar_id === fcal);
   rows.sort((a,b) => (a.tanggal||'').localeCompare(b.tanggal||''));
-
   const head = `<thead><tr>
     <th>Tanggal</th><th>Nama</th><th>Jenis</th><th>Kalender</th><th class="center">Aksi</th>
   </tr></thead>`;
@@ -2902,8 +2174,8 @@ function renderHolidays(){
       </td>
     </tr>`;
   }).join('');
-  $('#tblHolidays').innerHTML = head + `<tbody>${body || `<tr><td colspan="5" class="empty">Belum ada hari libur.</td></tr>`}</tbody>`;
-
+  const tbl = $('#tblHolidays');
+  if (tbl) tbl.innerHTML = head + `<tbody>${body || `<tr><td colspan="5" class="empty">Belum ada hari libur.</td></tr>`}</tbody>`;
   $$('[data-edit-hol]').forEach(b => b.onclick = () => formHoliday(b.dataset.editHol));
   $$('[data-del-hol]').forEach(b => b.onclick = () => {
     if (!confirm('Hapus hari libur ini?')) return;
@@ -2915,13 +2187,12 @@ function renderHolidays(){
 function formHoliday(id){
   const h = id ? DB.holidays.find(x => x.id === id) : null;
   const calOpts = (DB.working_calendars || []).map(c =>
-    `<option value="${c.id}" ${(h?.calendar_id || 'wcal_std_001') === c.id?'selected':''}>${esc(c.kode)} — ${esc(c.nama)}</option>`
+    `<option value="${c.id}" ${(h?.calendar_id || 'wcal_std_001') === c.id?'selected':''}>${esc(c.kode)}</option>`
   ).join('');
-
   const body = `
     <div class="row">
       <div class="field"><label class="f">Tanggal</label><input id="fh_tgl" type="date" value="${esc(h?.tanggal||today())}" /></div>
-      <div class="field" style="flex:3"><label class="f">Nama Libur</label><input id="fh_nama" value="${esc(h?.nama||'')}" placeholder="mis. Hari Kemerdekaan RI" /></div>
+      <div class="field" style="flex:3"><label class="f">Nama Libur</label><input id="fh_nama" value="${esc(h?.nama||'')}" /></div>
     </div>
     <div class="row" style="margin-top:12px">
       <div class="field"><label class="f">Jenis</label>
@@ -2948,29 +2219,21 @@ function formHoliday(id){
   });
 }
 
-  /* ---------- LEMBAR AHSP PUPR ---------- */
+/* ---------- LEMBAR AHSP ---------- */
 function initLembar(){
   const projSel = $('#lembarProjSel');
   const ahspSel = $('#lembarAhspSel');
   if (!projSel || !ahspSel) return;
-
   projSel.innerHTML = DB.projects.map(p =>
-    `<option value="${p.id}" ${p.id === STATE.activeProject ? 'selected' : ''}>${esc(p.kode)} — ${esc(p.nama)}</option>`
+    `<option value="${p.id}" ${p.id === STATE.activeProject ? 'selected' : ''}>${esc(p.kode)}</option>`
   ).join('');
-
   ahspSel.innerHTML = DB.ahsp_headers.map(a =>
     `<option value="${a.id}">${esc(a.kode)} — ${esc(a.nama)}</option>`
   ).join('');
-
   projSel.onchange = renderLembar;
   ahspSel.onchange = renderLembar;
-
-  const btnPrint = $('#btnLembarPrint');
-  if (btnPrint) btnPrint.onclick = () => window.print();
-
-  const btnCSV = $('#btnLembarExportCSV');
-  if (btnCSV) btnCSV.onclick = exportLembarCSV;
-
+  const btnPrint = $('#btnLembarPrint'); if (btnPrint) btnPrint.onclick = () => window.print();
+  const btnCSV = $('#btnLembarExportCSV'); if (btnCSV) btnCSV.onclick = exportLembarCSV;
   renderLembar();
 }
 
@@ -2979,19 +2242,11 @@ function renderLembar(){
   if (!wrap) return;
   const pid = $('#lembarProjSel')?.value;
   const aid = $('#lembarAhspSel')?.value;
-  if (!pid || !aid){
-    wrap.innerHTML = `<div class="empty">Pilih proyek dan item AHSP.</div>`;
-    return;
-  }
-
+  if (!pid || !aid){ wrap.innerHTML = `<div class="empty">Pilih proyek dan item AHSP.</div>`; return; }
   const proj = DB.projects.find(p => p.id === pid);
   const ahsp = DB.ahsp_headers.find(a => a.id === aid);
   if (!proj || !ahsp){ wrap.innerHTML = `<div class="empty">Data tidak ditemukan.</div>`; return; }
-
-  const dets = DB.project_ahsp_details.filter(d =>
-    d.project_id === pid && d.ahsp_id === aid
-  );
-
+  const dets = DB.project_ahsp_details.filter(d => d.project_id === pid && d.ahsp_id === aid);
   const groups = {upah: [], bahan: [], alat: []};
   dets.forEach(d => {
     const r = DB.master_resources.find(x => x.id === d.resource_id);
@@ -3001,13 +2256,9 @@ function renderLembar(){
     const sub  = kRAB * hRAB;
     (groups[r.jenis] = groups[r.jenis] || []).push({r, kRAB, hRAB, sub});
   });
-
   const romanLabel = {upah:'A', bahan:'B', alat:'C'};
   const jenisLabel = {upah:'TENAGA KERJA', bahan:'BAHAN / MATERIAL', alat:'PERALATAN'};
-
-  let subtotalAll = 0;
-  let rowsHTML = '';
-
+  let subtotalAll = 0, rowsHTML = '';
   ['upah','bahan','alat'].forEach(jenis => {
     const list = groups[jenis] || [];
     if (!list.length) return;
@@ -3016,63 +2267,37 @@ function renderLembar(){
     list.forEach(({r, kRAB, hRAB, sub: s}) => {
       sub += s;
       rowsHTML += `<tr>
-        <td>${esc(r.kode)}</td>
-        <td>${esc(r.nama)}</td>
-        <td class="ctr">${esc(r.satuan)}</td>
-        <td class="num">${fmt(kRAB, 6)}</td>
-        <td class="num">${rp(hRAB)}</td>
-        <td class="num">${rp(s)}</td>
+        <td>${esc(r.kode)}</td><td>${esc(r.nama)}</td><td class="ctr">${esc(r.satuan)}</td>
+        <td class="num">${fmt(kRAB, 6)}</td><td class="num">${rp(hRAB)}</td><td class="num">${rp(s)}</td>
       </tr>`;
     });
     subtotalAll += sub;
-    rowsHTML += `<tr class="subtotal"><td colspan="5" style="text-align:right">Subtotal ${jenisLabel[jenis]}</td><td class="num">${rp(sub)}</td></tr>`;
+    rowsHTML += `<tr class="subtotal"><td colspan="5" style="text-align:right">Subtotal</td><td class="num">${rp(sub)}</td></tr>`;
   });
-
   const oh = num(ahsp.overhead);
   const totalSetelahOH = subtotalAll * (1 + oh / 100);
-
   wrap.innerHTML = `
     <div class="ahsp-sheet">
       <h2>ANALISA HARGA SATUAN PEKERJAAN</h2>
       <div class="ahsp-meta">
         <div class="k">Proyek</div><div>:</div><div class="v">${esc(proj.nama)}</div>
-        <div class="k">Lokasi</div><div>:</div><div class="v">${esc(proj.lokasi || '-')}</div>
         <div class="k">Kode AHSP</div><div>:</div><div class="v">${esc(ahsp.kode)}</div>
         <div class="k">Uraian</div><div>:</div><div class="v">${esc(ahsp.nama)}</div>
         <div class="k">Satuan</div><div>:</div><div class="v">${esc(ahsp.satuan)}</div>
-        <div class="k">Sumber</div><div>:</div><div class="v">${esc(ahsp.sumber || 'Permen PUPR')}</div>
       </div>
       <table class="ahsp-tbl">
-        <thead>
-          <tr>
-            <th style="width:70px">Kode</th>
-            <th>Uraian</th>
-            <th style="width:60px">Satuan</th>
-            <th style="width:90px">Koefisien</th>
-            <th style="width:110px">Harga Satuan</th>
-            <th style="width:130px">Jumlah Harga</th>
-          </tr>
-        </thead>
+        <thead><tr>
+          <th style="width:70px">Kode</th><th>Uraian</th>
+          <th style="width:60px">Satuan</th><th style="width:90px">Koefisien</th>
+          <th style="width:110px">Harga</th><th style="width:130px">Jumlah</th>
+        </tr></thead>
         <tbody>
           ${rowsHTML || '<tr><td colspan="6" class="empty">Tidak ada komponen.</td></tr>'}
-          <tr class="subtotal">
-            <td colspan="5" style="text-align:right">JUMLAH HARGA TENAGA + BAHAN + ALAT</td>
-            <td class="num">${rp(subtotalAll)}</td>
-          </tr>
-          <tr class="subtotal">
-            <td colspan="5" style="text-align:right">OVERHEAD &amp; KEUNTUNGAN (${fmt(oh,2)}%)</td>
-            <td class="num">${rp(totalSetelahOH - subtotalAll)}</td>
-          </tr>
-          <tr class="grand-total">
-            <td colspan="5" style="text-align:right">HARGA SATUAN PEKERJAAN (per ${esc(ahsp.satuan)})</td>
-            <td class="num">${rp(totalSetelahOH)}</td>
-          </tr>
+          <tr class="subtotal"><td colspan="5" style="text-align:right">JUMLAH HARGA</td><td class="num">${rp(subtotalAll)}</td></tr>
+          <tr class="subtotal"><td colspan="5" style="text-align:right">OVERHEAD (${fmt(oh,2)}%)</td><td class="num">${rp(totalSetelahOH - subtotalAll)}</td></tr>
+          <tr class="grand-total"><td colspan="5" style="text-align:right">HARGA SATUAN (per ${esc(ahsp.satuan)})</td><td class="num">${rp(totalSetelahOH)}</td></tr>
         </tbody>
       </table>
-      <div class="ahsp-note">
-        Catatan: Koefisien diambil dari project_ahsp_details. Harga satuan menggunakan harga RAB.
-        Analisa ini bersifat read-only dan tidak mengubah data RAB/RAP.
-      </div>
     </div>
   `;
 }
@@ -3081,20 +2306,14 @@ function exportLembarCSV(){
   const pid = $('#lembarProjSel')?.value;
   const aid = $('#lembarAhspSel')?.value;
   if (!pid || !aid){ toast('Pilih proyek & AHSP dulu', false); return; }
-
   const ahsp = DB.ahsp_headers.find(a => a.id === aid);
-  const dets = DB.project_ahsp_details.filter(d =>
-    d.project_id === pid && d.ahsp_id === aid
-  );
-
+  const dets = DB.project_ahsp_details.filter(d => d.project_id === pid && d.ahsp_id === aid);
   const lines = [
     ['Kode AHSP', ahsp.kode].join(','),
     ['Nama', ahsp.nama].join(','),
-    ['Satuan', ahsp.satuan].join(','),
     '',
     ['Kode','Uraian','Satuan','Koefisien','Harga','Subtotal'].join(',')
   ];
-
   dets.forEach(d => {
     const r = DB.master_resources.find(x => x.id === d.resource_id);
     if (!r) return;
@@ -3102,7 +2321,6 @@ function exportLembarCSV(){
     const h = num(d.harga_rab);
     lines.push([r.kode, `"${r.nama}"`, r.satuan, k, h, k*h].join(','));
   });
-
   const blob = new Blob(['\ufeff' + lines.join('\n')], {type:'text/csv;charset=utf-8'});
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
@@ -3111,54 +2329,15 @@ function exportLembarCSV(){
   toast('CSV diexport');
 }
 
-/* ---------- RENDER SETTINGS ---------- */
+/* ---------- SETTINGS ---------- */
 function renderSettings(){
-  $('#setUrl').value = SET.sheetUrl || '';
-  $('#setOh').value  = SET.overhead;
-  $('#setPpn').value = SET.ppn;
-
+  const el1 = $('#setUrl'); if (el1) el1.value = SET.sheetUrl || '';
+  const el2 = $('#setOh');  if (el2) el2.value = SET.overhead;
+  const el3 = $('#setPpn'); if (el3) el3.value = SET.ppn;
   const vEl = document.getElementById('dbVersionLabel');
   if (vEl) vEl.textContent = STATE.dbVersion != null ? ('v' + STATE.dbVersion) : '—';
   const cEl = document.getElementById('clientIdLabel');
-  if (cEl) cEl.textContent = SyncManager.CLIENT_ID;
-
-  // ── Status lock hanya dicek kalau URL valid ──
-  const l = document.getElementById('lockStatusLabel');
-  if (!l) return;
-
-  const url = (SET.sheetUrl || '').trim();
-
-  // Kalau URL kosong atau format tidak valid → skip tanpa panggil server
-  if (!url){
-    l.textContent = '—';
-    l.style.color = 'var(--muted)';
-    return;
-  }
-  if (!/^https:\/\/script\.google\.com\/macros\/s\/[\w-]+\/exec$/.test(url)){
-    l.textContent = '⚠ URL tidak valid (harus /macros/s/…/exec)';
-    l.style.color = 'var(--warn)';
-    return;
-  }
-
-  l.textContent = '—';
-  l.style.color = 'var(--muted)';
-
-  // ═══ JANGAN cek status saat init — biarkan user klik sendiri ═══
-  // Cek hanya kalau tab Pengaturan aktif (bukan dari init)
-  var isSettingsTab = document.querySelector('.tab.active[data-tab="settings"]');
-  if (!isSettingsTab){
-    l.textContent = '— (klik tombol di bawah)';
-    return;
-  }
-
-  // Baru cek kalau user benar-benar buka tab settings
-  l.textContent = '⏳ Mengecek…';
-  SyncManager.status().then(s => {
-    // ... (kode existing)
-  }).catch(() => {
-    l.textContent = '⚠ Gagal cek status';
-    l.style.color = 'var(--warn)';
-  });
+  if (cEl && typeof SyncManager !== 'undefined') cEl.textContent = SyncManager.CLIENT_ID;
 }
 
 /* ---------- MODAL ---------- */
@@ -3172,9 +2351,6 @@ function openModal(title, bodyHTML, onSubmit){
 function closeModal(){
   $('#overlay').classList.remove('show');
   _submitHandler = null;
-  // ── Restore default button state (Fase 4D fix) ──
-  // Leveling.openUI() menyembunyikan mSubmit & ubah text mCancel.
-  // Tanpa restore ini, semua modal berikutnya kehilangan tombol Simpan.
   const sBtn = document.getElementById('mSubmit');
   if (sBtn) sBtn.style.display = '';
   const cBtn = document.getElementById('mCancel');
@@ -3191,7 +2367,7 @@ $('#mSubmit').onclick = () => {
   closeModal();
 };
 
-/* ---------- RECON MASTER DATA ---------- */
+/* ---------- RECON ---------- */
 function seedReconMasterData(){
   if (!DB.bj_material) DB.bj_material = JSON.parse(JSON.stringify(BJ_DEFAULT));
   if (!DB.beton_presets) DB.beton_presets = JSON.parse(JSON.stringify(BETON_PRESETS_DEFAULT));
@@ -3199,49 +2375,39 @@ function seedReconMasterData(){
   if (!DB.reconciliation) DB.reconciliation = [];
   saveDB();
 }
-
-/* ---------- RECON (Simplified — full version in original) ---------- */
 function renderReconRekap(){
   const items = DB.reconciliation || [];
-  if (!items.length){
-    $('#tblRecon').innerHTML = `<tbody><tr><td class="empty">Belum ada data rekonsiliasi.</td></tr></tbody>`;
-    return;
-  }
-  const head = `<thead><tr>
+  const tbl = $('#tblRecon');
+  if (!tbl) return;
+  if (!items.length){ tbl.innerHTML = `<tbody><tr><td class="empty">Belum ada data rekonsiliasi.</td></tr></tbody>`; return; }
+  tbl.innerHTML = `<thead><tr>
     <th>Tanggal</th><th>Skenario</th><th>Uraian</th>
     <th class="num">RAB</th><th class="num">RAP</th>
     <th class="num">Varian</th><th class="center">Aksi</th>
-  </tr></thead>`;
-  const body = items.map(it => `<tr>
+  </tr></thead><tbody>${items.map(it => `<tr>
     <td>${esc(it.tanggal)}</td>
     <td><span class="badge b-warn">${esc(it.skenario)}</span></td>
     <td>${esc(it.uraian)}</td>
     <td class="num">${rp(it.totalRAB)}</td>
     <td class="num">${rp(it.totalRAP)}</td>
     <td class="num ${it.varianRp>=0?'pos':'neg'}">${rp(it.varianRp)}</td>
-    <td class="center">
-      <button class="btn btn-sm btn-danger" data-del-recon="${it.id}">✕</button>
-    </td>
-  </tr>`).join('');
-  $('#tblRecon').innerHTML = head + `<tbody>${body}</tbody>`;
+    <td class="center"><button class="btn btn-sm btn-danger" data-del-recon="${it.id}">✕</button></td>
+  </tr>`).join('')}</tbody>`;
   $$('[data-del-recon]').forEach(b => b.onclick = () => {
     if (!confirm('Hapus?')) return;
     DB.reconciliation = DB.reconciliation.filter(x => x.id !== b.dataset.delRecon);
     saveDB(); renderReconRekap(); toast('Dihapus');
   });
 }
-
 function initRecon(){
   const mc = $('#convMat');
   if (mc) mc.innerHTML = DB.bj_material.map(x => `<option value="${esc(x.nama)}">${esc(x.kode)} — ${esc(x.nama)}</option>`).join('');
   const mm = $('#mixMutu');
   if (mm) mm.innerHTML = DB.beton_presets.map(x => `<option value="${esc(x.mutu)}">${esc(x.mutu)} — fc' ${fmt(x.fc,1)} MPa</option>`).join('');
-
   $$('.subtab').forEach(t => t.onclick = () => {
     $$('.subtab').forEach(x => x.classList.toggle('active', x === t));
     $$('.subpanel').forEach(p => p.classList.toggle('active', p.id === 'sub-' + t.dataset.sub));
   });
-
   const btnConv = $('#btnConvCalc');
   if (btnConv) btnConv.onclick = () => {
     const vol = num($('#convVRAB').value);
@@ -3256,38 +2422,53 @@ function initRecon(){
     const volM3 = massaKg / (bj * 1000);
     const tRAB = massaKg * hRAB;
     const tRAP = volM3 * hRAP;
-    $('#convResult').innerHTML = `
-      <div class="kv">
-        <div class="k">Massa</div><div class="v">${fmt(massaKg,2)} kg</div>
-        <div class="k">Volume Konversi</div><div class="v">${fmt(volM3,3)} m³</div>
-        <div class="k">Total RAB</div><div class="v">${rp(tRAB)}</div>
-        <div class="k">Total RAP</div><div class="v">${rp(tRAP)}</div>
-        <div class="k">Varian</div><div class="v ${(tRAB-tRAP)>=0?'pos':'neg'}">${rp(tRAB-tRAP)}</div>
-      </div>`;
+    $('#convResult').innerHTML = `<div class="kv">
+      <div class="k">Massa</div><div class="v">${fmt(massaKg,2)} kg</div>
+      <div class="k">Volume</div><div class="v">${fmt(volM3,3)} m³</div>
+      <div class="k">Total RAB</div><div class="v">${rp(tRAB)}</div>
+      <div class="k">Total RAP</div><div class="v">${rp(tRAP)}</div>
+      <div class="k">Varian</div><div class="v ${(tRAB-tRAP)>=0?'pos':'neg'}">${rp(tRAB-tRAP)}</div>
+    </div>`;
   };
 }
 
-/* ---------- EVENT WIRING ---------- */
-$$('.tab').forEach(t => t.onclick = () => switchTab(t.dataset.tab));
-
-$('#activeProject').onchange = e => { STATE.activeProject = e.target.value; renderAll(); };
-
-/* ═══ FIX: Null-guarded event wiring ═══ */
+/* ═══════════════════════════════════════════════════════════
+   EVENT WIRING — NULL-GUARDED (mencegah error)
+   ═══════════════════════════════════════════════════════════ */
 const _wire = (sel, fn) => { const el = document.querySelector(sel); if (el) el.onclick = fn; };
 const _bond = (sel, evt, fn) => { const el = document.querySelector(sel); if (el) el[evt] = fn; };
+
+$$('.tab').forEach(t => t.onclick = () => switchTab(t.dataset.tab));
+
+_bond('#activeProject', 'onchange', e => { STATE.activeProject = e.target.value; renderAll(); });
 
 _bond('#fResJenis', 'onchange', renderResources);
 _bond('#fResSearch', 'oninput',  renderResources);
 _wire('#btnAddRes',       () => formResource(null));
-_wire('#btnAddAhsp',      () => formAhsp(null));
+_wire('#btnAddAhsp',      () => {
+  const pid = STATE.activeProject;
+  if (!pid){ toast('Pilih proyek dulu', false); return; }
+  if (typeof AhspMaster !== 'undefined' && AhspMaster.openPicker){
+    AhspMaster.openPicker(pid, () => renderAhspTab());
+  } else {
+    formAhsp(null);
+  }
+});
 _wire('#btnAddWbs',       () => formWbs(null, false));
 _wire('#btnAddWbsGroup',  () => formWbs(null, true));
+_wire('#btnGenerateWbsTemplate', () => {
+  const pid = STATE.activeProject;
+  if (!pid){ toast('Pilih proyek dulu', false); return; }
+  if (typeof WbsTemplate !== 'undefined' && WbsTemplate.openDialog){
+    WbsTemplate.openDialog(pid);
+  } else {
+    toast('Modul WbsTemplate.js belum dimuat', false);
+  }
+});
 _wire('#btnAddProg',      () => formProgress(null));
 _wire('#btnAddProj',      () => formProject(null));
 _wire('#btnAddCalendar',  () => formCalendar(null));
 _wire('#btnAddHoliday',   () => formHoliday(null));
-$('#btnAddCalendar').onclick = () => formCalendar(null);
-$('#btnAddHoliday').onclick  = () => formHoliday(null);
 
 _wire('#btnRunCPMWBS', () => {
   const pid = STATE.activeProject;
@@ -3312,37 +2493,33 @@ _wire('#btnSaveKoef', () => {
 
 _wire('#btnPrintAnalysis', () => window.print());
 
-$('#btnSaveSet').onclick = () => {
+_wire('#btnSaveSet', () => {
   SET.overhead = num($('#setOh').value);
   SET.ppn = num($('#setPpn').value);
-
   const newUrl = $('#setUrl').value.trim();
   const urlChanged = newUrl !== SET.sheetUrl;
   SET.sheetUrl = newUrl;
   saveSET();
-
-  // Reset circuit breaker saat URL berubah
   if (urlChanged && typeof resetEndpointCircuit === 'function'){
     resetEndpointCircuit();
     if (typeof LiveSync !== 'undefined') LiveSync.start();
   }
-
   renderAll();
   if (typeof renderSettings === 'function') renderSettings();
   toast('Pengaturan disimpan');
-};
+});
 
-$('#btnExport').onclick = () => {
+_wire('#btnExport', () => {
   const blob = new Blob([JSON.stringify({db:DB, settings:SET}, null, 2)], {type:'application/json'});
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
   a.download = 'manajemen-konstruksi-v1-' + today() + '.json';
   a.click();
   toast('Data diexport');
-};
+});
 
-$('#btnImport').onclick = () => $('#fileImport').click();
-$('#fileImport').onchange = e => {
+_wire('#btnImport', () => { const el = $('#fileImport'); if (el) el.click(); });
+_bond('#fileImport', 'onchange', e => {
   const f = e.target.files[0]; if (!f) return;
   const reader = new FileReader();
   reader.onload = ev => {
@@ -3350,6 +2527,8 @@ $('#fileImport').onchange = e => {
       const parsed = JSON.parse(ev.target.result);
       if (parsed.db){ DB = parsed.db; if (parsed.settings) SET = Object.assign(SET, parsed.settings); }
       else DB = parsed;
+      ['photos','progress','project_wbs','projects','ahsp_headers','project_ahsp_details',
+       'master_resources','working_calendars','holidays','users'].forEach(k => { if (!DB[k]) DB[k] = []; });
       saveDB(); saveSET();
       STATE.activeProject = DB.projects[0]?.id || '';
       renderAll(); renderSettings();
@@ -3358,33 +2537,27 @@ $('#fileImport').onchange = e => {
   };
   reader.readAsText(f);
   e.target.value = '';
-};
+});
 
-$('#btnReset').onclick = () => {
+_wire('#btnReset', () => {
   if (!confirm('Hapus SELURUH data?')) return;
   DB = emptyDB();
-  DB.projects = [];
   saveDB(); STATE.activeProject = ''; renderAll(); toast('Data direset');
-};
+});
 
-$('#btnSeed').onclick = () => {
+_wire('#btnSeed', () => {
   if (!confirm('Muat data contoh?')) return;
   seedData();
   STATE.activeProject = DB.projects[0]?.id || '';
   renderAll(); toast('Data contoh dimuat');
-};
+});
 
 /* ═══════════════════════════════════════════════════════════
-   ENDPOINT HEALTH — Circuit Breaker (Koreksi 1C)
-   Mencegah spam 404 di Console saat deployment mati
+   ENDPOINT HEALTH — Circuit Breaker
    ═══════════════════════════════════════════════════════════ */
 const ENDPOINT_HEALTH = {
-  dead: false,
-  deadUntil: 0,
-  consecutiveFails: 0,
-  lastError: null,
-  DEAD_TTL_MS: 30 * 1000, 
-  FAIL_THRESHOLD: 3
+  dead: false, deadUntil: 0, consecutiveFails: 0, lastError: null,
+  DEAD_TTL_MS: 30 * 1000, FAIL_THRESHOLD: 3
 };
 
 async function sheetRequest(action, payload){
@@ -3392,96 +2565,32 @@ async function sheetRequest(action, payload){
     toast('URL Apps Script belum diatur', false);
     throw Object.assign(new Error('no url'), { code: 'NO_URL' });
   }
-
-  // Circuit breaker: skip kalau endpoint baru error beruntun
   if (ENDPOINT_HEALTH.dead && Date.now() < ENDPOINT_HEALTH.deadUntil){
-    throw Object.assign(
-      new Error('Endpoint unavailable (circuit open)'),
-      { code: 'CIRCUIT_OPEN', hint: ENDPOINT_HEALTH.lastError?.hint }
-    );
+    throw Object.assign(new Error('Endpoint unavailable (circuit open)'), { code: 'CIRCUIT_OPEN' });
   }
-
   try {
     const res = await fetch(SET.sheetUrl, {
-      method: 'POST',
-      redirect: 'follow',
-      credentials: 'omit',  // Jangan kirim cookie Google agar tidak diblokir CORS
+      method: 'POST', redirect: 'follow', credentials: 'omit',
       headers: {'Content-Type': 'text/plain;charset=utf-8'},
       body: JSON.stringify({action, payload})
     });
-
-    // ── SUKSES → reset health ──
     if (res.ok){
       ENDPOINT_HEALTH.consecutiveFails = 0;
       ENDPOINT_HEALTH.dead = false;
-      ENDPOINT_HEALTH.lastError = null;
-      const text = await res.text();
-      return JSON.parse(text);
+      return JSON.parse(await res.text());
     }
-
-    // ── 404 → endpoint mati (deployment dihapus / URL stale) ──
-    if (res.status === 404){
-      const e = Object.assign(new Error('HTTP 404 — deployment tidak ditemukan'), {
-        code: 'HTTP_404',
-        hint: 'Cek Apps Script → Deploy → Manage deployments. Pastikan Web App aktif, ' +
-              'Execute as "Me", Who has access "Anyone". Copy URL /exec yang baru.'
-      });
-    // ═══ RETRY OTOMATIS untuk 404 (redirect token expired) ═══
-    const is404 = err.message && err.message.includes('404');
-    const retryCount = (payload && payload._retryCount) || 0;
-
-    if (is404 && retryCount < 2){
-      console.warn('[sheetRequest] 404 → retry #' + (retryCount + 1) + ' setelah 2 detik...');
-      await new Promise(function(r){ setTimeout(r, 2000); });
-
-      // Retry dengan flag
-      var newPayload = Object.assign({}, payload, { _retryCount: retryCount + 1 });
-      return sheetRequest(action, newPayload);
-    }
-
-    ENDPOINT_HEALTH.consecutiveFails++;
-    if (ENDPOINT_HEALTH.consecutiveFails >= ENDPOINT_HEALTH.FAIL_THRESHOLD){
-      ENDPOINT_HEALTH.dead = true;
-      ENDPOINT_HEALTH.deadUntil = Date.now() + ENDPOINT_HEALTH.DEAD_TTL_MS;
-    }
-    ENDPOINT_HEALTH.lastError = err;
-    console.warn('[sheetRequest] gagal:', err.message);
-    throw err;
-    }
-
-    // ── 5xx / 403 / 405 → coba fallback blind (kemungkinan CORS) ──
-    if (res.status >= 500 || res.status === 403 || res.status === 405){
-      throw Object.assign(new Error('HTTP ' + res.status), { code: 'HTTP_' + res.status });
-    }
-
     throw Object.assign(new Error('HTTP ' + res.status), { code: 'HTTP_' + res.status });
-
-  } catch (err){
-    // ── Network error (TypeError) → coba fallback blind CORS ──
-    if (!err.code || err.code === 'TypeError'){
-      try {
-        await fetch(SET.sheetUrl, {
-          method: 'POST',
-          mode: 'no-cors',
-          headers: {'Content-Type': 'text/plain;charset=utf-8'},
-          body: JSON.stringify({action, payload})
-        });
-        return { ok: true, message: 'Terkirim (blind mode)', blind: true };
-      } catch(e2){ /* fall-through */ }
-    }
-
+  } catch(err){
     ENDPOINT_HEALTH.consecutiveFails++;
     if (ENDPOINT_HEALTH.consecutiveFails >= ENDPOINT_HEALTH.FAIL_THRESHOLD){
       ENDPOINT_HEALTH.dead = true;
       ENDPOINT_HEALTH.deadUntil = Date.now() + ENDPOINT_HEALTH.DEAD_TTL_MS;
     }
     ENDPOINT_HEALTH.lastError = err;
-    console.warn('[sheetRequest] gagal:', err.message);
     throw err;
   }
 }
 
-/* ── Helper: reset circuit (dipanggil setelah user update URL) ── */
 function resetEndpointCircuit(){
   ENDPOINT_HEALTH.dead = false;
   ENDPOINT_HEALTH.deadUntil = 0;
@@ -3489,41 +2598,19 @@ function resetEndpointCircuit(){
   ENDPOINT_HEALTH.lastError = null;
 }
 
-$('#btnPush').onclick = async () => {
-  SET.sheetUrl = $('#setUrl').value.trim(); saveSET();
-
-  // Acquire soft lock dulu (block 30 detik kalau ada user lain)
-  const lock = await SyncManager.lock(120000).catch(() => ({ ok: false, code:'NET' }));
-  if (!lock.ok && lock.code === 'LOCKED'){
-    const go = confirm('⚠ ' + lock.message + '\n\nTetap lanjut? Risiko konflik data.');
-    if (!go) return;
-  }
-
+_wire('#btnPush', async () => {
+  if (typeof SyncManager === 'undefined'){ toast('SyncManager belum siap', false); return; }
+  SET.sheetUrl = ($('#setUrl')?.value || '').trim(); saveSET();
   try {
     toast('Mengirim data...');
     const out = await SyncManager.push(DB, SET);
-    if (out.ok){
-      toast(`Berhasil (v${out.dbVersion}): ${out.sizeKB} KB`);
-    } else if (out.code === 'CONFLICT'){
-      const doPull = confirm(
-        '⚠ Konflik versi.\n\n' + out.message + '\n\nPull sekarang? (data lokal akan ditimpa)'
-      );
-      if (doPull){ $('#btnPull').click(); }
-      else toast('Push dibatalkan', false);
-    } else if (out.code === 'LOCKED'){
-      toast('Diblokir: ' + out.message, false);
-    } else {
-      toast('Gagal: ' + out.message, false);
-    }
-  } catch(e){
-    toast('Koneksi gagal: ' + e.message, false);
-  } finally {
-    await SyncManager.release().catch(() => {});
-  }
-};
+    toast(out.ok ? ('Berhasil: v' + out.dbVersion) : ('Gagal: ' + out.message), out.ok);
+  } catch(e){ toast('Koneksi gagal: ' + e.message, false); }
+});
 
-$('#btnPull').onclick = async () => {
-  SET.sheetUrl = $('#setUrl').value.trim(); saveSET();
+_wire('#btnPull', async () => {
+  if (typeof SyncManager === 'undefined'){ toast('SyncManager belum siap', false); return; }
+  SET.sheetUrl = ($('#setUrl')?.value || '').trim(); saveSET();
   try {
     toast('Mengambil data...');
     const out = await SyncManager.pull();
@@ -3531,48 +2618,43 @@ $('#btnPull').onclick = async () => {
       DB = out.db;
       if (out.settings) SET = Object.assign(SET, out.settings);
       STATE.dbVersion = out.dbVersion ?? null;
+      ['photos','progress','project_wbs','projects','ahsp_headers','project_ahsp_details',
+       'master_resources','working_calendars','holidays','users'].forEach(k => { if (!DB[k]) DB[k] = []; });
       saveDB(); saveSET();
       STATE.activeProject = DB.projects[0]?.id || '';
       renderAll(); renderSettings();
-      toast(`Data ditarik (v${out.dbVersion})`);
+      toast('Data ditarik: v' + out.dbVersion);
     } else {
       toast('Gagal pull: ' + (out.message || 'unknown'), false);
     }
-  } catch(e){
-    toast('Koneksi gagal: ' + e.message, false);
-  }
-};
+  } catch(e){ toast('Koneksi gagal: ' + e.message, false); }
+});
 
-/* ---------- INIT ---------- */
+/* ═══════════════════════════════════════════════════════════
+   INIT
+   ═══════════════════════════════════════════════════════════ */
 (function init(){
   loadSET();
   const ok = loadDB();
   if (!ok || !DB.projects || !DB.projects.length){
     seedData();
   } else {
-    seedCalendarDefaults();
+    if (typeof seedCalendarDefaults === 'function') seedCalendarDefaults();
   }
   STATE.activeProject = DB.projects[0]?.id || '';
-    // Patch: Pastikan token tersimpan jika user sudah login
-  if (STATE.session && STATE.session.token) {
-    localStorage.setItem('mk_session_token', STATE.session.token);
-  }
-  
   saveDB();
   renderProjectSelector();
   renderAll();
   renderSettings();
   seedReconMasterData();
   initRecon();
-  initScheduleEvents();
+  if (typeof initScheduleEvents === 'function') initScheduleEvents();
 
-  // Initialize AUTOSAVE indicator
   if (typeof AUTOSAVE !== 'undefined'){
     AUTOSAVE.initIndicator();
     AUTOSAVE.setStatus('✓ Sistem siap', 'var(--ok)');
   }
 
-  // Populate holiday filter
   const fhol = $('#fHolCal');
   if (fhol){
     fhol.innerHTML = '<option value="">Semua Kalender</option>' +
@@ -3584,50 +2666,23 @@ $('#btnPull').onclick = async () => {
     'color:#1abc9c;font-size:14px;font-weight:bold');
 })();
 </script>
-  
-  <!-- ===================== MODAL LAPORAN MINGGUAN & BULANAN ===================== -->
-<div class="overlay" id="reportPeriodikModal">
-  <div class="modal">
-    <div class="modal-head">
-      <h3>🖨 Cetak Laporan Periodik</h3>
-      <button class="x" onclick="document.getElementById('reportPeriodikModal').classList.remove('show')">&times;</button>
-    </div>
-    <div class="modal-body">
-      <div class="row" style="margin-bottom: 15px;">
-        <div class="field" style="flex:1;">
-          <label class="f">Jenis Laporan</label>
-          <select id="reportType" style="width:100%;">
-            <option value="mingguan">Laporan Mingguan</option>
-            <option value="bulanan">Laporan Bulanan</option>
-          </select>
-        </div>
-        <div class="field" style="flex:1;">
-          <label class="f">Pilih Periode</label>
-          <select id="reportPeriod" style="width:100%;"></select>
-        </div>
-      </div>
-      <p class="hint">Laporan akan dibuka di tab baru dan otomatis memicu dialog print (Save as PDF).</p>
-    </div>
-    <div class="modal-foot">
-      <button class="btn" onclick="document.getElementById('reportPeriodikModal').classList.remove('show')">Batal</button>
-      <button class="btn btn-primary" id="btnGenerateReport">🖨 Cetak Laporan</button>
-    </div>
-  </div>
-</div>
-  
-  <script>
-// Pastikan kode ini dijalankan setelah ReportGeneratorExtended dimuat
+
+<!-- ═══════════════════════════════════════════════════════════
+   MODAL LAPORAN PERIODIK — WIRING
+   ═══════════════════════════════════════════════════════════ -->
+<script>
 document.addEventListener('DOMContentLoaded', function() {
-  
-  // Fungsi untuk mengisi dropdown periode
   function updateReportPeriodOptions() {
-    const type = document.getElementById('reportType').value;
+    const typeEl = document.getElementById('reportType');
     const periodSelect = document.getElementById('reportPeriod');
-    const proj = activeProj();
-    
-    if (!proj) return;
+    if (!typeEl || !periodSelect) return;
+    const type = typeEl.value;
+    const proj = (typeof activeProj === 'function') ? activeProj() : null;
+    if (!proj){
+      periodSelect.innerHTML = '<option value="">— Tidak ada proyek —</option>';
+      return;
+    }
     periodSelect.innerHTML = '';
-    
     if (type === 'mingguan') {
       const totalMinggu = Math.max(1, Math.round(num(proj.durasi_minggu) || 1));
       for (let i = 1; i <= totalMinggu; i++) {
@@ -3641,47 +2696,38 @@ document.addEventListener('DOMContentLoaded', function() {
           months.add(`${d.getFullYear()}-${d.getMonth() + 1}`);
         }
       });
-      
       if (months.size === 0) {
         const now = new Date();
         months.add(`${now.getFullYear()}-${now.getMonth() + 1}`);
       }
-      
       Array.from(months).sort().forEach(m => {
         const [year, month] = m.split('-');
-        const namaBulan = ReportGeneratorExtended._getNamaBulan(parseInt(month));
+        const namaBulan = (typeof ReportGeneratorExtended !== 'undefined' && ReportGeneratorExtended._getNamaBulan)
+          ? ReportGeneratorExtended._getNamaBulan(parseInt(month))
+          : month;
         periodSelect.innerHTML += `<option value="${month}-${year}">${namaBulan} ${year}</option>`;
       });
     }
   }
 
-  // Event listener untuk perubahan jenis laporan
   const reportTypeEl = document.getElementById('reportType');
-  if (reportTypeEl) {
-    reportTypeEl.addEventListener('change', updateReportPeriodOptions);
-  }
+  if (reportTypeEl) reportTypeEl.addEventListener('change', updateReportPeriodOptions);
 
-  // Event listener untuk tombol cetak
   const btnGenerate = document.getElementById('btnGenerateReport');
   if (btnGenerate) {
     btnGenerate.addEventListener('click', () => {
       const proj = activeProj();
-      if (!proj) {
-        toast('Pilih proyek terlebih dahulu', false);
-        return;
-      }
-      
+      if (!proj) { toast('Pilih proyek terlebih dahulu', false); return; }
       const type = document.getElementById('reportType').value;
       const period = document.getElementById('reportPeriod').value;
       let html = '';
-      
+      if (typeof ReportGeneratorExtended === 'undefined'){ toast('Modul laporan belum siap', false); return; }
       if (type === 'mingguan') {
         html = ReportGeneratorExtended.buildMingguanHTML(proj.id, period);
       } else if (type === 'bulanan') {
         const [month, year] = period.split('-');
         html = ReportGeneratorExtended.buildBulananHTML(proj.id, month, year);
       }
-      
       if (html) {
         const win = window.open('', '_blank');
         win.document.write(html);
@@ -3691,67 +2737,18 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   }
 
-    // Buka modal saat tombol Report diklik
   const btnReportPeriodik = document.getElementById('btnReportPeriodik');
   if (btnReportPeriodik) {
     btnReportPeriodik.onclick = () => {
-      if (!STATE.activeProject) {
-        toast('Pilih proyek aktif dulu', false);
-        return;
-      }
+      if (!STATE.activeProject) { toast('Pilih proyek aktif dulu', false); return; }
       updateReportPeriodOptions();
       document.getElementById('reportPeriodikModal').classList.add('show');
     };
   }
 
-  // Inisialisasi awal
-  if (reportTypeEl) {
-    updateReportPeriodOptions();
-  }
-  
-      // Hubungkan tombol Cetak Laporan ke ReportGenerator (dengan sistem retry)
-      const btnPrintReport = document.getElementById('btnPrintReport');
-      if (btnPrintReport) {
-        btnPrintReport.onclick = () => {
-          const pid = (typeof STATE !== 'undefined') ? STATE.activeProject : null;
-          if (!pid) {
-            toast('Pilih proyek dulu', false);
-            return;
-          }
+  if (reportTypeEl) updateReportPeriodOptions();
+});
+</script>
 
-          // Fungsi untuk mencoba membuka laporan
-          const tryOpenReport = (attempt = 0) => {
-            if (typeof ReportGenerator !== 'undefined' && ReportGenerator.openHarian) {
-              // Modul siap, buka laporan
-              ReportGenerator.openHarian(pid);
-            } else if (attempt < 15) {
-              // Modul belum siap, tunggu 300ms dan coba lagi (max 4.5 detik)
-              console.log('⏳ Menunggu ReportGenerator siap... Percobaan ke-' + (attempt + 1));
-              setTimeout(() => tryOpenReport(attempt + 1), 300);
-            } else {
-              // Gagal setelah 15 kali percobaan
-              toast('⚠ Modul ReportGenerator gagal dimuat. Cek Console (F12).', false);
-            }
-          };
-          
-          tryOpenReport();
-        };
-      }
-});
-</script>
-  <script>
-document.addEventListener('DOMContentLoaded', function(){
-  const btn = document.getElementById('btnGenerateWbsTemplate');
-  if (btn){
-    _wire('#btnGenerateWbsTemplate', () => {
-      const pid = STATE.activeProject;
-      if (!pid){ toast('Pilih proyek dulu', false); return; }
-      WbsTemplate.openDialog(pid);
-    });
-  }
-  console.log('%c[WbsTemplate.js] ✅ Modul Generate WBS terpasang',
-    'color:#a855f7;font-weight:bold;font-size:12px');
-});
-</script>
 </body>
 </html>
