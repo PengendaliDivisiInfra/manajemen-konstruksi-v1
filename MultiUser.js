@@ -407,6 +407,25 @@ function filterProjectDropdown(){
       }
     }
 
+        /* ═══ SEMBUNYIKAN TAB PENGATURAN dari user biasa ═══ */
+    (function hideSettingsTabForNonAdmin(){
+      const tab = document.querySelector('.tab[data-tab="settings"]');
+      if (!tab) return;
+    
+      const user = (typeof Auth !== 'undefined' && Auth.user) ? Auth.user : null;
+      const isAdmin = user && (user.role === 'superadmin' || user.role === 'admin');
+    
+      if (isAdmin){
+        tab.style.display = '';  // tampilkan untuk admin
+      } else {
+        tab.style.display = 'none';  // sembunyikan untuk user biasa
+        // Kalau sedang di tab settings, pindah ke dashboard
+        if (tab.classList.contains('active')){
+          if (typeof switchTab === 'function') switchTab('dashboard');
+        }
+      }
+    })();
+
     /* ═══════════════════════════════════════════════════════════
        USER MANAGEMENT UI (Khusus Superadmin)
        ═══════════════════════════════════════════════════════════ */
