@@ -318,15 +318,19 @@
           : '<div class="rg-empty-note">Tidak ada foto dokumentasi pada tanggal ini.</div>') +
         '<div class="rg-subsection-divider" style="margin:24px 0 16px 0;"></div>' +
         '<div class="rg-subsection-label">Tanda Tangan</div>' +
+        
+        /* Baris Pertama: Kiri (Diperiksa) & Kanan (Dibuat) */
         '<div class="rg-ttd-wrap">' +
           '<div class="rg-ttd-col">' + ttdBlock('Di Periksa,', meta.ttd_team_leader || { jabatan: 'Konsultan Pengawas / Team Leader' }) + '</div>' +
           '<div class="rg-ttd-col">' + ttdBlock('Di Buat,', meta.ttd_project_manager || { jabatan: 'Project Manager' }) + '</div>' +
         '</div>' +
-        '<div class="rg-ttd-wrap" style="margin-top:30px;justify-content:center;gap:50px;">' +
-          '<div class="rg-ttd-col" style="flex:0 0 auto;min-width:200px;">' + ttdBlock('Disetujui,', meta.ttd_direksi || { jabatan: 'Direksi Pengawas' }) + '</div>' +
-          '<div class="rg-ttd-col" style="flex:0 0 auto;min-width:200px;">' + ttdBlock('', meta.ttd_ppk || { jabatan: 'Pejabat Pembuat Komitmen' }) + '</div>' +
+        
+        /* Baris Kedua: Kiri (Disetujui) & Kanan (Mengetahui) */
+        '<div class="rg-ttd-wrap" style="margin-top:30px;">' +
+          '<div class="rg-ttd-col">' + ttdBlock('Disetujui,', meta.ttd_direksi || { jabatan: 'Direksi Pengawas' }) + '</div>' +
+          '<div class="rg-ttd-col">' + ttdBlock('Mengetahui,', meta.ttd_ppk || { jabatan: 'Pejabat Pembuat Komitmen' }) + '</div>' +
         '</div>' +
-      '</div>';
+        '</div>';
     }
 
     function renderToPDF(html, filename){
