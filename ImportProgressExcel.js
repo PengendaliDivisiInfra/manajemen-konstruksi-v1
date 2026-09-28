@@ -133,6 +133,13 @@
             const file = e.target.files[0];
             if (!file) return;
 
+            // Cek dulu apakah proyek punya WBS
+            const wbsListCheck = DB.project_wbs.filter(w => w.project_id === projectId && !w.is_group);
+            if (wbsListCheck.length === 0){
+              if (typeof toast === 'function') toast('⚠ Proyek ini belum memiliki WBS. Tambahkan WBS terlebih dahulu di tab "WBS / BQ".', false);
+              return;
+            }
+
             const reader = new FileReader();
             reader.onload = function(ev){
               try {
@@ -195,7 +202,8 @@
                   const wbs = wbsMap[kode];
                   if (!wbs){
                     valid = false;
-                    error = 'Kode WBS tidak ditemukan';
+                    // PESAN ERROR DIPERBARUI: Menyebutkan kode yang dicari
+                    error = 'Kode WBS "' + kode + '" tidak ditemukan di proyek ini. Cek tab WBS/BQ.';
                   } else if (minggu < 1){
                     valid = false;
                     error = 'Minggu tidak valid';
