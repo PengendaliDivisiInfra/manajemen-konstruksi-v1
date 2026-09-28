@@ -540,6 +540,85 @@ const CPM = {
     // 5) Float + critical
     this.computeFloat(items, proj);
 
+    run(projectId){
+    const proj = DB.projects.find(p => p.id === projectId);
+    if (!proj) return { ok:false, message:'Proyek tidak ditemukan' };
+
+    // Ambil SEMUA item (termasuk group) untuk roll-up
+    const allItems = DB.project_wbs.filter(w => w.project_id === projectId);
+    const items = allItems.filter(w => !w.is_group);
+
+    if (!items.length) return { ok:true, message:'Tidak ada item WBS', count:0 };
+
+    // ... (existing topological sort, forward pass, backward pass, float)
+
+    // ═══ TAMBAHKAN: Roll-up ke parent group ═══
+    this.rollUpToGroups(allItems, proj);
+
+    // ... (existing write-back)
+    return { ok: true, /* ... */ };
+  },
+
+  /* ── Roll-up tanggal dari leaf ke group ── */
+  rollUpToGroups(allItems, proj) {
+    const groups = allItems.filter(w => w.is_group);
+    const byParent = {};
+    
+    allItems.forEach(w => {
+      if (w.parent_id) {
+        if (!byParent[w.parent_id]) byParent[w.parent_id] = [];
+        byParent[w.parent_id].push(w);
+      }
+    });
+
+    // Proses dari level terdalam ke luar
+    const maxLevel = 3;
+    for (let lvl = maxLevel; lvl >= 1; lvl--) {
+      groups.forEach(g => {
+        const kids = byParent[g.id] || [];
+        if (!kids.length) return;
+
+        // Ambil tanggal dari kids yang sudah terisi
+        let minStart = null;
+        let maxFinish = null;
+        let totalDur = 0;
+        let totalBobot = 0;
+        let sumWeightedProgress = 0;
+
+        kids.forEach(k => {
+          const ks = k.tgl_mulai_rencana || k.start_date || '';
+          const kf = k.tgl_selesai_rencana || k.finish_date || '';
+          if (ks && (!minStart || ks < minStart)) minStart = ks;
+          if (kf && (!maxFinish || kf > maxFinish)) maxFinish = kf;
+          totalDur += num(k.durasi_hari || k.duration || 0);
+
+          // Progress berbobot cost
+          const costTotal = num(k.volume_rab) * Calc.hargaSatuanRAB(proj.id, k.ahsp_id);
+          const progPct = this.computeProgressPct(k);
+          totalBobot += costTotal;
+          sumWeightedProgress += costTotal * progPct;
+        });
+
+        g.tgl_mulai_rencana = minStart || '';
+        g.tgl_selesai_rencana = maxFinish || '';
+        g.start_date = minStart || '';
+        g.finish_date = maxFinish || '';
+        g.durasi_hari = totalDur;
+        g.duration = totalDur;
+        g.progress_pct = totalBobot > 0 ? (sumWeightedProgress / totalBobot) : 0;
+      });
+    }
+  },
+
+  /* ── Hitung progress leaf task ── */
+  computeProgressPct(task) {
+    const volRAB = num(task.volume_rab) || 1;
+    const done = DB.progress
+      .filter(p => p.wbs_id === task.id)
+      .reduce((s, p) => s + num(p.volume), 0);
+    return Math.min(100, (done / volRAB) * 100);
+  }
+
     // 6) Write-back (DUAL-WRITE)
     items.forEach(it => {
       const startISO  = WorkingCalendar.fmt(it._ES);
@@ -1738,6 +1817,7 @@ const GanttEngine = {
       id: w.id,
       kode: w.kode_wbs || '',
       nama: w.uraian || '',
+      level: w.wbs_level || level, 
       level,
       isSummary,
       isMilestone: !isSummary && duration === 0,
