@@ -34,6 +34,7 @@
     </div>
     <button class="btn btn-sm" id="btnExcel" title="Export ke Excel">📊 XLSX</button>
     <button class="btn btn-sm" id="btnIcal" title="Export Milestone ke Google Calendar">📅 iCal</button>
+    <button class="btn btn-sm" id="btnReportPeriodik" title="Cetak Laporan Mingguan/Bulanan">📄 Report</button>
     <span class="live-indicator" id="liveIndicator" title="Status sinkronisasi">
       <span class="live-dot"></span><span class="live-text">Live</span>
     </span>
@@ -3660,6 +3661,19 @@ document.addEventListener('DOMContentLoaded', function() {
         document.getElementById('reportPeriodikModal').classList.remove('show');
       }
     });
+  }
+
+    // Buka modal saat tombol Report diklik
+  const btnReportPeriodik = document.getElementById('btnReportPeriodik');
+  if (btnReportPeriodik) {
+    btnReportPeriodik.onclick = () => {
+      if (!STATE.activeProject) {
+        toast('Pilih proyek aktif dulu', false);
+        return;
+      }
+      updateReportPeriodOptions();
+      document.getElementById('reportPeriodikModal').classList.add('show');
+    };
   }
 
   // Inisialisasi awal
