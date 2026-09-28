@@ -1,6 +1,5 @@
 /* =====================================================================
    MODUL REPORT GENERATOR — Laporan PDF (Harian/Mingguan/Bulanan)
-   Menggunakan html2pdf.js untuk convert HTML → PDF A4 Portrait
    ===================================================================== */
 
 (function reportGeneratorModule(){
@@ -8,7 +7,7 @@
     attempt = attempt || 0;
     if (typeof DB === 'undefined' || !DB || typeof html2pdf === 'undefined'){
       if (attempt > 60){
-        console.error('[ReportGenerator.js] html2pdf belum siap atau engine belum loaded');
+        console.error('[ReportGenerator.js] html2pdf belum siap');
         return;
       }
       setTimeout(function(){ bootstrap(attempt + 1); }, 300);
@@ -77,10 +76,6 @@
       return Math.max(1, Math.floor(diffDays / 7) + 1);
     }
 
-    /* ═══════════════════════════════════════════════════════════
-       OPEN DIALOG: PILIH TANGGAL
-       ═══════════════════════════════════════════════════════════ */
-
     function openHarianDialog(projectId){
       projectId = projectId || (typeof STATE !== 'undefined' ? STATE.activeProject : null);
       if (!projectId){ _toast('Pilih proyek dulu', false); return; }
@@ -90,33 +85,24 @@
 
       var today = new Date().toISOString().slice(0,10);
 
-      /* Pakai Date Widget aplikasi kalau tersedia */
       var dateWidget = (typeof _dateWidgetHTML === 'function')
         ? _dateWidgetHTML('rg_tgl', today, { placeholder: 'Pilih tanggal' })
         : '<input type="date" id="rg_tgl" value="' + _esc(today) + '" />';
 
       var html = '' +
-        '<div class="rg-intro">' +
-          'Cetak <b>Laporan Harian</b> untuk proyek <b style="color:#7cb3ff">' + _esc(proj.kode) + '</b>.' +
-        '</div>' +
-        '<div class="rg-field">' +
-          '<label>Tanggal Laporan</label>' +
-          dateWidget +
-        '</div>' +
+        '<div class="rg-intro">Cetak <b>Laporan Harian</b> untuk proyek <b style="color:#7cb3ff">' + _esc(proj.kode) + '</b>.</div>' +
+        '<div class="rg-field"><label>Tanggal Laporan</label>' + dateWidget + '</div>' +
         '<div class="rg-quick">' +
           '<button type="button" class="rg-quick-btn" data-offset="0">Hari Ini</button>' +
           '<button type="button" class="rg-quick-btn" data-offset="-1">Kemarin</button>' +
           '<button type="button" class="rg-quick-btn" data-offset="-7">7 Hari Lalu</button>' +
         '</div>' +
-        '<div class="rg-info" id="rg_info">' +
-          '<div class="rg-info-row"><span>Memuat data…</span></div>' +
-        '</div>' +
-        '<p class="rg-hint">Laporan akan berisi: header logo & identitas, tabel item yang dikerjakan, ringkasan progres, foto dokumentasi, dan kolom tanda tangan.</p>';
+        '<div class="rg-info" id="rg_info"><div class="rg-info-row"><span>Memuat data…</span></div></div>' +
+        '<p class="rg-hint">Laporan akan berisi: header logo & identitas, tabel item, ringkasan progres, foto, dan tanda tangan.</p>';
 
       openModal('🖨 Cetak Laporan Harian', html, function(){ return false; });
 
       setTimeout(function(){
-        /* Init date widget supaya popup kalender bekerja */
         if (typeof _initDateWidgets === 'function'){
           _initDateWidgets(document.getElementById('mBody'));
         }
@@ -136,15 +122,10 @@
 
         var tglEl = document.getElementById('rg_tgl');
         if (tglEl){
-          tglEl.addEventListener('change', function(){
-            updateInfo(projectId, tglEl.value);
-          });
-          tglEl.addEventListener('input', function(){
-            updateInfo(projectId, tglEl.value);
-          });
+          tglEl.addEventListener('change', function(){ updateInfo(projectId, tglEl.value); });
+          tglEl.addEventListener('input', function(){ updateInfo(projectId, tglEl.value); });
         }
 
-        /* Quick date buttons */
         document.querySelectorAll('.rg-quick-btn').forEach(function(btn){
           btn.onclick = function(){
             var offset = parseInt(btn.getAttribute('data-offset'), 10) || 0;
@@ -154,10 +135,7 @@
             var tglNative = document.getElementById('rg_tgl');
             if (tglNative){
               tglNative.value = iso;
-              /* Trigger sync face widget */
-              if (typeof _syncDateWidgetFace === 'function'){
-                _syncDateWidgetFace(tglNative);
-              }
+              if (typeof _syncDateWidgetFace === 'function') _syncDateWidgetFace(tglNative);
               updateInfo(projectId, iso);
             }
           };
@@ -183,73 +161,48 @@
         return p.project_id === projectId && (p.tanggal || '').split('T')[0] === tanggal;
       });
 
-      /* Kalau ada foto tapi tidak ada progress, tampilkan info foto saja */
-      var totalItems = progressCount;
-      var hasPhotoOnly = totalItems === 0 && photos.length > 0;
-
       var html = '';
       html += '<div class="rg-info-row"><span>📊 Item progress:</span><b>' + progressCount + ' item</b></div>';
       html += '<div class="rg-info-row"><span>📷 Foto dokumentasi:</span><b>' + photos.length + ' foto</b></div>';
       html += '<div class="rg-info-row"><span>📅 Tanggal:</span><b>' + formatHariTgl(tanggal) + '</b></div>';
 
-      /* Warning kalau kosong total */
-      if (totalItems === 0 && photos.length === 0){
-        html += '<div class="rg-info-warn">⚠ Belum ada progress atau foto pada tanggal ini. Laporan tetap bisa dicetak, namun tabel &amp; foto akan kosong.</div>';
-      } else if (hasPhotoOnly){
-        html += '<div class="rg-info-note">ℹ️ Ada foto tapi belum ada input progress pada tanggal ini. Foto akan tetap dimuat ke laporan.</div>';
+      if (progressCount === 0 && photos.length === 0){
+        html += '<div class="rg-info-warn">⚠ Belum ada progress atau foto pada tanggal ini.</div>';
       }
-
       info.innerHTML = html;
     }
-
-    /* ═══════════════════════════════════════════════════════════
-       GENERATE LAPORAN HARIAN
-       ═══════════════════════════════════════════════════════════ */
 
     function generateHarian(projectId, tanggal){
       var proj = DB.projects.find(function(p){ return p.id === projectId; });
       if (!proj){ _toast('Proyek tidak ditemukan', false); return; }
-
-      var meta = (window.ProjectMeta && ProjectMeta.get)
-        ? ProjectMeta.get(projectId)
-        : {};
-
+      var meta = (window.ProjectMeta && ProjectMeta.get) ? ProjectMeta.get(projectId) : {};
       var html = buildHarianHTML(proj, meta, tanggal);
       renderToPDF(html, 'Laporan-Harian-' + proj.kode + '-' + tanggal + '.pdf');
     }
 
     function buildHarianHTML(proj, meta, tanggal){
-
-      /* ═══ Ambil data foto lebih dulu ═══ */
       var photos = (DB.photos || []).filter(function(p){
         return p.project_id === proj.id && (p.tanggal || '').split('T')[0] === tanggal;
       }).sort(function(a,b){ return (a.urutan||0)-(b.urutan||0); });
 
-      /* ═══ Ambil progress ═══ */
       var progress = DB.progress.filter(function(p){
         return p.project_id === proj.id && (p.tanggal || '').split('T')[0] === tanggal;
       });
 
-      /* Group progress by WBS */
       var byWbs = {};
       progress.forEach(function(p){
         if (!byWbs[p.wbs_id]) byWbs[p.wbs_id] = 0;
         byWbs[p.wbs_id] += _num(p.volume);
       });
 
-      /* Kalau tidak ada progress tapi ada foto, ambil WBS unik dari foto */
       if (Object.keys(byWbs).length === 0 && photos.length > 0){
-        photos.forEach(function(p){
-          if (!byWbs[p.wbs_id]) byWbs[p.wbs_id] = 0;
-        });
+        photos.forEach(function(p){ if (!byWbs[p.wbs_id]) byWbs[p.wbs_id] = 0; });
       }
 
-      /* Hitung total proyek */
       var wbsRows = (typeof Calc !== 'undefined' && Calc.wbsRows) ? Calc.wbsRows(proj.id) : [];
       var totalRAB = wbsRows.filter(function(r){ return !r.isGroup; })
         .reduce(function(s, r){ return s + _num(r.total_rab); }, 0) || 1;
 
-      /* Baris tabel */
       var rowsData = [];
       Object.keys(byWbs).forEach(function(wbsId){
         var w = DB.project_wbs.find(function(x){ return x.id === wbsId; });
@@ -262,23 +215,13 @@
         var pctHari = volRAB > 0 ? (volHari / volRAB * 100) : 0;
         var pctBobotHari = bobot * (pctHari / 100);
 
-        /* Count foto untuk WBS ini */
-        var photoCount = photos.filter(function(ph){ return ph.wbs_id === wbsId; }).length;
-
         rowsData.push({
-          kode: w.kode_wbs,
-          uraian: w.uraian,
-          satuan: w.satuan || '-',
-          volHari: volHari,
-          volRAB: volRAB,
-          pctHari: pctHari,
-          bobot: bobot,
-          pctBobotHari: pctBobotHari,
-          photoCount: photoCount
+          kode: w.kode_wbs, uraian: w.uraian, satuan: w.satuan || '-',
+          volHari: volHari, volRAB: volRAB, pctHari: pctHari,
+          bobot: bobot, pctBobotHari: pctBobotHari
         });
       });
 
-      // Hitung progres kumulatif
       var allProgress = DB.progress.filter(function(p){ return p.project_id === proj.id; });
       var allByWbs = {};
       allProgress.forEach(function(p){
@@ -287,617 +230,224 @@
       });
 
       var totalKumulatif = 0;
-      var totalRencana = 0;
       var mingguNow = hitungMinggu(proj, tanggal);
-      var sc = (typeof Calc !== 'undefined' && Calc.scurve) ? Calc.scurve(proj.id) : { planned:[], actual:[] };
+      var sc = (typeof Calc !== 'undefined' && Calc.scurve) ? Calc.scurve(proj.id) : { planned:[] };
       var totalRencanaPct = sc.planned[Math.min(mingguNow-1, sc.planned.length-1)] || 0;
 
       wbsRows.filter(function(r){ return !r.isGroup; }).forEach(function(r){
         var vol = allByWbs[r.id] || 0;
         var volRAB = _num(r.volume_rab);
         var bobot = _num(r.total_rab) / totalRAB * 100;
-        if (volRAB > 0){
-          totalKumulatif += bobot * Math.min(1, vol / volRAB);
-        }
+        if (volRAB > 0) totalKumulatif += bobot * Math.min(1, vol / volRAB);
       });
 
       var pctHariIni = rowsData.reduce(function(s, r){ return s + r.pctBobotHari; }, 0);
       var deviasi = totalKumulatif - totalRencanaPct;
 
-      // Header / Footer
       var logoPupr = meta.logo_pupr ? '<img src="' + meta.logo_pupr + '" class="rg-logo" />' : '<div class="rg-logo-ph"></div>';
       var logoKontraktor = meta.logo_kontraktor ? '<img src="' + meta.logo_kontraktor + '" class="rg-logo" />' : '<div class="rg-logo-ph"></div>';
 
-      // TTD
       function ttdBlock(title, data){
         var nikStr = String(data.nik || '').trim();
-        var nikHTML = nikStr !== ''
-          ? '<div class="rg-ttd-nik">NIP/NIK: ' + _esc(nikStr) + '</div>'
-          : '';
+        var nikHTML = nikStr !== '' ? '<div class="rg-ttd-nik">NIP/NIK: ' + _esc(nikStr) + '</div>' : '';
         var namaStr = String(data.nama || '').trim();
-        var namaHTML = namaStr !== ''
-          ? '<b>' + _esc(namaStr) + '</b>'
-          : '<b style="letter-spacing:1px">................................</b>';
-        return '' +
-          '<div class="rg-ttd">' +
-            (title ? '<div class="rg-ttd-title" style="font-style:italic; margin-bottom:4px; font-size:10px; color:#333;">' + _esc(title) + '</div>' : '') +
-            '<div class="rg-ttd-jabatan">' + _esc(data.jabatan || '') + '</div>' +
-            '<div class="rg-ttd-space"></div>' +
-            '<div class="rg-ttd-nama">' + namaHTML + '</div>' +
-            nikHTML +
-          '</div>';
+        var namaHTML = namaStr !== '' ? '<b>' + _esc(namaStr) + '</b>' : '<b style="letter-spacing:1px">................................</b>';
+        return '<div class="rg-ttd">' +
+          (title ? '<div class="rg-ttd-title" style="font-style:italic;margin-bottom:4px;font-size:10px;color:#333;">' + _esc(title) + '</div>' : '') +
+          '<div class="rg-ttd-jabatan">' + _esc(data.jabatan || '') + '</div>' +
+          '<div class="rg-ttd-space"></div>' +
+          '<div class="rg-ttd-nama">' + namaHTML + '</div>' + nikHTML + '</div>';
       }
 
-      return '' +
-        '<div class="rg-page">' +
-
-          /* Header */
-          '<div class="rg-header">' +
-            '<div class="rg-header-logo">' + logoPupr + '</div>' +
-            '<div class="rg-header-text">' +
-              '<div class="rg-instansi">' + _esc(meta.nama_instansi || 'DINAS PEKERJAAN UMUM') + '</div>' +
-              (meta.alamat_instansi ? '<div class="rg-alamat">' + _esc(meta.alamat_instansi) + '</div>' : '') +
-              '<div class="rg-title">LAPORAN HARIAN PROGRES PEKERJAAN</div>' +
-            '</div>' +
-            '<div class="rg-header-logo">' + logoKontraktor + '</div>' +
+      return '<div class="rg-page">' +
+        '<div class="rg-header">' +
+          '<div class="rg-header-logo">' + logoPupr + '</div>' +
+          '<div class="rg-header-text">' +
+            '<div class="rg-instansi">' + _esc(meta.nama_instansi || 'DINAS PEKERJAAN UMUM') + '</div>' +
+            (meta.alamat_instansi ? '<div class="rg-alamat">' + _esc(meta.alamat_instansi) + '</div>' : '') +
+            '<div class="rg-title">LAPORAN HARIAN PROGRES PEKERJAAN</div>' +
           '</div>' +
-
-          '<div class="rg-hr"></div>' +
-
-          /* Info Proyek */
-          '<table class="rg-info-table">' +
-            '<tr><td class="rg-k">Nama Paket</td><td class="rg-c">:</td><td>' + _esc(proj.nama) + '</td></tr>' +
-            '<tr><td class="rg-k">Kode Proyek</td><td class="rg-c">:</td><td>' + _esc(proj.kode) + '</td></tr>' +
-            '<tr><td class="rg-k">Lokasi</td><td class="rg-c">:</td><td>' +
-              _esc([meta.lokasi_desa, meta.lokasi_kecamatan, meta.lokasi_kabupaten].filter(Boolean).join(', ') || proj.lokasi || '-') +
-            '</td></tr>' +
-            '<tr><td class="rg-k">Kontraktor</td><td class="rg-c">:</td><td>' + _esc(meta.nama_kontraktor || '-') + '</td></tr>' +
-            '<tr><td class="rg-k">Nomor Kontrak</td><td class="rg-c">:</td><td>' + _esc(meta.nomor_kontrak || '-') + '</td></tr>' +
-            '<tr><td class="rg-k">Sumber Dana</td><td class="rg-c">:</td><td>' + _esc(meta.sumber_dana || '-') + ' / TA ' + _esc(meta.tahun_anggaran || '') + '</td></tr>' +
-            '<tr><td class="rg-k">Tanggal</td><td class="rg-c">:</td><td><b>' + formatHariTgl(tanggal) + '</b></td></tr>' +
-            '<tr><td class="rg-k">Minggu ke-</td><td class="rg-c">:</td><td>' + mingguNow + ' dari ' + (proj.durasi_minggu || '-') + '</td></tr>' +
-          '</table>' +
-
-          /* Tabel pekerjaan */
-          '<div class="rg-section-title">A. Pekerjaan yang Dilaksanakan</div>' +
-          '<table class="rg-table">' +
-             '<thead>' +
-               '<tr>' +
-                 '<th style="width:35px">No</th>' +
-                 '<th style="width:65px">Kode</th>' +
-                 '<th>Uraian Pekerjaan</th>' +
-                 '<th style="width:45px">Sat</th>' +
-                 '<th style="width:90px" class="rg-num">Vol Hari Ini</th>' +
-                 '<th style="width:75px" class="rg-num">% Item</th>' +
-                 '<th style="width:80px" class="rg-num">Bobot %</th>' +
-               '</tr>' +
-             '</thead>' +
-            '<tbody>' +
-              (rowsData.length
-                ? rowsData.map(function(r, i){
-                    return '<tr>' +
-                      '<td class="rg-center">' + (i+1) + '</td>' +
-                      '<td>' + _esc(r.kode) + '</td>' +
-                      '<td>' + _esc(r.uraian) + '</td>' +
-                      '<td class="rg-center">' + _esc(r.satuan) + '</td>' +
-                      '<td class="rg-num">' + _fmt(r.volHari, 2) + '</td>' +
-                      '<td class="rg-num">' + _fmt(r.pctHari, 2) + '%</td>' +
-                      '<td class="rg-num"><b>' + _fmt(r.pctBobotHari, 3) + '%</b></td>' +
-                    '</tr>';
-                  }).join('')
-                : '<tr><td colspan="8" class="rg-empty">Tidak ada pekerjaan yang dilaporkan pada tanggal ini</td></tr>') +
-            '</tbody>' +
-            '<tfoot>' +
-              '<tr>' +
-                '<td colspan="6" class="rg-num rg-bold">Progres Hari Ini</td>' +
-                '<td class="rg-num rg-bold">' + _fmt(pctHariIni, 3) + '%</td>' +
-              '</tr>' +
-            '</tfoot>' +
-          '</table>' +
-
-          /* Ringkasan */
-          '<div class="rg-section-title">B. Ringkasan Progres</div>' +
-          '<table class="rg-summary">' +
-            '<tr>' +
-              '<td class="rg-sum-k">Progres Hari Ini</td>' +
-              '<td class="rg-sum-v">' + _fmt(pctHariIni, 3) + '%</td>' +
-              '<td class="rg-sum-k">Progres Kumulatif</td>' +
-              '<td class="rg-sum-v">' + _fmt(totalKumulatif, 3) + '%</td>' +
-            '</tr>' +
-            '<tr>' +
-              '<td class="rg-sum-k">Rencana (Kurva S)</td>' +
-              '<td class="rg-sum-v">' + _fmt(totalRencanaPct, 3) + '%</td>' +
-              '<td class="rg-sum-k">Deviasi</td>' +
-              '<td class="rg-sum-v ' + (deviasi >= 0 ? 'rg-ok' : 'rg-bad') + '">' +
-                (deviasi >= 0 ? '+' : '') + _fmt(deviasi, 3) + '% ' +
-                (deviasi >= 0 ? '(Ahead)' : '(Behind)') +
-              '</td>' +
-            '</tr>' +
-          '</table>' +
-
-            /* ═══ C. LAMPIRAN FOTO ═══ */
-            '<div class="rg-section-title">C. LAMPIRAN FOTO</div>' +
-            
-            (photos.length
-              ? '<div class="rg-subsection-label">Dokumentasi Foto (' + photos.length + ')</div>' +
-                '<div class="rg-photo-grid">' +
-                  photos.map(function(p){
-                    var w = DB.project_wbs.find(function(x){ return x.id === p.wbs_id; });
-                    var cap = p.caption || (w ? (w.kode_wbs + ' — ' + w.uraian) : '');
-                    return '<div class="rg-photo-item">' +
-                      '<img src="' + p.file_data + '" />' +
-                      '<div class="rg-photo-cap">' + _esc(cap) + '</div>' +
-                    '</div>';
-                  }).join('') +
-                '</div>'
-              : '<div class="rg-empty-note">Tidak ada foto dokumentasi pada tanggal ini.</div>'
-            ) +
-            
-            /* ═══ TANDA TANGAN ═══ */
-            '<div class="rg-subsection-divider" style="margin: 24px 0 16px 0;"></div>' +
-            '<div class="rg-subsection-label">Tanda Tangan</div>' +
-            
-            /* Baris Pertama: Kiri (Diperiksa) & Kanan (Dibuat) */
-            '<div class="rg-ttd-wrap">' +
-              '<div class="rg-ttd-col">' +
-                ttdBlock('Di Periksa,', meta.ttd_team_leader || { jabatan: 'Konsultan Pengawas / Team Leader Konsultan' }) +
-              '</div>' +
-              '<div class="rg-ttd-col">' +
-                ttdBlock('Di Buat,', meta.ttd_project_manager || { jabatan: 'Project Manager' }) +
-              '</div>' +
-            '</div>' +
-            
-            /* Baris Kedua: Tengah (Disetujui) */
-            '<div class="rg-ttd-wrap" style="margin-top:30px; justify-content: center; gap: 50px;">' +
-              '<div class="rg-ttd-col" style="flex: 0 0 auto; min-width: 200px;">' +
-                ttdBlock('Disetujui,', meta.ttd_direksi || { jabatan: 'Direksi Pengawas' }) +
-              '</div>' +
-              '<div class="rg-ttd-col" style="flex: 0 0 auto; min-width: 200px;">' +
-                ttdBlock('', meta.ttd_ppk || { jabatan: 'Pejabat Pembuat Komitmen' }) +
-              '</div>' +
-            '</div>' +
-        '</div>';
-
-    /* ═══════════════════════════════════════════════════════════
-       RENDER KE PDF
-       ═══════════════════════════════════════════════════════════ */
+          '<div class="rg-header-logo">' + logoKontraktor + '</div>' +
+        '</div>' +
+        '<div class="rg-hr"></div>' +
+        '<table class="rg-info-table">' +
+          '<tr><td class="rg-k">Nama Paket</td><td class="rg-c">:</td><td>' + _esc(proj.nama) + '</td></tr>' +
+          '<tr><td class="rg-k">Kode Proyek</td><td class="rg-c">:</td><td>' + _esc(proj.kode) + '</td></tr>' +
+          '<tr><td class="rg-k">Lokasi</td><td class="rg-c">:</td><td>' + _esc(proj.lokasi || '-') + '</td></tr>' +
+          '<tr><td class="rg-k">Kontraktor</td><td class="rg-c">:</td><td>' + _esc(meta.nama_kontraktor || '-') + '</td></tr>' +
+          '<tr><td class="rg-k">Tanggal</td><td class="rg-c">:</td><td><b>' + formatHariTgl(tanggal) + '</b></td></tr>' +
+          '<tr><td class="rg-k">Minggu ke-</td><td class="rg-c">:</td><td>' + mingguNow + ' dari ' + (proj.durasi_minggu || '-') + '</td></tr>' +
+        '</table>' +
+        '<div class="rg-section-title">A. Pekerjaan yang Dilaksanakan</div>' +
+        '<table class="rg-table">' +
+          '<thead><tr>' +
+            '<th style="width:35px">No</th><th style="width:65px">Kode</th><th>Uraian Pekerjaan</th>' +
+            '<th style="width:45px">Sat</th><th style="width:90px" class="rg-num">Vol Hari Ini</th>' +
+            '<th style="width:75px" class="rg-num">% Item</th><th style="width:80px" class="rg-num">Bobot %</th>' +
+          '</tr></thead>' +
+          '<tbody>' +
+            (rowsData.length ? rowsData.map(function(r, i){
+              return '<tr><td class="rg-center">' + (i+1) + '</td>' +
+                '<td>' + _esc(r.kode) + '</td><td>' + _esc(r.uraian) + '</td>' +
+                '<td class="rg-center">' + _esc(r.satuan) + '</td>' +
+                '<td class="rg-num">' + _fmt(r.volHari, 2) + '</td>' +
+                '<td class="rg-num">' + _fmt(r.pctHari, 2) + '%</td>' +
+                '<td class="rg-num"><b>' + _fmt(r.pctBobotHari, 3) + '%</b></td></tr>';
+            }).join('') : '<tr><td colspan="7" class="rg-empty">Tidak ada pekerjaan pada tanggal ini</td></tr>') +
+          '</tbody>' +
+          '<tfoot><tr><td colspan="6" class="rg-num rg-bold">Progres Hari Ini</td>' +
+            '<td class="rg-num rg-bold">' + _fmt(pctHariIni, 3) + '%</td></tr></tfoot>' +
+        '</table>' +
+        '<div class="rg-section-title">B. Ringkasan Progres</div>' +
+        '<table class="rg-summary">' +
+          '<tr><td class="rg-sum-k">Progres Hari Ini</td><td class="rg-sum-v">' + _fmt(pctHariIni, 3) + '%</td>' +
+            '<td class="rg-sum-k">Progres Kumulatif</td><td class="rg-sum-v">' + _fmt(totalKumulatif, 3) + '%</td></tr>' +
+          '<tr><td class="rg-sum-k">Rencana (Kurva S)</td><td class="rg-sum-v">' + _fmt(totalRencanaPct, 3) + '%</td>' +
+            '<td class="rg-sum-k">Deviasi</td><td class="rg-sum-v ' + (deviasi >= 0 ? 'rg-ok' : 'rg-bad') + '">' +
+            (deviasi >= 0 ? '+' : '') + _fmt(deviasi, 3) + '% ' + (deviasi >= 0 ? '(Ahead)' : '(Behind)') + '</td></tr>' +
+        '</table>' +
+        '<div class="rg-section-title">C. LAMPIRAN FOTO</div>' +
+        (photos.length
+          ? '<div class="rg-subsection-label">Dokumentasi Foto (' + photos.length + ')</div>' +
+            '<div class="rg-photo-grid">' + photos.map(function(p){
+              var w = DB.project_wbs.find(function(x){ return x.id === p.wbs_id; });
+              var cap = p.caption || (w ? (w.kode_wbs + ' — ' + w.uraian) : '');
+              return '<div class="rg-photo-item"><img src="' + p.file_data + '" />' +
+                '<div class="rg-photo-cap">' + _esc(cap) + '</div></div>';
+            }).join('') + '</div>'
+          : '<div class="rg-empty-note">Tidak ada foto dokumentasi pada tanggal ini.</div>') +
+        '<div class="rg-subsection-divider" style="margin:24px 0 16px 0;"></div>' +
+        '<div class="rg-subsection-label">Tanda Tangan</div>' +
+        '<div class="rg-ttd-wrap">' +
+          '<div class="rg-ttd-col">' + ttdBlock('Di Periksa,', meta.ttd_team_leader || { jabatan: 'Konsultan Pengawas / Team Leader' }) + '</div>' +
+          '<div class="rg-ttd-col">' + ttdBlock('Di Buat,', meta.ttd_project_manager || { jabatan: 'Project Manager' }) + '</div>' +
+        '</div>' +
+        '<div class="rg-ttd-wrap" style="margin-top:30px;justify-content:center;gap:50px;">' +
+          '<div class="rg-ttd-col" style="flex:0 0 auto;min-width:200px;">' + ttdBlock('Disetujui,', meta.ttd_direksi || { jabatan: 'Direksi Pengawas' }) + '</div>' +
+          '<div class="rg-ttd-col" style="flex:0 0 auto;min-width:200px;">' + ttdBlock('', meta.ttd_ppk || { jabatan: 'Pejabat Pembuat Komitmen' }) + '</div>' +
+        '</div>' +
+      '</div>';
+    }
 
     function renderToPDF(html, filename){
-      /* ═══ 1. Loading overlay ═══ */
       var overlay = document.createElement('div');
       overlay.id = 'pdfRenderOverlay';
-      overlay.style.cssText =
-        'position:fixed;inset:0;background:rgba(4,9,18,.92);' +
-        'backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);' +
-        'z-index:99998;display:flex;align-items:center;justify-content:center;' +
-        'color:#e6edf7;font-family:Segoe UI,Arial,sans-serif;';
-      overlay.innerHTML =
-        '<div style="text-align:center">' +
-          '<div style="font-size:36px;margin-bottom:14px">⏳</div>' +
-          '<div style="font-size:15px;font-weight:700;margin-bottom:6px">Menyiapkan Preview...</div>' +
-          '<div style="font-size:11.5px;color:#8fa3c4">Mohon tunggu</div>' +
-        '</div>';
+      overlay.style.cssText = 'position:fixed;inset:0;background:rgba(4,9,18,.92);z-index:99998;display:flex;align-items:center;justify-content:center;color:#e6edf7;font-family:Arial;';
+      overlay.innerHTML = '<div style="text-align:center"><div style="font-size:36px">⏳</div><div>Menyiapkan Preview...</div></div>';
       document.body.appendChild(overlay);
 
-      /* ═══ 2. Ambil CSS PDF ═══ */
-      var cssString = '';
-      try {
-        cssString = getPDFStyles();
-      } catch(e){
-        console.error('[ReportGenerator] getPDFStyles error:', e);
-        cssString = '';
-      }
+      var cssString = getPDFStyles();
 
-      /* ═══ 3. Build HTML document lengkap ═══ */
-      var fullHTML =
-        '<!DOCTYPE html>' +
-        '<html><head>' +
-        '<meta charset="UTF-8">' +
-        '<title>' + filename + '</title>' +
+      var fullHTML = '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>' + filename + '</title>' +
         '<style>' + cssString + '</style>' +
-        '<style>' +
-          /* Safety net */
-          'html,body{margin:0;padding:0;background:#ffffff;}' +
-          'body{color:#111111;font-family:Arial,Helvetica,sans-serif;font-size:10.5px;line-height:1.4;}' +
-          'img{max-width:100%;height:auto;}' +
-          '@page{size:A4 portrait;margin:12mm 12mm 14mm 12mm;}' +
-          '@media print{' +
-            'body{margin:0;padding:0;}' +
-            '.rg-page{page-break-after:always;}' +
-            '.rg-page:last-child{page-break-after:auto;}' +
-            '.no-print{display:none !important;}' +
-          '}' +
-        '</style>' +
-        '</head>' +
-        '<body>' + html + '</body>' +
-        '</html>';
+        '<style>html,body{margin:0;padding:0;background:#fff;}body{color:#111;font-family:Arial;font-size:10.5px;line-height:1.4;}' +
+        'img{max-width:100%;height:auto;}@page{size:A4 portrait;margin:12mm;}' +
+        '@media print{body{margin:0;}.rg-page{page-break-after:always;}.rg-page:last-child{page-break-after:auto;}}' +
+        '</style></head><body>' + html + '</body></html>';
 
-      /* ═══ 4. Buka window baru untuk preview ═══ */
       var printWindow = window.open('', '_blank', 'width=900,height=1000');
-
       if (!printWindow){
-        /* Fallback: kalau popup diblokir, pakai iframe invisible */
-        console.warn('[ReportGenerator] Popup blocked, using iframe mode');
-        var iframe = document.createElement('iframe');
-        iframe.style.cssText = 'position:fixed;left:-9999px;top:0;width:794px;height:1123px;border:0;';
-        iframe.srcdoc = fullHTML;
-        document.body.appendChild(iframe);
-
-        iframe.onload = function(){
-          setTimeout(function(){
-            /* Cleanup overlay */
-            if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
-            /* Beri tahu user */
-            _toast('⚠ Popup diblokir. Aktifkan popup untuk preview PDF.', false);
-            /* Tetap coba buka print dialog */
-            try {
-              iframe.contentWindow.focus();
-              iframe.contentWindow.print();
-            } catch(e){
-              console.error('Print error:', e);
-            }
-            /* Cleanup iframe setelah 10s */
-            setTimeout(function(){
-              if (iframe.parentNode) iframe.parentNode.removeChild(iframe);
-            }, 10000);
-          }, 800);
-        };
+        if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+        _toast('⚠ Popup diblokir. Aktifkan popup di browser.', false);
         return;
       }
 
-      /* ═══ 5. Tulis HTML lengkap ke window baru ═══ */
       printWindow.document.open();
       printWindow.document.write(fullHTML);
       printWindow.document.close();
 
-      /* ═══ 6. Setelah load, tampilkan toolbar kecil di atas preview ═══ */
       printWindow.onload = function(){
         setTimeout(function(){
           try {
-            /* Inject toolbar floating ke window baru */
             var toolbar = printWindow.document.createElement('div');
             toolbar.className = 'no-print';
-            toolbar.style.cssText =
-              'position:fixed;top:0;left:0;right:0;height:52px;' +
-              'background:linear-gradient(135deg,#1f4e79,#17395a);' +
-              'color:#fff;display:flex;align-items:center;justify-content:space-between;' +
-              'padding:0 20px;box-shadow:0 4px 12px rgba(0,0,0,.3);' +
-              'z-index:9999;font-family:Segoe UI,Arial,sans-serif;';
-
-            var info = printWindow.document.createElement('div');
-            info.style.cssText = 'display:flex;align-items:center;gap:12px;font-size:13px;font-weight:600;';
-            info.innerHTML = '📄 <span style="font-weight:400;opacity:.9">' + filename + '</span>';
-
-            var buttons = printWindow.document.createElement('div');
-            buttons.style.cssText = 'display:flex;gap:8px;';
-
-            var btnPrint = printWindow.document.createElement('button');
-            btnPrint.textContent = '🖨 Print / Save as PDF';
-            btnPrint.style.cssText =
-              'padding:8px 18px;background:linear-gradient(135deg,#16a34a,#0f8a3f);' +
-              'color:#fff;border:none;border-radius:6px;font-size:12px;font-weight:700;' +
-              'cursor:pointer;box-shadow:0 2px 6px rgba(0,0,0,.2);font-family:inherit;';
-            btnPrint.onclick = function(){ printWindow.print(); };
-
-            var btnClose = printWindow.document.createElement('button');
-            btnClose.textContent = '✕ Tutup';
-            btnClose.style.cssText =
-              'padding:8px 18px;background:rgba(255,255,255,.15);' +
-              'color:#fff;border:1px solid rgba(255,255,255,.3);border-radius:6px;' +
-              'font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;';
-            btnClose.onclick = function(){ printWindow.close(); };
-
-            buttons.appendChild(btnPrint);
-            buttons.appendChild(btnClose);
-            toolbar.appendChild(info);
-            toolbar.appendChild(buttons);
-
-            /* Push body content down supaya tidak tertutup toolbar */
+            toolbar.style.cssText = 'position:fixed;top:0;left:0;right:0;height:52px;background:linear-gradient(135deg,#1f4e79,#17395a);color:#fff;display:flex;align-items:center;justify-content:space-between;padding:0 20px;z-index:9999;font-family:Arial;';
+            toolbar.innerHTML = '<div>📄 ' + filename + '</div>' +
+              '<div><button id="btnPrintPDF" style="padding:8px 18px;background:#16a34a;color:#fff;border:none;border-radius:6px;cursor:pointer;font-weight:700;margin-right:8px;">🖨 Print / Save as PDF</button>' +
+              '<button id="btnClosePDF" style="padding:8px 18px;background:rgba(255,255,255,.15);color:#fff;border:1px solid rgba(255,255,255,.3);border-radius:6px;cursor:pointer;">✕ Tutup</button></div>';
             printWindow.document.body.style.paddingTop = '52px';
             printWindow.document.body.insertBefore(toolbar, printWindow.document.body.firstChild);
-
-            /* ═══ 7. Cleanup overlay di parent ═══ */
+            printWindow.document.getElementById('btnPrintPDF').onclick = function(){ printWindow.print(); };
+            printWindow.document.getElementById('btnClosePDF').onclick = function(){ printWindow.close(); };
             if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
-
             _toast('✅ Preview siap — Klik "Print / Save as PDF"');
-
           } catch(e){
-            console.error('[ReportGenerator] Toolbar inject error:', e);
+            console.error(e);
             if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
           }
         }, 500);
       };
 
-      /* ═══ 8. Fallback timeout — kalau onload tidak fire ═══ */
       setTimeout(function(){
         if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
       }, 5000);
     }
 
-    /* ═══════════════════════════════════════════════════════════
-       PREVIEW PDF — modal review sebelum download
-       ═══════════════════════════════════════════════════════════ */
-
-    function openPdfPreview(blobUrl, filename){
-      /* Buat modal overlay khusus PDF (lebih besar dari modal biasa) */
-      var overlay = document.createElement('div');
-      overlay.className = 'pdf-preview-overlay';
-      overlay.id = 'pdfPreviewOverlay';
-
-      overlay.innerHTML =
-        '<div class="pdf-preview-modal">' +
-
-          /* Header */
-          '<div class="pdf-preview-head">' +
-            '<div class="pdf-preview-title">' +
-              '<span class="pdf-ico">📄</span>' +
-              '<div>' +
-                '<div class="pdf-name">' + _esc(filename) + '</div>' +
-                '<div class="pdf-hint">Preview laporan — periksa sebelum diunduh</div>' +
-              '</div>' +
-            '</div>' +
-            '<button class="pdf-close" id="pdfCloseBtn" title="Tutup">×</button>' +
-          '</div>' +
-
-          /* Toolbar */
-          '<div class="pdf-preview-toolbar">' +
-            '<div class="pdf-tb-left">' +
-              '<span class="pdf-tb-info">🔍 Format A4 Portrait · Siap cetak</span>' +
-            '</div>' +
-            '<div class="pdf-tb-right">' +
-              '<button class="pdf-btn pdf-btn-secondary" id="pdfPrintBtn">' +
-                '🖨 Print' +
-              '</button>' +
-              '<button class="pdf-btn pdf-btn-secondary" id="pdfBackBtn">' +
-                '← Ubah Tanggal' +
-              '</button>' +
-              '<button class="pdf-btn pdf-btn-primary" id="pdfDownloadBtn">' +
-                '⬇ Download PDF' +
-              '</button>' +
-            '</div>' +
-          '</div>' +
-
-          /* Iframe viewer */
-          '<div class="pdf-preview-body">' +
-            '<iframe class="pdf-preview-frame" src="' + blobUrl + '#toolbar=0&navpanes=0&scrollbar=1&zoom=100"></iframe>' +
-          '</div>' +
-
-        '</div>';
-
-      document.body.appendChild(overlay);
-
-      /* Trigger animasi */
-      setTimeout(function(){ overlay.classList.add('show'); }, 10);
-
-      /* ═══ Wire tombol ═══ */
-
-      /* Close */
-      function closePreview(){
-        overlay.classList.remove('show');
-        setTimeout(function(){
-          document.body.removeChild(overlay);
-          /* Revoke blob URL untuk hemat memory */
-          try { URL.revokeObjectURL(blobUrl); } catch(e){}
-        }, 200);
-      }
-
-      document.getElementById('pdfCloseBtn').onclick = closePreview;
-
-      /* ESC untuk close */
-      var escHandler = function(e){
-        if (e.key === 'Escape') {
-          document.removeEventListener('keydown', escHandler);
-          closePreview();
-        }
-      };
-      document.addEventListener('keydown', escHandler);
-
-      /* Klik backdrop untuk close */
-      overlay.onclick = function(e){
-        if (e.target === overlay) closePreview();
-      };
-
-      /* Download — trigger save As */
-      document.getElementById('pdfDownloadBtn').onclick = function(){
-        var a = document.createElement('a');
-        a.href = blobUrl;
-        a.download = filename;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        _toast('✅ PDF diunduh: ' + filename);
-        setTimeout(closePreview, 400);
-      };
-
-      /* Print — buka print dialog lewat hidden iframe */
-      document.getElementById('pdfPrintBtn').onclick = function(){
-        var printFrame = document.createElement('iframe');
-        printFrame.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:none;';
-        printFrame.src = blobUrl;
-        printFrame.onload = function(){
-          setTimeout(function(){
-            try {
-              printFrame.contentWindow.focus();
-              printFrame.contentWindow.print();
-            } catch(e){
-              console.warn('[ReportGenerator] Print error:', e);
-              _toast('⚠ Browser tidak mengizinkan print otomatis. Silakan klik Download lalu print manual.', false);
-            }
-            /* Cleanup */
-            setTimeout(function(){
-              if (printFrame.parentNode) printFrame.parentNode.removeChild(printFrame);
-            }, 3000);
-          }, 500);
-        };
-        document.body.appendChild(printFrame);
-      };
-
-      /* Ubah tanggal — close preview + reopen dialog */
-      document.getElementById('pdfBackBtn').onclick = function(){
-        closePreview();
-        /* Kembali buka dialog pilih tanggal setelah modal tertutup */
-        setTimeout(function(){
-          var pid = (typeof STATE !== 'undefined') ? STATE.activeProject : null;
-          if (pid) openHarianDialog(pid);
-        }, 250);
-      };
-
-      /* Log */
-      console.log('%c[ReportGenerator] PDF preview dibuka', 'color:#06b6d4;font-weight:bold');
-    }
-
-    /* ═══════════════════════════════════════════════════════════
-       STYLES KHUSUS UNTUK PDF
-       ═══════════════════════════════════════════════════════════ */
-
     function getPDFStyles(){
-      return '' +
-        '* { box-sizing: border-box; }' +
+      return '* { box-sizing: border-box; }' +
         '.rg-page, .rg-page * { color: #111 !important; }' +
-        '.rg-page { margin: 0; padding: 0; background: #ffffff; font-family: Arial, sans-serif; font-size: 10.5px; line-height: 1.4; }' +
-        '.rg-page { padding: 0; background: #fff; }' +
-
-        /* Header */
-        '.rg-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-bottom: 8px; }' +
+        '.rg-page { margin: 0; padding: 0; background: #fff; font-family: Arial; font-size: 10.5px; line-height: 1.4; }' +
+        '.rg-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-bottom: 10px; }' +
         '.rg-header-logo { width: 80px; flex-shrink: 0; text-align: center; }' +
         '.rg-logo { max-width: 75px; max-height: 75px; object-fit: contain; }' +
         '.rg-logo-ph { width: 75px; height: 75px; border: 1px dashed #999; border-radius: 4px; }' +
         '.rg-header-text { flex: 1; text-align: center; }' +
         '.rg-instansi { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px; }' +
         '.rg-alamat { font-size: 9px; color: #555; margin-top: 2px; }' +
-        '.rg-title { font-size: 14px; font-weight: 700; margin-top: 6px; text-decoration: underline; letter-spacing: .8px; }' +
-        '.rg-hr { height: 3px; background: #1f4e79; margin: 4px 0 12px 0; }' +
-
-        /* Info */
-        '.rg-info-table { width: 100%; border-collapse: collapse; margin-bottom: 12px; font-size: 10px; }' +
-        '.rg-info-table td { padding: 2px 4px; vertical-align: top; }' +
+        '.rg-title { font-size: 14px; font-weight: 700; margin-top: 6px; text-decoration: underline; }' +
+        '.rg-hr { height: 3px; background: #1f4e79; margin: 6px 0 16px 0; }' +
+        '.rg-info-table { width: 100%; border-collapse: collapse; margin-bottom: 20px; padding: 0 6px; line-height: 1.7; font-size: 10px; }' +
+        '.rg-info-table td { padding: 3px 4px; vertical-align: top; }' +
         '.rg-info-table .rg-k { width: 120px; font-weight: 600; }' +
         '.rg-info-table .rg-c { width: 8px; }' +
-
-        /* Section title */
-        '.rg-section-title { font-size: 11px; font-weight: 700; margin: 12px 0 6px 0; padding: 4px 8px; background: #e7effa; border-left: 3px solid #1f4e79; text-transform: uppercase; letter-spacing: .3px; }' +
-
-        /* Tabel utama */
-        '.rg-table { width: 100%; border-collapse: collapse; font-size: 9.5px; margin-bottom: 10px; }' +
-        '.rg-table th, .rg-table td { border: 1px solid #333; padding: 4px 6px; vertical-align: middle; }' +
+        '.rg-section-title { font-size: 11px; font-weight: 700; margin: 18px 0 10px 0; padding: 6px 12px; background: #e7effa; border-left: 3px solid #1f4e79; text-transform: uppercase; }' +
+        '.rg-table { width: 100%; border-collapse: collapse; font-size: 9.5px; margin-bottom: 18px; }' +
+        '.rg-table th, .rg-table td { border: 1px solid #333; padding: 6px 8px; vertical-align: middle; }' +
         '.rg-table th { background: #1f4e79; color: #fff; font-weight: 700; text-align: center; font-size: 9.5px; }' +
         '.rg-table tfoot td { background: #f0f0f0; font-weight: 700; }' +
         '.rg-table .rg-num { text-align: right; }' +
         '.rg-table .rg-center { text-align: center; }' +
         '.rg-table .rg-empty { text-align: center; font-style: italic; color: #888; padding: 10px; }' +
         '.rg-bold { font-weight: 700; }' +
-
-        /* Ringkasan */
-        '.rg-summary { width: 100%; border-collapse: collapse; font-size: 10px; margin-bottom: 10px; }' +
-        '.rg-summary td { border: 1px solid #333; padding: 6px 8px; }' +
+        '.rg-summary { width: 100%; border-collapse: collapse; font-size: 10px; margin-bottom: 20px; }' +
+        '.rg-summary td { border: 1px solid #333; padding: 8px 10px; }' +
         '.rg-sum-k { background: #f0f0f0; font-weight: 600; width: 130px; }' +
         '.rg-sum-v { width: 130px; text-align: right; font-weight: 700; }' +
         '.rg-sum-v.rg-ok { color: #16a34a; }' +
         '.rg-sum-v.rg-bad { color: #dc2626; }' +
-
-        /* Foto */
-        '.rg-photo-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px; }' +
-        '.rg-photo-item { border: 1px solid #333; padding: 4px; background: #fff; }' +
-        '.rg-photo-item img { width: 100%; height: 130px; object-fit: cover; display: block; }' +
-        '.rg-photo-cap { font-size: 9px; color: #333; margin-top: 3px; line-height: 1.3; min-height: 22px; }' +
-
-        /* TTD */
-        '.rg-ttd-wrap { display: flex; justify-content: space-between; gap: 20px; margin-top: 12px; page-break-inside: avoid; }' +
-        '.rg-ttd-col { flex: 1; text-align: center; font-size: 10px; }' +
-        '.rg-ttd { padding: 6px 4px; }' +
-        '.rg-ttd-jabatan { font-weight: 700; text-transform: uppercase; font-size: 9.5px; }' +
-        '.rg-ttd-space { height: 55px; }' +
-        '.rg-ttd-nama { border-top: 1px solid #333; padding-top: 3px; font-size: 10px; }' +
-        '.rg-ttd-nik { font-size: 9px; color: #555; margin-top: 1px; }' +
-
-        /* Footer */
-        '.rg-footer { margin-top: 16px; padding-top: 6px; border-top: 1px dashed #999; font-size: 8.5px; color: #666; text-align: right; }' +
-
-        /* PROFESSIONAL SPACING */
-        '.rg-section-title { margin: 18px 0 10px 0; padding: 6px 12px; font-size: 11px; }' +
-        '.rg-header { padding-bottom: 10px; margin-bottom: 4px; }' +
-        '.rg-hr { margin: 6px 0 16px 0; height: 3px; }' +
-        '.rg-info-table { margin-bottom: 20px; padding: 0 6px; line-height: 1.7; }' +
-        '.rg-info-table td { padding: 3px 4px; }' +
-        '.rg-table { margin-bottom: 18px; }' +
-        '.rg-table th, .rg-table td { padding: 6px 8px; }' +
-        '.rg-summary { margin-bottom: 20px; }' +
-        '.rg-summary td { padding: 8px 10px; }' +
-
-        /* SUB-SECTION (Lampiran) */
-        '.rg-subsection-label { font-size: 10.5px; font-weight: 700; color: #1f4e79; ' +
-          'margin: 14px 0 8px 0; padding-left: 8px; border-left: 3px solid #4a90d9; ' +
-          'text-transform: uppercase; letter-spacing: .4px; }' +
-        '.rg-subsection-divider { height: 1px; background: #d0d8e4; margin: 18px 0 14px 0; }' +
-        '.rg-empty-note { font-size: 10px; font-style: italic; color: #777; ' +
-          'text-align: center; padding: 14px; background: #f8f9fb; border-radius: 4px; margin-bottom: 14px; }' +
-
-        /* PHOTO GRID IMPROVED */
         '.rg-photo-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 16px; }' +
         '.rg-photo-item { border: 1px solid #ccc; padding: 5px; background: #fff; border-radius: 4px; page-break-inside: avoid; }' +
-        '.rg-photo-item img { width: 100%; height: 140px; object-fit: cover; display: block; border-radius: 2px; }' +
-        '.rg-photo-cap { font-size: 9.5px; color: #333; margin-top: 4px; line-height: 1.35; min-height: 24px; font-weight: 500; }' +
-
-        /* TTD IMPROVED */
+        '.rg-photo-item img { width: 100%; height: 140px; object-fit: cover; display: block; }' +
+        '.rg-photo-cap { font-size: 9.5px; color: #333; margin-top: 4px; min-height: 24px; }' +
         '.rg-ttd-wrap { display: flex; justify-content: space-between; gap: 24px; margin-top: 14px; page-break-inside: avoid; }' +
         '.rg-ttd-col { flex: 1; text-align: center; font-size: 10.5px; }' +
         '.rg-ttd { padding: 8px 4px; }' +
         '.rg-ttd-jabatan { font-weight: 700; text-transform: uppercase; font-size: 10px; margin-bottom: 4px; }' +
         '.rg-ttd-space { height: 60px; }' +
-        '.rg-ttd-nama { border-top: 1px solid #333; padding-top: 4px; font-size: 10.5px; margin-top: 4px; }' +
+        '.rg-ttd-nama { border-top: 1px solid #333; padding-top: 4px; margin-top: 4px; }' +
         '.rg-ttd-nik { font-size: 9px; color: #555; margin-top: 2px; }' +
-
+        '.rg-subsection-label { font-size: 10.5px; font-weight: 700; color: #1f4e79; margin: 14px 0 8px 0; padding-left: 8px; border-left: 3px solid #4a90d9; text-transform: uppercase; }' +
+        '.rg-subsection-divider { height: 1px; background: #d0d8e4; margin: 18px 0 14px 0; }' +
+        '.rg-empty-note { font-size: 10px; font-style: italic; color: #777; text-align: center; padding: 14px; background: #f8f9fb; border-radius: 4px; }' +
         '.rg-page { page-break-after: always; }' +
-         '.rg-page:last-child { page-break-after: auto; }' +
-         '@page { size: A4 portrait; margin: 18mm 15mm 18mm 15mm; }';
+        '@page { size: A4 portrait; margin: 18mm 15mm; }';
     }
-
-    /* ═══════════════════════════════════════════════════════════
-       PUBLIC API + TOMBOL
-       ═══════════════════════════════════════════════════════════ */
 
     window.ReportGenerator = {
       openHarian: openHarianDialog,
       harian: function(pid, tgl){ generateHarian(pid, tgl); }
     };
 
-    // Inject tombol "🖨 Cetak Laporan" di tab Progress (fallback jika index.html tidak punya)
-    function injectPrintButton(){
-      var headerRow = document.querySelector('#sec-progress .panel:first-child .panel-head .row');
-      if (!headerRow) return;
-      if (document.getElementById('btnPrintReport')) return;
-
-      var btn = document.createElement('button');
-      btn.id = 'btnPrintReport';
-      btn.className = 'btn';
-      btn.style.cssText = 'background:linear-gradient(135deg,#dc2626,#b91c1c);border-color:transparent;color:#fff';
-      btn.innerHTML = '🖨 Cetak Laporan';
-      btn.onclick = function(){
-        var pid = (typeof STATE !== 'undefined') ? STATE.activeProject : null;
-        if (!pid){ _toast('Pilih proyek dulu', false); return; }
-        openHarianDialog(pid);
-      };
-      headerRow.appendChild(btn);
-    }
-
-    if (document.readyState === 'loading'){
-      document.addEventListener('DOMContentLoaded', injectPrintButton);
-    } else {
-      injectPrintButton();
-    }
-    setTimeout(injectPrintButton, 1000);
-    setTimeout(injectPrintButton, 3000);
-
     console.log('%c[ReportGenerator.js] ✅ Report Generator installed',
       'color:#dc2626;font-weight:bold;font-size:13px');
-  } // <-- PENUTUP install()
+  }
 
   if (document.readyState === 'loading'){
     document.addEventListener('DOMContentLoaded', function(){ bootstrap(0); });
   } else {
     bootstrap(0);
   }
-})(); // <-- PENUTUP IIFE
+})();
 
 /* =====================================================================
    ADD-ON: LAPORAN MINGGUAN & BULANAN
