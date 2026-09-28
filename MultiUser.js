@@ -214,23 +214,45 @@
       }
     }
 
-    function filterProjectDropdown(){
-      var sel = document.getElementById('activeProject');
-      if (!sel) return;
-
-      var allowed = DB.projects.filter(function(p){ return Auth.canAccess(p.id); });
-      
-      sel.innerHTML = allowed.length
-        ? allowed.map(function(p){
-            return '<option value="' + p.id + '">' + esc(p.kode) + ' — ' + esc(p.nama) + '</option>';
-          }).join('')
-        : '<option value="">(Tidak ada proyek yang bisa diakses)</option>';
-        
-      if (allowed.length && !allowed.find(p => p.id === STATE.activeProject)) {
-        STATE.activeProject = allowed[0].id;
-        sel.value = STATE.activeProject;
-      }
+function filterProjectDropdown(){
+  // ═══ FIX: Guard jika DB belum siap ═══
+  if (typeof DB === 'undefined' || !DB || !DB.projects) {
+    // Coba lagi setelah 500ms, maksimal sampai DB siap
+    if (!filterProjectDropdown._retryCount) filterProjectDropdown._retryCount = 0;
+    filterProjectDropdown._retryCount++;
+    if (filterProjectDropdown._retryCount > 20) {
+      console.warn('[MultiUser] filterProjectDropdown menyerah setelah 20x percobaan');
+      return;
     }
+    setTimeout(filterProjectDropdown, 500);
+    return;
+  }
+
+  const sel = document.getElementById('activeProject');
+  if (!sel) return;
+
+  const user = (typeof Auth !== 'undefined' && Auth.user) ? Auth.user : null;
+  if (!user) return;
+
+  // Superadmin: tampilkan semua proyek
+  if (user.role === 'superadmin' || (user.project_ids && user.project_ids.includes('*'))) {
+    return;  // biarkan dropdown default dari renderProjectSelector
+  }
+
+  // Filter by user's project_ids
+  const allowed = (user.project_ids || []).map(String);
+  Array.from(sel.options).forEach(opt => {
+    if (!opt.value) return;
+    opt.style.display = allowed.includes(String(opt.value)) ? '' : 'none';
+  });
+
+  // Auto-select proyek pertama yang diizinkan
+  const visible = Array.from(sel.options).filter(o => o.value && o.style.display !== 'none');
+  if (visible.length && !allowed.includes(sel.value)) {
+    sel.value = visible[0].value;
+    sel.dispatchEvent(new Event('change'));
+  }
+}
 
     function patchProjectSelector(){
       if (typeof window._origRenderProjectSelector !== 'undefined') return;
