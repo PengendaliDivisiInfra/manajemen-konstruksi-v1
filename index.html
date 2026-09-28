@@ -956,6 +956,7 @@ function emptyDB(){
     projects: [],
     project_ahsp_details: [],
     project_wbs: [],
+    photos: [],
     progress: [],
     bj_material: [],
     beton_presets: [],
@@ -989,6 +990,7 @@ function loadDB(){
       });
       
       if (!DB.users) DB.users = []; 
+      if (!DB.photos) DB.photos = []; 
       return true;
     }
   } catch(e){ console.error(e); }
