@@ -6122,3 +6122,20 @@ canvas:not(.gantt-axis):not(.gantt-bars){
 .ahsp-pi-meta{display:flex;gap:12px;font-size:10.5px;color:var(--muted)}
 .ahsp-pi-kat{padding:1px 6px;background:rgba(168,85,247,.15);color:#c084fc;border-radius:8px;font-weight:600}
 .ahsp-pi-hsp{color:#4ade80;font-weight:700;margin-left:auto}
+
+/* ═══ Indikator LiveSync — State Off (Manual) ═══ */
+.live-indicator.is-off .live-dot {
+  background: #6b7280;
+  box-shadow: 0 0 6px rgba(107, 114, 128, 0.4);
+}
+.live-indicator.is-off .live-text {
+  color: #8fa3c4;
+}
+
+/* ═══ Tombol Save & Load — disabled state ═══ */
+#btnSaveSync:disabled,
+#btnLoadSync:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none !important;
+}
