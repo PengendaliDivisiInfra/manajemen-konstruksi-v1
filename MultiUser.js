@@ -355,66 +355,63 @@ function filterProjectDropdown(){
     /* ═══════════════════════════════════════════════════════════
        RBAC — HAK AKSES TOMBOL
        ═══════════════════════════════════════════════════════════ */
-    function applyPermissions() {
-      if (!Auth.user) return;
-
-      var role = Auth.user.role;
-      var isGuest = Auth.user.username === 'guest';
-      var activeProjectId = STATE.activeProject;
-      var allowedProjects = Auth.user.project_ids || [];
-      var isAllowedInProject = allowedProjects.indexOf('*') >= 0 || allowedProjects.indexOf(String(activeProjectId)) >= 0;
-
-      // Daftar Tombol
-      var adminOnlyButtons = [
-        '#btnAddRes', '#btnAddAhsp', '#btnAddProj', '#btnAddCalendar', '#btnAddHoliday',
-        '#btnReset', '#btnSeed', '#btnPush', '#btnPull', '#btnSaveSet', '#btnSyncAlat', '#btnSaveKoef'
-      ];
-      var editorButtons = [
-        '#btnAddWbs', '#btnAddWbsGroup', '#btnImportBQ', '#btnRunCPMWBS',
-        '#btnAddProg', '#btnProgressWizard', '#btnRunCPM'
-      ];
-      var tableActionButtons = document.querySelectorAll(
-        '[data-edit-res], [data-del-res], [data-edit-wbs], [data-del-wbs], ' +
-        '[data-edit-pg], [data-del-pg], [data-edit-prj], [data-del-prj], ' +
-        '[data-edit-cal], [data-del-cal], [data-edit-hol], [data-del-hol], ' +
-        '[data-edit-user], [data-del-user], [data-edit-ahsp], [data-del-ahsp], ' +
-        '.btn-danger, .btn-edit, .btn-delete'
-      );
-
-      // --- TERAPKAN ATURAN ---
-      if (role === 'superadmin' || role === 'admin') {
-        // ADMIN: Full Akses
-        adminOnlyButtons.forEach(sel => { var el = document.querySelector(sel); if (el) el.style.display = ''; });
-        editorButtons.forEach(sel => { var el = document.querySelector(sel); if (el) el.style.display = ''; });
+  function applyPermissions() {
+    if (!Auth.user) return;
+  
+    var role = Auth.user.role;
+    var isGuest = Auth.user.username === 'guest';
+    var activeProjectId = STATE.activeProject;
+    var allowedProjects = Auth.user.project_ids || [];
+    var isAllowedInProject = allowedProjects.indexOf('*') >= 0
+                          || allowedProjects.indexOf(String(activeProjectId)) >= 0;
+  
+    var adminOnlyButtons = [
+      '#btnAddRes', '#btnAddAhsp', '#btnAddProj', '#btnAddCalendar', '#btnAddHoliday',
+      '#btnReset', '#btnSeed', '#btnPush', '#btnPull', '#btnSaveSet', '#btnSyncAlat', '#btnSaveKoef'
+    ];
+    var editorButtons = [
+      '#btnAddWbs', '#btnAddWbsGroup', '#btnImportBQ', '#btnRunCPMWBS',
+      '#btnAddProg', '#btnProgressWizard', '#btnRunCPM'
+    ];
+    var tableActionButtons = document.querySelectorAll(
+      '[data-edit-res], [data-del-res], [data-edit-wbs], [data-del-wbs], ' +
+      '[data-edit-pg], [data-del-pg], [data-edit-prj], [data-del-prj], ' +
+      '[data-edit-cal], [data-del-cal], [data-edit-hol], [data-del-hol], ' +
+      '[data-edit-user], [data-del-user], [data-edit-ahsp], [data-del-ahsp], ' +
+      '.btn-danger, .btn-edit, .btn-delete'
+    );
+  
+    // --- TERAPKAN ATURAN ---
+    if (role === 'superadmin' || role === 'admin') {
+      adminOnlyButtons.forEach(sel => { var el = document.querySelector(sel); if (el) el.style.display = ''; });
+      editorButtons.forEach(sel => { var el = document.querySelector(sel); if (el) el.style.display = ''; });
+      tableActionButtons.forEach(el => el.style.display = '');
+  
+    } else if (role === 'owner' || isGuest) {
+      adminOnlyButtons.forEach(sel => { var el = document.querySelector(sel); if (el) el.style.display = 'none'; });
+      editorButtons.forEach(sel => { var el = document.querySelector(sel); if (el) el.style.display = 'none'; });
+      tableActionButtons.forEach(el => el.style.display = 'none');
+  
+    } else if (role === 'user') {
+      adminOnlyButtons.forEach(sel => { var el = document.querySelector(sel); if (el) el.style.display = ''; });
+      editorButtons.forEach(sel => { var el = document.querySelector(sel); if (el) el.style.display = ''; });
+  
+      if (isAllowedInProject) {
         tableActionButtons.forEach(el => el.style.display = '');
-        
-      } else if (role === 'owner' || isGuest) {
-        // OWNER / GUEST: Read-Only Total
-        adminOnlyButtons.forEach(sel => { var el = document.querySelector(sel); if (el) el.style.display = 'none'; });
-        editorButtons.forEach(sel => { var el = document.querySelector(sel); if (el) el.style.display = 'none'; });
+      } else {
         tableActionButtons.forEach(el => el.style.display = 'none');
-
-      } else if (role === 'user') {
-        // USER: Full Edit (seperti Admin), tapi dibatasi proyeknya
-        adminOnlyButtons.forEach(sel => { var el = document.querySelector(sel); if (el) el.style.display = ''; });
-        editorButtons.forEach(sel => { var el = document.querySelector(sel); if (el) el.style.display = ''; });
-        
-        if (isAllowedInProject) {
-          tableActionButtons.forEach(el => el.style.display = '');
-        } else {
-          tableActionButtons.forEach(el => el.style.display = 'none');
-        }
-      }
-              // ═══ TAMBAHKAN DI AKHIR ═══
-        (function hideSettingsTabForNonAdmin(){
-          const tab = document.querySelector('.tab[data-tab="settings"]');
-          if (!tab) return;
-          const user = (typeof Auth !== 'undefined' && Auth.user) ? Auth.user : null;
-          const isAdmin = user && (user.role === 'superadmin' || user.role === 'admin');
-          tab.style.display = isAdmin ? '' : 'none';
-        })();
       }
     }
+  
+    // Hide Settings tab untuk non-admin (single close brace — tidak ada duplikat)
+    (function hideSettingsTabForNonAdmin(){
+      const tab = document.querySelector('.tab[data-tab="settings"]');
+      if (!tab) return;
+      const user = (typeof Auth !== 'undefined' && Auth.user) ? Auth.user : null;
+      const isAdmin = user && (user.role === 'superadmin' || user.role === 'admin');
+      tab.style.display = isAdmin ? '' : 'none';
+    })();
+  }
 
         /* ═══ SEMBUNYIKAN TAB PENGATURAN dari user biasa ═══ */
     (function hideSettingsTabForNonAdmin(){
