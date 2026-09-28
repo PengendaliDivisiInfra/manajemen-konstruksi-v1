@@ -179,7 +179,7 @@
       progress.forEach(function(p){ wbsDone[p.wbs_id] = true; });
       var progressCount = Object.keys(wbsDone).length;
 
-      var photos = DB.photos.filter(function(p){
+      var photos = (DB.photos || []).filter(function(p){
         return p.project_id === projectId && (p.tanggal || '').split('T')[0] === tanggal;
       });
 
@@ -221,7 +221,7 @@
     function buildHarianHTML(proj, meta, tanggal){
 
       /* ═══ Ambil data foto lebih dulu ═══ */
-      var photos = DB.photos.filter(function(p){
+      var photos = (DB.photos || []).filter(function(p){
         return p.project_id === proj.id && (p.tanggal || '').split('T')[0] === tanggal;
       }).sort(function(a,b){ return (a.urutan||0)-(b.urutan||0); });
 
