@@ -26,7 +26,6 @@
     function downloadTemplate(){
       const wb = XLSX.utils.book_new();
       
-      // Sheet 1: Template
       const headers = ['Kode WBS', 'Minggu', 'Volume', 'Tanggal', 'Keterangan'];
       const sampleData = [
         ['I.1', 1, 380, '2024-06-03', 'Galian tanah minggu 1'],
@@ -35,12 +34,9 @@
       ];
       const wsData = [headers, ...sampleData];
       const ws = XLSX.utils.aoa_to_sheet(wsData);
-      ws['!cols'] = [
-        { wch: 12 }, { wch: 8 }, { wch: 12 }, { wch: 14 }, { wch: 30 }
-      ];
+      ws['!cols'] = [{ wch: 12 }, { wch: 8 }, { wch: 12 }, { wch: 14 }, { wch: 30 }];
       XLSX.utils.book_append_sheet(wb, ws, 'Template Progress');
 
-      // Sheet 2: Petunjuk
       const petunjuk = [
         ['PETUNJUK PENGISIAN TEMPLATE IMPORT PROGRESS'],
         [''],
@@ -96,7 +92,6 @@
         <div id="impPreviewWrap" style="display:none;">
           <div class="panel-head" style="margin-bottom:6px"><h3 style="font-size:12px">👁 Preview Data</h3></div>
           <div class="imp-preview" id="impPreview" style="max-height:40vh; overflow:auto; border:1px solid var(--line); border-radius:8px;">
-            <!-- Preview akan diisi oleh JS -->
           </div>
           <div id="impSummary" style="margin-top:10px; font-size:12px;"></div>
           <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:14px;">
@@ -131,7 +126,7 @@
         if (btnDownload) btnDownload.onclick = downloadTemplate;
         if (btnUpload) btnUpload.onclick = () => fileInput.click();
 
-        let parsedData = []; // { kode, minggu, volume, tanggal, keterangan, valid, error }
+        let parsedData = [];
 
         if (fileInput){
           fileInput.onchange = function(e){
@@ -152,11 +147,9 @@
                   return;
                 }
 
-                // Parse rows
                 parsedData = [];
                 const headers = rows[0].map(h => String(h || '').trim());
                 
-                // Cari index kolom
                 const idxKode = headers.findIndex(h => h.toLowerCase().includes('kode'));
                 const idxMinggu = headers.findIndex(h => h.toLowerCase().includes('minggu'));
                 const idxVolume = headers.findIndex(h => h.toLowerCase().includes('volume'));
@@ -168,7 +161,6 @@
                   return;
                 }
 
-                // Ambil WBS project
                 const wbsList = DB.project_wbs.filter(w => w.project_id === projectId && !w.is_group);
                 const wbsMap = {};
                 wbsList.forEach(w => { wbsMap[String(w.kode_wbs).trim()] = w; });
@@ -177,20 +169,18 @@
                   const row = rows[i];
                   if (!row || row.length === 0) continue;
                   const kode = String(row[idxKode] || '').trim();
-                  if (!kode) continue; // skip baris kosong
+                  if (!kode) continue;
 
                   const minggu = parseInt(row[idxMinggu], 10) || 0;
                   const volume = parseFloat(row[idxVolume]) || 0;
                   const tanggalRaw = row[idxTanggal];
                   const keterangan = idxKet >= 0 ? String(row[idxKet] || '').trim() : '';
 
-                  // Format tanggal
                   let tanggal = '';
                   if (tanggalRaw){
                     if (typeof tanggalRaw === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(tanggalRaw.trim())){
                       tanggal = tanggalRaw.trim();
                     } else if (typeof tanggalRaw === 'number'){
-                      // Excel serial date
                       const d = new Date((tanggalRaw - 25569) * 86400 * 1000);
                       if (!isNaN(d.getTime())) tanggal = d.toISOString().slice(0,10);
                     } else {
@@ -199,7 +189,6 @@
                     }
                   }
 
-                  // Validasi
                   let valid = true;
                   let error = '';
 
@@ -217,13 +206,11 @@
                     valid = false;
                     error = 'Tanggal tidak valid';
                   } else {
-                    // Cek volume kumulatif vs RAB
                     const volRAB = parseFloat(wbs.volume_rab) || 0;
                     const existingVol = DB.progress
                       .filter(p => p.project_id === projectId && p.wbs_id === wbs.id)
                       .reduce((s, p) => s + (parseFloat(p.volume) || 0), 0);
                     
-                    // Hitung juga total dari file yang diimport (untuk baris yang sama)
                     const importedVolSameWbs = parsedData
                       .filter(d => d.kode === kode && d.valid)
                       .reduce((s, d) => s + d.volume, 0);
@@ -326,14 +313,12 @@
           
           if (typeof closeModal === 'function') closeModal();
           
-          // Refresh UI Progress jika ada
           if (typeof ProgressManager !== 'undefined' && ProgressManager.renderTable){
             ProgressManager.renderTable();
           } else if (typeof renderProgress === 'function'){
             renderProgress();
           }
           
-          // Recalculate CPM jika perlu
           if (typeof runCPM === 'function' && STATE.activeProject){
             runCPM(STATE.activeProject);
           }
@@ -350,7 +335,6 @@
       if (!headerRow) return;
       if (document.getElementById('btnImportProgress')) return;
 
-      // Cari tombol Progress Wizard sebagai anchor
       const btnWizard = document.getElementById('btnProgressWizard');
       if (!btnWizard) return;
 
@@ -368,7 +352,6 @@
         openImportDialog(pid);
       };
       
-      // Sisipkan setelah tombol Wizard
       if (btnWizard.nextSibling){
         headerRow.insertBefore(btn, btnWizard.nextSibling);
       } else {
