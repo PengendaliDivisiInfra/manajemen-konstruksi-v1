@@ -1479,12 +1479,18 @@ function cloneAhspToProject(projectId){
 }
 
 function activeProj(){
+  if (!DB || !DB.projects) return null;
   return DB.projects.find(p => p.id === STATE.activeProject) || null;
 }
 
 /* ---------- RENDER GLOBAL ---------- */
 function renderProjectSelector(){
   const sel = $('#activeProject');
+  if (!sel) return;
+  if (!DB || !DB.projects){
+    sel.innerHTML = '<option value="">(Memuat…)</option>';
+    return;
+  }
   sel.innerHTML = DB.projects.length
     ? DB.projects.map(p => `<option value="${p.id}">${esc(p.kode)} — ${esc(p.nama)}</option>`).join('')
     : '<option value="">(Belum ada proyek)</option>';
@@ -3262,38 +3268,45 @@ $$('.tab').forEach(t => t.onclick = () => switchTab(t.dataset.tab));
 
 $('#activeProject').onchange = e => { STATE.activeProject = e.target.value; renderAll(); };
 
-$('#fResJenis').onchange = renderResources;
-$('#fResSearch').oninput  = renderResources;
-$('#btnAddRes').onclick   = () => formResource(null);
-$('#btnAddAhsp').onclick  = () => formAhsp(null);
-$('#btnAddWbs').onclick   = () => formWbs(null, false);
-$('#btnAddWbsGroup').onclick = () => formWbs(null, true);
-$('#btnAddProg').onclick  = () => formProgress(null);
-$('#btnAddProj').onclick  = () => formProject(null);
+/* ═══ FIX: Null-guarded event wiring ═══ */
+const _wire = (sel, fn) => { const el = document.querySelector(sel); if (el) el.onclick = fn; };
+const _bond = (sel, evt, fn) => { const el = document.querySelector(sel); if (el) el[evt] = fn; };
+
+_bond('#fResJenis', 'onchange', renderResources);
+_bond('#fResSearch', 'oninput',  renderResources);
+_wire('#btnAddRes',       () => formResource(null));
+_wire('#btnAddAhsp',      () => formAhsp(null));
+_wire('#btnAddWbs',       () => formWbs(null, false));
+_wire('#btnAddWbsGroup',  () => formWbs(null, true));
+_wire('#btnAddProg',      () => formProgress(null));
+_wire('#btnAddProj',      () => formProject(null));
+_wire('#btnAddCalendar',  () => formCalendar(null));
+_wire('#btnAddHoliday',   () => formHoliday(null));
 $('#btnAddCalendar').onclick = () => formCalendar(null);
 $('#btnAddHoliday').onclick  = () => formHoliday(null);
 
-$('#btnRunCPMWBS').onclick = () => {
+_wire('#btnRunCPMWBS', () => {
   const pid = STATE.activeProject;
   if (!pid) return;
   runCPM(pid);
   saveDB(); renderWbs();
   toast('CPM dihitung ulang');
-};
+});
 
-$('#btnSyncAlat').onclick = () => {
-  const pid = $('#ahspProjSel').value;
+_wire('#btnSyncAlat', () => {
+  const el = document.querySelector('#ahspProjSel');
+  const pid = el ? el.value : null;
   if (!pid){ toast('Pilih proyek', false); return; }
   if (!confirm('Sinkronkan ulang koefisien alat?')) return;
   cloneAhspToProject(pid);
   saveDB(); renderKoefTable(); toast('Disinkronkan');
-};
+});
 
-$('#btnSaveKoef').onclick = () => {
+_wire('#btnSaveKoef', () => {
   saveDB(); renderWbs(); renderAnalysis(); toast('Koefisien disimpan');
-};
+});
 
-$('#btnPrintAnalysis').onclick = () => window.print();
+_wire('#btnPrintAnalysis', () => window.print());
 
 $('#btnSaveSet').onclick = () => {
   SET.overhead = num($('#setOh').value);
