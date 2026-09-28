@@ -1,228 +1,400 @@
 /* =====================================================================
-   MODUL PROGRESS & S-CURVE — Manajemen Progres Fisik & Analisis Deviasi
+   PROGRESS MANAGER v2 — Laporan Progres dengan Hierarki WBS & Filter Periode
    ===================================================================== */
 
 const ProgressManager = {
-  /* ── MESIN KALKULASI (A, B, C) ── */
-  getABC(projectId, wbsId, mingguTarget) {
-    const wbs = DB.project_wbs.find(w => w.id === wbsId);
-    if (!wbs || num(wbs.volume_rab) === 0) return { A: 0, B: 0, C: 0, bobot: 0, volLalu: 0, volKini: 0, volKumulatif: 0 };
+  currentPeriod: 'weekly',     // 'daily' | 'weekly' | 'monthly'
+  currentRangeStart: null,
+  currentRangeEnd: null,
 
-    // 1. Hitung Bobot Item terhadap Total Proyek
-    const hsRAB = Calc.hargaSatuanRAB(projectId, wbs.ahsp_id);
-    const totalRABProyek = Calc.wbsRows(projectId).filter(r => !r.isGroup).reduce((s, r) => s + r.total_rab, 0) || 1;
-    const bobot = (num(wbs.volume_rab) * hsRAB) / totalRABProyek * 100;
+  /* ═══════════════════════════════════════════════════════════
+     A. RENDER TABEL UTAMA
+     ═══════════════════════════════════════════════════════════ */
+  renderTable(projectId) {
+    projectId = projectId || STATE.activeProject;
+    if (!projectId) return;
 
-    // 2. Ambil semua progress untuk WBS ini
-    const allProg = DB.progress.filter(p => p.project_id === projectId && p.wbs_id === wbsId);
+    const container = document.getElementById('tblProg');
+    if (!container) return;
 
-    // 3. Hitung Volume Kumulatif
-    const volLalu = allProg.filter(p => num(p.minggu) < mingguTarget).reduce((s, p) => s + num(p.volume), 0);
-    const volKini = allProg.filter(p => num(p.minggu) === mingguTarget).reduce((s, p) => s + num(p.volume), 0);
-    const volKumulatif = volLalu + volKini;
+    // Ambil semua WBS proyek
+    const allWbs = DB.project_wbs.filter(w => w.project_id === projectId);
+    if (!allWbs.length) {
+      container.innerHTML = '<tbody><tr><td class="empty">Belum ada WBS. Tambahkan di tab WBS/BQ.</td></tr></tbody>';
+      return;
+    }
 
-    // 4. Konversi ke Persentase terhadap Volume RAB
-    const A = (volLalu / num(wbs.volume_rab)) * bobot;
-    const B = (volKini / num(wbs.volume_rab)) * bobot;
-    const C = (volKumulatif / num(wbs.volume_rab)) * bobot;
+    // Bangun tree
+    const tree = this.buildTree(allWbs);
+    const leaves = this.collectLeaves(tree);
 
-    return { A, B, C, bobot, volLalu, volKini, volKumulatif };
-  },
+    // Dapatkan daftar periode berdasarkan currentPeriod
+    const periods = this.getPeriods(projectId, this.currentPeriod);
 
-  /* ── RENDER TABEL INPUT PROGRESS ── */
-  renderTable() {
-    const pid = STATE.activeProject;
-    if (!pid) return;
-    const items = DB.project_wbs.filter(w => w.project_id === pid && !w.is_group);
-    const rows = DB.progress.filter(p => p.project_id === pid).sort((a,b) => num(a.minggu) - num(b.minggu) || (items.findIndex(x=>x.id===a.wbs_id) - items.findIndex(x=>x.id===b.wbs_id)));
+    // Header
+    const headCols = periods.map(p => 
+      `<th class="center" style="min-width:90px">${esc(p.label)}</th>`
+    ).join('');
 
-    const head = `<thead><tr>
-      <th>Minggu</th><th>Kode WBS</th><th>Uraian</th>
-      <th class="num">Bobot (%)</th>
-      <th class="num">Vol Lalu</th>
-      <th class="num">Vol Kini</th>
-      <th class="num">Vol Kumulatif</th>
-      <th class="num">Progres Lalu (A)</th>
-      <th class="num">Progres Kini (B)</th>
-      <th class="num">S.D. Kini (C)</th>
-      <th class="center">Aksi</th>
-    </tr></thead>`;
-
-    const body = rows.map(p => {
-      const w = items.find(x => x.id === p.wbs_id);
-      if (!w) return '';
-      const abc = this.getABC(pid, p.wbs_id, p.minggu);
-      return `<tr>
-        <td class="center"><b>M${esc(p.minggu)}</b></td>
-        <td>${esc(w.kode_wbs)}</td>
-        <td>${esc(w.uraian)}</td>
-        <td class="num">${fmt(abc.bobot, 2)}%</td>
-        <td class="num">${fmt(abc.volLalu, 2)}</td>
-        <td class="num">${fmt(abc.volKini, 2)}</td>
-        <td class="num">${fmt(abc.volKumulatif, 2)}</td>
-        <td class="num pos">${fmt(abc.A, 2)}%</td>
-        <td class="num ${abc.B >= 0 ? 'pos' : 'neg'}">${fmt(abc.B, 2)}%</td>
-        <td class="num ${abc.C >= 0 ? 'pos' : 'neg'}"><b>${fmt(abc.C, 2)}%</b></td>
-        <td class="center">
-          <button class="btn btn-sm" data-edit-pg="${p.id}">✎</button>
-          <button class="btn btn-sm btn-danger" data-del-pg="${p.id}">✕</button>
-        </td>
-      </tr>`;
-    }).join('');
-
-    $('#tblProg').innerHTML = head + `<tbody>${body || `<tr><td colspan="11" class="empty">Belum ada progress.</td></tr>`}</tbody>`;
-    
-    // Re-attach event listeners
-    $$('[data-edit-pg]').forEach(b => b.onclick = () => ProgressManager.form(b.dataset.editPg));
-    $$('[data-del-pg]').forEach(b => b.onclick = () => {
-      if (!confirm('Hapus progress ini?')) return;
-      if (typeof Undo !== 'undefined') Undo.snapshot('Hapus Progress');
-      DB.progress = DB.progress.filter(x => x.id !== b.dataset.delPg);
-      saveDB(); ProgressManager.renderTable(); toast('Progress dihapus');
-    });
-  },
-
-  /* ── RENDER S-CURVE & ANALISIS DEVIASI ── */
-  renderScurve(projectId) {
-    const sc = Calc.scurve(projectId);
-    const ctx = document.getElementById('chartProgressScurve');
-    if (!ctx) return;
-
-    if (STATE.chartProgScurve) STATE.chartProgScurve.destroy();
-    STATE.chartProgScurve = new Chart(ctx.getContext('2d'), {
-      type: 'line',
-      data: {
-        labels: sc.labels,
-        datasets: [
-          { label: 'Rencana (%)', data: sc.planned, borderColor: '#2f81f7', backgroundColor: 'rgba(47,129,247,.14)', fill: true, tension: .35, borderWidth: 2.5, pointRadius: 3 },
-          { label: 'Aktual (%)', data: sc.actual, borderColor: '#1abc9c', backgroundColor: 'rgba(26,188,156,.14)', fill: true, tension: .35, borderWidth: 2.5, pointRadius: 3 }
-        ]
-      },
-      options: {
-        responsive: true, maintainAspectRatio: false,
-        plugins: { legend: { labels: { color: '#e6edf7' } } },
-        scales: {
-          x: { ticks: { color: '#8fa3c4' }, grid: { color: 'rgba(36,54,92,.5)' } },
-          y: { ticks: { color: '#8fa3c4', callback: v => v + '%' }, grid: { color: 'rgba(36,54,92,.5)' }, beginAtZero: true, max: 100 }
-        }
-      }
-    });
-  },
-
-  renderVariance(projectId) {
-    const items = DB.project_wbs.filter(w => w.project_id === projectId && !w.is_group);
-    const proj = DB.projects.find(p => p.id === projectId);
-    const totalRAB = items.reduce((s, w) => s + (num(w.volume_rab) * Calc.hargaSatuanRAB(projectId, w.ahsp_id)), 0) || 1;
-    const currentMinggu = DB.progress.filter(p => p.project_id === projectId).reduce((m, p) => Math.max(m, num(p.minggu)), 1);
-
-    const rows = items.map(w => {
-      const bobot = (num(w.volume_rab) * Calc.hargaSatuanRAB(projectId, w.ahsp_id)) / totalRAB * 100;
-      
-      // Hitung Rencana (%) berdasarkan Jadwal
-      let planPct = 0;
-      if (currentMinggu > 0 && w.tgl_mulai_rencana && w.tgl_selesai_rencana) {
-        const cal = WorkingCalendar.get(w.calendar_id || proj.calendar_id);
-        const totalDays = WorkingCalendar.diffDays(w.tgl_mulai_rencana, w.tgl_selesai_rencana, cal, 'working') || 1;
-        const hariKe = Math.min(totalDays, Math.max(0, (currentMinggu - 1) * 5 + 5)); 
-        planPct = Math.min((hariKe / totalDays) * bobot, bobot);
-      }
-
-      // Hitung Aktual (%) menggunakan logika A+B=C
-      const abc = this.getABC(projectId, w.id, currentMinggu);
-      const actPct = abc.C;
-      
-      const dev = actPct - planPct;
-      let status = '<span class="badge b-ok">On Schedule</span>';
-      if (dev < -1) status = '<span class="badge b-danger">Behind</span>';
-      else if (dev > 1) status = '<span class="badge b-warn">Ahead</span>';
-
-      return `<tr>
-        <td><b>${esc(w.kode_wbs)}</b></td>
-        <td>${esc(w.uraian)}</td>
-        <td class="num">${fmt(bobot, 2)}%</td>
-        <td class="num">${fmt(planPct, 2)}%</td>
-        <td class="num">${fmt(actPct, 2)}%</td>
-        <td class="num ${dev >= 0 ? 'pos' : 'neg'}">${fmt(dev, 2)}%</td>
-        <td class="text-center">${status}</td>
-      </tr>`;
-    }).join('');
-
-    const head = `<thead><tr>
-      <th>Kode WBS</th><th>Uraian</th>
-      <th class="num">Bobot (%)</th>
-      <th class="num">Rencana (%)</th>
-      <th class="num">Aktual (%)</th>
-      <th class="num">Deviasi (%)</th>
-      <th class="text-center">Status</th>
-    </tr></thead>`;
-
-    const tbl = document.getElementById('tblProgressVariance');
-    if (tbl) tbl.innerHTML = head + `<tbody>${rows || '<tr><td colspan="7" class="empty">Belum ada data WBS.</td></tr>'}</tbody>`;
-  },
-
-  /* ── FORM INPUT DENGAN VALIDASI GOLDEN RULES ── */
-  form(id) {
-    const pid = STATE.activeProject;
-    const p = id ? DB.progress.find(x => x.id === id) : null;
-    const items = DB.project_wbs.filter(w => w.project_id === pid && !w.is_group);
-    const opts = items.map(w => `<option value="${w.id}" ${p?.wbs_id === w.id?'selected':''}>${esc(w.kode_wbs)} — ${esc(w.uraian)}</option>`).join('');
-    const proj = activeProj();
-    const maxM = Math.max(1, Math.round(num(proj?.durasi_minggu)||1));
-
-    const body = `
-      <div class="row">
-        <div class="field" style="flex:3"><label class="f">Item WBS</label><select id="fp_wbs">${opts}</select></div>
-        <div class="field"><label class="f">Minggu ke-</label><input id="fp_m" type="number" min="1" max="${maxM}" value="${num(p?.minggu)||1}" /></div>
-        <div class="field"><label class="f">Volume</label><input id="fp_v" type="number" step="0.01" value="${num(p?.volume)}" /></div>
-        <div class="field"><label class="f">Tanggal</label><input id="fp_t" type="date" value="${esc(p?.tanggal||today())}" /></div>
-      </div>
-      <div id="fp_info" style="margin-top:12px;font-size:12px;color:var(--muted);background:#0e1a30;padding:10px;border-radius:6px"></div>
+    const head = `
+      <thead>
+        <tr>
+          <th style="width:80px">Kode</th>
+          <th>Uraian Pekerjaan</th>
+          <th style="width:55px" class="center">Sat</th>
+          <th style="width:80px" class="num">Vol RAB</th>
+          <th style="width:80px" class="num">Bobot %</th>
+          ${headCols}
+          <th style="width:90px" class="num">Total (%)</th>
+        </tr>
+      </thead>
     `;
-    
-    openModal(id?'Edit Progress':'Tambah Progress', body, () => {
-      const wbsId = $('#fp_wbs').value;
-      const minggu = num($('#fp_m').value);
-      const volumeInput = num($('#fp_v').value);
-      const wbs = items.find(x => x.id === wbsId);
-      
-      // Validasi Golden Rules
-      if (wbs) {
-        const volRab = num(wbs.volume_rab);
-        const volLalu = DB.progress.filter(x => x.project_id === pid && x.wbs_id === wbsId && num(x.minggu) < minggu && x.id !== p?.id).reduce((s,x) => s + num(x.volume), 0);
-        const volTotalNanti = volLalu + volumeInput;
-        
-        if (volTotalNanti > volRab && volRab > 0) {
-          toast(`⚠ Volume kumulatif (${fmt(volTotalNanti,2)}) melebihi Volume RAB (${fmt(volRab,2)}). Sisa maksimal: ${fmt(volRab - volLalu, 2)}`, false);
-          return false;
-        }
-      }
 
-      const obj = { id: p?.id || uid('pg'), project_id: pid, wbs_id: wbsId, minggu, volume: volumeInput, tanggal: $('#fp_t').value };
-      if (p) Object.assign(p, obj); else DB.progress.push(obj);
-      saveDB(); 
-      ProgressManager.renderTable(); 
-      toast('Progress disimpan');
+    // Body: render tree
+    const body = this.renderTreeRows(tree, leaves, periods, projectId, 0);
+
+    container.innerHTML = head + `<tbody>${body}</tbody>`;
+
+    // Wire input events
+    this.wireInputEvents(projectId, periods);
+  },
+
+  /* ═══════════════════════════════════════════════════════════
+     B. BUILD TREE 3-LEVEL
+     ═══════════════════════════════════════════════════════════ */
+  buildTree(allWbs) {
+    const byId = {};
+    const childrenOf = {};
+    const roots = [];
+
+    allWbs.forEach(w => {
+      byId[w.id] = w;
+      childrenOf[w.id] = [];
     });
-    
-    const updateInfo = () => {
-      const wbsId = $('#fp_wbs').value;
-      const minggu = num($('#fp_m').value);
-      const wbs = items.find(x => x.id === wbsId);
-      if (!wbs) return;
-      
-      const volRab = num(wbs.volume_rab);
-      const volLalu = DB.progress.filter(x => x.project_id === pid && x.wbs_id === wbsId && num(x.minggu) < minggu && x.id !== p?.id).reduce((s,x) => s + num(x.volume), 0);
-      const sisa = volRab - volLalu;
-      
-      $('#fp_info').innerHTML = `
-        <b>Volume RAB:</b> ${fmt(volRab, 2)} ${wbs.satuan} <br>
-        <b>Volume s.d. Minggu ${minggu-1}:</b> ${fmt(volLalu, 2)} ${wbs.satuan} <br>
-        <b style="color:var(--warn)">Sisa Volume Maksimal:</b> ${fmt(sisa, 2)} ${wbs.satuan}
+
+    allWbs.forEach(w => {
+      if (w.parent_id && byId[w.parent_id]) {
+        childrenOf[w.parent_id].push(w);
+      } else {
+        roots.push(w);
+      }
+    });
+
+    const sorter = (a, b) => (a.urut || 0) - (b.urut || 0);
+
+    function walk(node, level) {
+      node._level = level;
+      node._children = (childrenOf[node.id] || []).sort(sorter);
+      node._children.forEach(c => walk(c, level + 1));
+      return node;
+    }
+
+    return roots.sort(sorter).map(r => walk(r, 1));
+  },
+
+  collectLeaves(tree) {
+    const leaves = [];
+    function walk(node) {
+      if (!node._children.length) {
+        leaves.push(node);
+      } else {
+        node._children.forEach(walk);
+      }
+    }
+    tree.forEach(walk);
+    return leaves;
+  },
+
+  /* ═══════════════════════════════════════════════════════════
+     C. DAFTAR PERIODE DINAMIS
+     ═══════════════════════════════════════════════════════════ */
+  getPeriods(projectId, mode) {
+    const proj = DB.projects.find(p => p.id === projectId);
+    if (!proj) return [];
+
+    const start = proj.tgl_mulai || today();
+    const end = proj.tgl_selesai || today();
+
+    const periods = [];
+    const d1 = new Date(start + 'T00:00:00');
+    const d2 = new Date(end + 'T00:00:00');
+
+    if (mode === 'daily') {
+      let d = new Date(d1);
+      let guard = 0;
+      while (d <= d2 && guard++ < 400) {
+        const iso = localISO(d);
+        periods.push({
+          key: iso,
+          label: d.toLocaleDateString('id-ID', { day: '2-digit', month: 'short' }),
+          start: iso,
+          end: iso
+        });
+        d.setDate(d.getDate() + 1);
+      }
+    } else if (mode === 'weekly') {
+      let d = new Date(d1);
+      let wk = 1;
+      let guard = 0;
+      while (d <= d2 && guard++ < 60) {
+        const ws = new Date(d);
+        const we = new Date(d);
+        we.setDate(we.getDate() + 6);
+        const wsISO = localISO(ws);
+        const weISO = localISO(we > d2 ? d2 : we);
+        periods.push({
+          key: 'W' + wk,
+          label: 'W' + wk,
+          start: wsISO,
+          end: weISO
+        });
+        d.setDate(d.getDate() + 7);
+        wk++;
+      }
+    } else if (mode === 'monthly') {
+      let d = new Date(d1.getFullYear(), d1.getMonth(), 1);
+      let guard = 0;
+      while (d <= d2 && guard++ < 36) {
+        const mStart = new Date(d);
+        const mEnd = new Date(d.getFullYear(), d.getMonth() + 1, 0);
+        periods.push({
+          key: d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'),
+          label: d.toLocaleDateString('id-ID', { month: 'short', year: '2-digit' }),
+          start: localISO(mStart),
+          end: localISO(mEnd > d2 ? d2 : mEnd)
+        });
+        d.setMonth(d.getMonth() + 1);
+      }
+    }
+
+    return periods;
+  },
+
+  /* ═══════════════════════════════════════════════════════════
+     D. RENDER ROWS (REKURSIF)
+     ═══════════════════════════════════════════════════════════ */
+  renderTreeRows(tree, leaves, periods, projectId, depth) {
+    let html = '';
+
+    const totalRAB = leaves.reduce((s, w) => 
+      s + (num(w.volume_rab) * Calc.hargaSatuanRAB(projectId, w.ahsp_id)), 0) || 1;
+
+    tree.forEach(node => {
+      const isLeaf = !node._children.length;
+      const indent = depth * 16;
+      const levelClass = isLeaf ? '' : (depth === 0 ? 'lvl1' : 'lvl2');
+
+      // Bobot
+      const volRAB = num(node.volume_rab);
+      const costTotal = isLeaf ? volRAB * Calc.hargaSatuanRAB(projectId, node.ahsp_id) : 0;
+      const bobot = isLeaf ? (costTotal / totalRAB * 100) : 0;
+
+      // Untuk leaf: hitung progress kumulatif
+      const totalProg = isLeaf ? this.getTaskTotalProgress(node.id) : 0;
+
+      // Kolom periode
+      let periodCells = '';
+      periods.forEach(p => {
+        if (isLeaf) {
+          const val = this.getCellValue(node.id, p, this.currentPeriod);
+          periodCells += `
+            <td class="pw-cell">
+              <input type="number" 
+                     class="pw-input" 
+                     step="0.01"
+                     min="0"
+                     data-wbs="${node.id}" 
+                     data-period="${p.key}"
+                     data-start="${p.start}"
+                     data-end="${p.end}"
+                     value="${val > 0 ? val.toFixed(2) : ''}"
+                     placeholder="0" />
+            </td>
+          `;
+        } else {
+          // Summary: read-only, tampilkan hasil roll-up
+          const sumVal = this.getSummaryValue(node, p, this.currentPeriod, leaves);
+          periodCells += `<td class="pw-td-pct">${sumVal > 0 ? sumVal.toFixed(2) : '—'}</td>`;
+        }
+      });
+
+      // Baris
+      html += `
+        <tr class="${levelClass}">
+          <td>${esc(node.kode_wbs || '')}</td>
+          <td style="padding-left:${indent}px">
+            ${isLeaf ? '' : '<span style="opacity:.6">▸ </span>'}
+            ${esc(node.uraian || '')}
+          </td>
+          <td class="center">${esc(node.satuan || '')}</td>
+          <td class="num">${isLeaf ? fmt(volRAB, 2) : ''}</td>
+          <td class="num">${isLeaf ? fmt(bobot, 2) : ''}</td>
+          ${periodCells}
+          <td class="num">${isLeaf ? fmt(totalProg, 2) + '%' : ''}</td>
+        </tr>
       `;
-    };
-    
-    $('#fp_wbs').onchange = updateInfo;
-    $('#fp_m').oninput = updateInfo;
-    updateInfo();
+
+      if (node._children.length) {
+        html += this.renderTreeRows(node._children, leaves, periods, projectId, depth + 1);
+      }
+    });
+
+    return html;
+  },
+
+  /* ═══════════════════════════════════════════════════════════
+     E. HITUNG NILAI PER CELL
+     ═══════════════════════════════════════════════════════════ */
+  
+  /* Ambil nilai volume untuk leaf task di periode tertentu */
+  getCellValue(wbsId, period, mode) {
+    const rows = DB.progress.filter(p => 
+      p.wbs_id === wbsId && 
+      p.tanggal >= period.start && 
+      p.tanggal <= period.end
+    );
+    return rows.reduce((s, p) => s + num(p.volume), 0);
+  },
+
+  /* Ambil nilai summary (SUM dari anak) */
+  getSummaryValue(node, period, mode, leaves) {
+    // Kumpulkan semua descendant leaf
+    const descendants = [];
+    function walk(n) {
+      if (!n._children.length) descendants.push(n);
+      else n._children.forEach(walk);
+    }
+    walk(node);
+
+    // SUM volume untuk periode
+    return descendants.reduce((s, l) => {
+      return s + this.getCellValue(l.id, period, mode);
+    }, 0);
+  },
+
+  /* Total progress kumulatif per task */
+  getTaskTotalProgress(wbsId) {
+    const w = DB.project_wbs.find(x => x.id === wbsId);
+    if (!w) return 0;
+    const volRAB = num(w.volume_rab) || 1;
+    const done = DB.progress
+      .filter(p => p.wbs_id === wbsId)
+      .reduce((s, p) => s + num(p.volume), 0);
+    return Math.min(100, (done / volRAB) * 100);
+  },
+
+  /* ═══════════════════════════════════════════════════════════
+     F. WIRE INPUT EVENTS — Auto-save + Akumulasi
+     ═══════════════════════════════════════════════════════════ */
+  wireInputEvents(projectId, periods) {
+    document.querySelectorAll('.pw-input').forEach(inp => {
+      inp.onchange = () => {
+        const wbsId = inp.dataset.wbs;
+        const periodKey = inp.dataset.period;
+        const start = inp.dataset.start;
+        const end = inp.dataset.end;
+        const val = num(inp.value);
+
+        // Cari periode object
+        const period = periods.find(p => p.key === periodKey);
+        if (!period) return;
+
+        // Hapus dulu semua progress lama di periode ini untuk WBS ini
+        DB.progress = DB.progress.filter(p => 
+          !(p.wbs_id === wbsId && 
+            p.tanggal >= period.start && 
+            p.tanggal <= period.end)
+        );
+
+        if (val > 0) {
+          // Simpan sebagai satu record di tanggal akhir periode
+          const tanggalSimpan = this.getTanggalSimpan(period, this.currentPeriod);
+          DB.progress.push({
+            id: uid('pg'),
+            project_id: projectId,
+            wbs_id: wbsId,
+            minggu: this.getMingguFromDate(projectId, tanggalSimpan),
+            volume: val,
+            tanggal: tanggalSimpan,
+            keterangan: 'Input via Laporan Progres'
+          });
+        }
+
+        saveDB();
+        this.renderTable(projectId);
+        toast('✓ Tersimpan: ' + val + ' ' + (DB.project_wbs.find(w => w.id === wbsId)?.satuan || ''));
+      };
+    });
+  },
+
+  getTanggalSimpan(period, mode) {
+    if (mode === 'daily') return period.start;
+    if (mode === 'weekly') return period.end;    // akhir minggu
+    if (mode === 'monthly') return period.end;   // akhir bulan
+    return period.start;
+  },
+
+  getMingguFromDate(projectId, tanggalISO) {
+    const proj = DB.projects.find(p => p.id === projectId);
+    if (!proj || !proj.tgl_mulai) return 1;
+    const d1 = new Date(proj.tgl_mulai + 'T00:00:00');
+    const d2 = new Date(tanggalISO + 'T00:00:00');
+    const diff = Math.round((d2 - d1) / 86400000);
+    return Math.max(1, Math.floor(diff / 7) + 1);
+  },
+
+  /* ═══════════════════════════════════════════════════════════
+     G. UI CONTROLS — Filter Periode & Tombol Cetak
+     ═══════════════════════════════════════════════════════════ */
+  renderToolbar(projectId) {
+    const wrap = document.getElementById('progressToolbar');
+    if (!wrap) return;
+
+    wrap.innerHTML = `
+      <div class="row" style="align-items:center;gap:12px">
+        <div class="field" style="min-width:180px">
+          <label class="f">Filter Periode</label>
+          <select id="pmPeriodMode">
+            <option value="daily" ${this.currentPeriod==='daily'?'selected':''}>📅 Harian</option>
+            <option value="weekly" ${this.currentPeriod==='weekly'?'selected':''}>📆 Mingguan</option>
+            <option value="monthly" ${this.currentPeriod==='monthly'?'selected':''}>🗓 Bulanan</option>
+          </select>
+        </div>
+        <div style="flex:1"></div>
+        <button class="btn btn-sm" id="pmBtnPrint" style="background:linear-gradient(135deg,#dc2626,#b91c1c);color:#fff;border-color:transparent">🖨 Cetak Laporan</button>
+      </div>
+    `;
+
+    const sel = document.getElementById('pmPeriodMode');
+    if (sel) {
+      sel.onchange = (e) => {
+        this.currentPeriod = e.target.value;
+        this.renderTable(projectId);
+      };
+    }
+
+    const btnPrint = document.getElementById('pmBtnPrint');
+    if (btnPrint) {
+      btnPrint.onclick = () => {
+        if (typeof ReportGenerator !== 'undefined' && ReportGenerator.openHarian) {
+          ReportGenerator.openHarian(projectId);
+        }
+      };
+    }
+  },
+
+  /* ═══════════════════════════════════════════════════════════
+     H. COMPAT: Method lama yang masih dipanggil
+     ═══════════════════════════════════════════════════════════ */
+  renderScurve(projectId) {
+    if (typeof renderProgressScurve === 'function') {
+      renderProgressScurve(projectId);
+    }
+  },
+  
+  renderVariance(projectId) {
+    if (typeof renderProgressVariance === 'function') {
+      renderProgressVariance(projectId);
+    }
   }
 };
