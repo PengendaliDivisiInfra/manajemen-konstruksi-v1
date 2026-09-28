@@ -222,7 +222,9 @@
         });
       });
 
-      var allProgress = DB.progress.filter(function(p){ return p.project_id === proj.id; });
+      var allProgress = DB.progress.filter(function(p){
+        return p.project_id === proj.id && (p.tanggal || '').split('T')[0] <= tanggal;
+      });
       var allByWbs = {};
       allProgress.forEach(function(p){
         if (!allByWbs[p.wbs_id]) allByWbs[p.wbs_id] = 0;
@@ -251,7 +253,7 @@
         var nikStr = String(data.nik || '').trim();
         var nikHTML = nikStr !== '' ? '<div class="rg-ttd-nik">NIP/NIK: ' + _esc(nikStr) + '</div>' : '';
         var namaStr = String(data.nama || '').trim();
-        var namaHTML = namaStr !== '' ? '<b>' + _esc(namaStr) + '</b>' : '<b style="letter-spacing:1px">................................</b>';
+        var namaHTML = namaStr !== '' ? '<b>' + _esc(namaStr) + '</b>' : '&nbsp;';
         return '<div class="rg-ttd">' +
           (title ? '<div class="rg-ttd-title" style="font-style:italic;margin-bottom:4px;font-size:10px;color:#333;">' + _esc(title) + '</div>' : '') +
           '<div class="rg-ttd-jabatan">' + _esc(data.jabatan || '') + '</div>' +
@@ -428,7 +430,7 @@
         '.rg-ttd { padding: 8px 4px; }' +
         '.rg-ttd-jabatan { font-weight: 700; text-transform: uppercase; font-size: 10px; margin-bottom: 4px; }' +
         '.rg-ttd-space { height: 60px; }' +
-        '.rg-ttd-nama { border-top: 1px solid #333; padding-top: 4px; margin-top: 4px; }' +
+        '.rg-ttd-nama { display: inline-block; min-width: 150px; border-top: 1px solid #333; padding-top: 4px; margin-top: 4px; }' +
         '.rg-ttd-nik { font-size: 9px; color: #555; margin-top: 2px; }' +
         '.rg-subsection-label { font-size: 10.5px; font-weight: 700; color: #1f4e79; margin: 14px 0 8px 0; padding-left: 8px; border-left: 3px solid #4a90d9; text-transform: uppercase; }' +
         '.rg-subsection-divider { height: 1px; background: #d0d8e4; margin: 18px 0 14px 0; }' +
