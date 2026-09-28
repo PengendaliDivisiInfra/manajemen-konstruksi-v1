@@ -3555,6 +3555,118 @@ $('#btnPull').onclick = async () => {
   console.log('%cManajemen Konstruksi v1 (Schedule) — siap digunakan',
     'color:#1abc9c;font-size:14px;font-weight:bold');
 })();
+
+  <!-- ===================== MODAL LAPORAN MINGGUAN & BULANAN ===================== -->
+<div class="overlay" id="reportPeriodikModal">
+  <div class="modal">
+    <div class="modal-head">
+      <h3>🖨 Cetak Laporan Periodik</h3>
+      <button class="x" onclick="document.getElementById('reportPeriodikModal').classList.remove('show')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="row" style="margin-bottom: 15px;">
+        <div class="field" style="flex:1;">
+          <label class="f">Jenis Laporan</label>
+          <select id="reportType" style="width:100%;">
+            <option value="mingguan">Laporan Mingguan</option>
+            <option value="bulanan">Laporan Bulanan</option>
+          </select>
+        </div>
+        <div class="field" style="flex:1;">
+          <label class="f">Pilih Periode</label>
+          <select id="reportPeriod" style="width:100%;"></select>
+        </div>
+      </div>
+      <p class="hint">Laporan akan dibuka di tab baru dan otomatis memicu dialog print (Save as PDF).</p>
+    </div>
+    <div class="modal-foot">
+      <button class="btn" onclick="document.getElementById('reportPeriodikModal').classList.remove('show')">Batal</button>
+      <button class="btn btn-primary" id="btnGenerateReport">🖨 Cetak Laporan</button>
+    </div>
+  </div>
+</div>
+</script>
+  <script>
+// Pastikan kode ini dijalankan setelah ReportGeneratorExtended dimuat
+document.addEventListener('DOMContentLoaded', function() {
+  
+  // Fungsi untuk mengisi dropdown periode
+  function updateReportPeriodOptions() {
+    const type = document.getElementById('reportType').value;
+    const periodSelect = document.getElementById('reportPeriod');
+    const proj = activeProj();
+    
+    if (!proj) return;
+    periodSelect.innerHTML = '';
+    
+    if (type === 'mingguan') {
+      const totalMinggu = Math.max(1, Math.round(num(proj.durasi_minggu) || 1));
+      for (let i = 1; i <= totalMinggu; i++) {
+        periodSelect.innerHTML += `<option value="${i}">Minggu ke-${i}</option>`;
+      }
+    } else if (type === 'bulanan') {
+      const months = new Set();
+      DB.progress.filter(p => p.project_id === proj.id).forEach(p => {
+        if (p.tanggal) {
+          const d = new Date(p.tanggal);
+          months.add(`${d.getFullYear()}-${d.getMonth() + 1}`);
+        }
+      });
+      
+      if (months.size === 0) {
+        const now = new Date();
+        months.add(`${now.getFullYear()}-${now.getMonth() + 1}`);
+      }
+      
+      Array.from(months).sort().forEach(m => {
+        const [year, month] = m.split('-');
+        const namaBulan = ReportGeneratorExtended._getNamaBulan(parseInt(month));
+        periodSelect.innerHTML += `<option value="${month}-${year}">${namaBulan} ${year}</option>`;
+      });
+    }
+  }
+
+  // Event listener untuk perubahan jenis laporan
+  const reportTypeEl = document.getElementById('reportType');
+  if (reportTypeEl) {
+    reportTypeEl.addEventListener('change', updateReportPeriodOptions);
+  }
+
+  // Event listener untuk tombol cetak
+  const btnGenerate = document.getElementById('btnGenerateReport');
+  if (btnGenerate) {
+    btnGenerate.addEventListener('click', () => {
+      const proj = activeProj();
+      if (!proj) {
+        toast('Pilih proyek terlebih dahulu', false);
+        return;
+      }
+      
+      const type = document.getElementById('reportType').value;
+      const period = document.getElementById('reportPeriod').value;
+      let html = '';
+      
+      if (type === 'mingguan') {
+        html = ReportGeneratorExtended.buildMingguanHTML(proj.id, period);
+      } else if (type === 'bulanan') {
+        const [month, year] = period.split('-');
+        html = ReportGeneratorExtended.buildBulananHTML(proj.id, month, year);
+      }
+      
+      if (html) {
+        const win = window.open('', '_blank');
+        win.document.write(html);
+        win.document.close();
+        document.getElementById('reportPeriodikModal').classList.remove('show');
+      }
+    });
+  }
+
+  // Inisialisasi awal
+  if (reportTypeEl) {
+    updateReportPeriodOptions();
+  }
+});
 </script>
 </body>
 </html>
