@@ -405,6 +405,15 @@ function filterProjectDropdown(){
           tableActionButtons.forEach(el => el.style.display = 'none');
         }
       }
+              // ═══ TAMBAHKAN DI AKHIR ═══
+        (function hideSettingsTabForNonAdmin(){
+          const tab = document.querySelector('.tab[data-tab="settings"]');
+          if (!tab) return;
+          const user = (typeof Auth !== 'undefined' && Auth.user) ? Auth.user : null;
+          const isAdmin = user && (user.role === 'superadmin' || user.role === 'admin');
+          tab.style.display = isAdmin ? '' : 'none';
+        })();
+      }
     }
 
         /* ═══ SEMBUNYIKAN TAB PENGATURAN dari user biasa ═══ */
