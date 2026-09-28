@@ -6299,13 +6299,15 @@ const LiveSync = {
   _timer: null,
   _remoteVersion: null,
   _paused: false,
+  _disabled: true, 
 
   start(){
-    this.stop();
-    if (!SET.sheetUrl || !SET.sheetUrl.trim()) return;
-    this._currentInterval = this.INTERVAL_MS;
-    this._schedule();
-  },
+    if (this._disabled){
+      console.log('%c[LiveSync] ⏸ Nonaktif (manual sync mode)',
+        'color:#f59e0b;font-weight:bold');
+      this._setIndicator('off', 'Manual');
+      return;
+    }
 
   _schedule(){
     clearTimeout(this._timer);
@@ -6316,10 +6318,14 @@ const LiveSync = {
     }, this._currentInterval);
   },
 
-  stop(){
-    clearTimeout(this._timer);
-    this._timer = null;
-  },
+  stop(){ clearTimeout(this._timer); this._timer = null; },
+  pause(){ this._paused = true; },
+  resume(){ if (this._disabled) return; /* ... */ },
+  _backoff(){ /* no-op */ },
+  _resetBackoff(){ this._currentInterval = this.INTERVAL_MS; },
+
+   async tick(){
+    if (this._disabled) return; 
 
   pause(){ this._paused = true; },
 
@@ -6396,7 +6402,7 @@ const LiveSync = {
   _setIndicator(state, text){
     const ind = document.getElementById('liveIndicator');
     if (!ind) return;
-    ind.classList.remove('is-ok','is-warn','is-err');
+    ind.classList.remove('is-ok','is-warn','is-err','is-syncing');
     ind.classList.add('is-' + state);
     const t = ind.querySelector('.live-text');
     if (t) t.textContent = text;
@@ -6815,7 +6821,7 @@ const ImportExcel = {
     const btnExec = document.getElementById('btnExecRefresh');
     if (btnExec) btnExec.onclick = () => { ExecDashboard.render(); toast('Executive dashboard di-refresh'); };
 
-    setTimeout(() => LiveSync.start(), 1500);
+    //setTimeout(() => LiveSync.start(), 1500);  // ← DIMATIKAN: manual sync mode
 
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'visible') LiveSync.resume();
