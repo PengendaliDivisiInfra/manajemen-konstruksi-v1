@@ -6289,145 +6289,142 @@ const CalendarExport = {
   }
 };
 
-/* =====================================================================
-   LIVE COLLABORATION
-   ===================================================================== */
-const LiveSync = {
-  INTERVAL_MS: 30000,
-  MAX_INTERVAL_MS: 5 * 60 * 1000,
-  _currentInterval: 30000,
-  _timer: null,
-  _remoteVersion: null,
-  _paused: false,
-  _disabled: true, 
-
-  start(){
-    if (this._disabled){
-      console.log('%c[LiveSync] ⏸ Nonaktif (manual sync mode)',
-        'color:#f59e0b;font-weight:bold');
-      this._setIndicator('off', 'Manual');
-      return;
-    }
-
-  _schedule(){
-    clearTimeout(this._timer);
-    this._timer = setTimeout(() => {
-      Promise.resolve(this.tick()).finally(() => {
-        if (!this._paused) this._schedule();
-      });
-    }, this._currentInterval);
-  },
-
-  stop(){ clearTimeout(this._timer); this._timer = null; },
-  pause(){ this._paused = true; },
-  resume(){ if (this._disabled) return; /* ... */ },
-  _backoff(){ /* no-op */ },
-  _resetBackoff(){ this._currentInterval = this.INTERVAL_MS; },
-
-   async tick(){
-    if (this._disabled) return; 
-
-  pause(){ this._paused = true; },
-
-  resume(){
-    this._paused = false;
-    this._currentInterval = this.INTERVAL_MS;
-    this._schedule();
-  },
-
-  _backoff(){
-    this._currentInterval = Math.min(this._currentInterval * 3, this.MAX_INTERVAL_MS);
-  },
-
-  _resetBackoff(){
-    this._currentInterval = this.INTERVAL_MS;
-  },
-
-  async tick(){
-    if (this._paused) return;
-    if (!SET.sheetUrl) return;
-    if (document.getElementById('overlay')?.classList.contains('show')) return;
-    if (typeof GanttView !== 'undefined' && GanttView._state?.barDrag) return;
-
-    const ind = document.getElementById('liveIndicator');
-    if (ind) ind.classList.add('is-syncing');
-
-    try {
-      const out = await SyncManager.status();
-      if (!out || !out.ok){
-        let txt = 'Offline';
-        if (out && out.code === 'DEAD_ENDPOINT'){
-          txt = 'URL mati';
-          this._backoff();
-        } else if (out && out.code === 'CIRCUIT_OPEN'){
-          txt = 'Endpoint offline';
-          this._backoff();
-        } else if (out && out.code === 'NO_URL'){
-          txt = 'URL kosong';
-        } else {
-          this._backoff();
-        }
-        this._setIndicator('err', txt);
-        return;
-      }
-
-      this._resetBackoff();
-
-      const remoteVer = out.dbVersion;
-
-      if (this._remoteVersion === null){
-        this._remoteVersion = remoteVer;
-        this._setIndicator('ok', 'Live');
-        return;
-      }
-
-      const localVer = STATE.dbVersion;
-      if (remoteVer !== this._remoteVersion){
-        this._remoteVersion = remoteVer;
-        if (localVer === null || remoteVer > localVer){
-          this._showBanner(remoteVer);
-          this._setIndicator('warn', 'Update tersedia');
-        }
-      } else {
-        this._setIndicator('ok', 'Live');
-      }
-    } catch(e){
-      this._backoff();
-      this._setIndicator('err', 'Offline');
-    } finally {
-      if (ind) ind.classList.remove('is-syncing');
-    }
-  },
-
-  _setIndicator(state, text){
-    const ind = document.getElementById('liveIndicator');
-    if (!ind) return;
-    ind.classList.remove('is-ok','is-warn','is-err','is-syncing');
-    ind.classList.add('is-' + state);
-    const t = ind.querySelector('.live-text');
-    if (t) t.textContent = text;
-  },
-
-  _showBanner(remoteVer){
-    let b = document.getElementById('remoteBanner');
-    if (!b){
-      b = document.createElement('div');
-      b.className = 'remote-banner';
-      b.id = 'remoteBanner';
-      b.innerHTML =
-        '<span>🔄 <b>Data di server diperbarui</b> (v' + remoteVer + ').</span>' +
-        '<button class="remote-btn-pull">Pull Sekarang</button>' +
-        '<button class="remote-btn-later">Nanti</button>';
-      document.body.appendChild(b);
-    }
-    b.classList.add('show');
-    b.querySelector('.remote-btn-pull').onclick = () => {
-      b.classList.remove('show');
-      if (typeof $('#btnPull') !== 'undefined' && $('#btnPull')) $('#btnPull').click();
-    };
-    b.querySelector('.remote-btn-later').onclick = () => b.classList.remove('show');
-  }
-};
+   /* =====================================================================
+      LIVE COLLABORATION
+      ===================================================================== */
+   const LiveSync = {
+     INTERVAL_MS: 30000,
+     MAX_INTERVAL_MS: 5 * 60 * 1000,
+     _currentInterval: 30000,
+     _timer: null,
+     _remoteVersion: null,
+     _paused: false,
+     _disabled: true,
+   
+     start(){
+       if (this._disabled){
+         console.log('%c[LiveSync] ⏸ Nonaktif (manual sync mode)',
+           'color:#f59e0b;font-weight:bold');
+         this._setIndicator('off', 'Manual');
+         return;
+       }
+       this._schedule();
+     },
+   
+     _schedule(){
+       clearTimeout(this._timer);
+       this._timer = setTimeout(() => {
+         Promise.resolve(this.tick()).finally(() => {
+           if (!this._paused) this._schedule();
+         });
+       }, this._currentInterval);
+     },
+   
+     stop(){ clearTimeout(this._timer); this._timer = null; },
+   
+     pause(){ this._paused = true; },
+   
+     resume(){
+       if (this._disabled) return;
+       this._paused = false;
+       this._currentInterval = this.INTERVAL_MS;
+       this._schedule();
+     },
+   
+     _backoff(){
+       this._currentInterval = Math.min(this._currentInterval * 3, this.MAX_INTERVAL_MS);
+     },
+   
+     _resetBackoff(){
+       this._currentInterval = this.INTERVAL_MS;
+     },
+   
+     async tick(){
+       if (this._paused) return;
+       if (this._disabled) return;
+       if (!SET.sheetUrl) return;
+       if (document.getElementById('overlay')?.classList.contains('show')) return;
+       if (typeof GanttView !== 'undefined' && GanttView._state?.barDrag) return;
+   
+       const ind = document.getElementById('liveIndicator');
+       if (ind) ind.classList.add('is-syncing');
+   
+       try {
+         const out = await SyncManager.status();
+         if (!out || !out.ok){
+           let txt = 'Offline';
+           if (out && out.code === 'DEAD_ENDPOINT'){
+             txt = 'URL mati';
+             this._backoff();
+           } else if (out && out.code === 'CIRCUIT_OPEN'){
+             txt = 'Endpoint offline';
+             this._backoff();
+           } else if (out && out.code === 'NO_URL'){
+             txt = 'URL kosong';
+           } else {
+             this._backoff();
+           }
+           this._setIndicator('err', txt);
+           return;
+         }
+   
+         this._resetBackoff();
+   
+         const remoteVer = out.dbVersion;
+   
+         if (this._remoteVersion === null){
+           this._remoteVersion = remoteVer;
+           this._setIndicator('ok', 'Live');
+           return;
+         }
+   
+         const localVer = STATE.dbVersion;
+         if (remoteVer !== this._remoteVersion){
+           this._remoteVersion = remoteVer;
+           if (localVer === null || remoteVer > localVer){
+             this._showBanner(remoteVer);
+             this._setIndicator('warn', 'Update tersedia');
+           }
+         } else {
+           this._setIndicator('ok', 'Live');
+         }
+       } catch(e){
+         this._backoff();
+         this._setIndicator('err', 'Offline');
+       } finally {
+         if (ind) ind.classList.remove('is-syncing');
+       }
+     },
+   
+     _setIndicator(state, text){
+       const ind = document.getElementById('liveIndicator');
+       if (!ind) return;
+       ind.classList.remove('is-ok','is-warn','is-err','is-syncing','is-off');
+       ind.classList.add('is-' + state);
+       const t = ind.querySelector('.live-text');
+       if (t) t.textContent = text;
+     },
+   
+     _showBanner(remoteVer){
+       let b = document.getElementById('remoteBanner');
+       if (!b){
+         b = document.createElement('div');
+         b.className = 'remote-banner';
+         b.id = 'remoteBanner';
+         b.innerHTML =
+           '<span>🔄 <b>Data di server diperbarui</b> (v' + remoteVer + ').</span>' +
+           '<button class="remote-btn-pull">Pull Sekarang</button>' +
+           '<button class="remote-btn-later">Nanti</button>';
+         document.body.appendChild(b);
+       }
+       b.classList.add('show');
+       b.querySelector('.remote-btn-pull').onclick = () => {
+         b.classList.remove('show');
+         if (typeof $('#btnPull') !== 'undefined' && $('#btnPull')) $('#btnPull').click();
+       };
+       b.querySelector('.remote-btn-later').onclick = () => b.classList.remove('show');
+     }
+   };
 
 /* =====================================================================
    MOBILE VIEW
