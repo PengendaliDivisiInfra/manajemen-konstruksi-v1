@@ -439,10 +439,10 @@
             /* Baris Pertama: Kiri (Diperiksa) & Kanan (Dibuat) */
             '<div class="rg-ttd-wrap">' +
               '<div class="rg-ttd-col">' +
-                ttdBlock('Diperiksa,', meta.ttd_team_leader || { jabatan: 'Konsultan Pengawas / Team Leader Konsultan' }) +
+                ttdBlock('Di Periksa,', meta.ttd_team_leader || { jabatan: 'Konsultan Pengawas / Team Leader Konsultan' }) +
               '</div>' +
               '<div class="rg-ttd-col">' +
-                ttdBlock('Dibuat,', meta.ttd_project_manager || { jabatan: 'Project Manager' }) +
+                ttdBlock('Di Buat,', meta.ttd_project_manager || { jabatan: 'Project Manager' }) +
               '</div>' +
             '</div>' +
             
