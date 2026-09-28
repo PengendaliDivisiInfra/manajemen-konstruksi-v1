@@ -400,20 +400,21 @@
 
   <!-- ===================== PROGRESS ===================== -->
 <section class="section" id="sec-progress">
-  <!-- PANEL 1: INPUT PROGRESS (Yang sudah ada) -->
+  <!-- PANEL 1: LAPORAN PROGRES (menggantikan "Input Progress Mingguan") -->
   <div class="panel">
     <div class="panel-head">
-      <div><h2>Input Progress Mingguan</h2><p>Volume aktual terpasang per item WBS</p></div>
-      <div class="row">
-        <button class="btn btn-primary" id="btnAddProg">+ Progress</button>
-         <button class="btn btn-ok" id="btnProgressWizard" style="background:linear-gradient(135deg,#a855f7,#7c3aed);border-color:transparent;color:#fff">📊 Progress Wizard</button>
-         <button class="btn" id="btnPrintReport" style="background:linear-gradient(135deg,#dc2626,#b91c1c);border-color:transparent;color:#fff">🖨 Cetak Laporan</button>
+      <div>
+        <h2>📊 Laporan Progres</h2>
+        <p>Volume aktual terpasang per item WBS — otomatis terakumulasi per periode</p>
       </div>
+      <div id="progressToolbar"></div>
     </div>
-    <div class="tw" style="max-height:40vh; overflow-y:auto;"><table id="tblProg"></table></div>
+    <div class="tw" style="max-height:50vh; overflow:auto;">
+      <table id="tblProg"></table>
+    </div>
   </div>
 
-  <!-- PANEL 2: S-CURVE & ANALISIS (BARU) -->
+  <!-- PANEL 2: S-CURVE -->
   <div class="panel" style="margin-top:18px">
     <div class="panel-head">
       <div><h2>Kurva S — Rencana vs Aktual (Detail)</h2><p>Analisis performa jadwal berdasarkan bobot pekerjaan</p></div>
@@ -423,12 +424,14 @@
     </div>
   </div>
 
-  <!-- PANEL 3: TABEL DEVIASI (BARU) -->
+  <!-- PANEL 3: TABEL DEVIASI -->
   <div class="panel" style="margin-top:18px">
     <div class="panel-head">
       <div><h2>Analisis Deviasi Progres</h2><p>Perbandingan bobot rencana vs aktual per item WBS</p></div>
     </div>
-    <div class="tw" style="max-height:45vh; overflow-y:auto;"><table id="tblProgressVariance"></table></div>
+    <div class="tw" style="max-height:45vh; overflow-y:auto;">
+      <table id="tblProgressVariance"></table>
+    </div>
   </div>
 </section>
 
@@ -1501,10 +1504,13 @@ function switchTab(name){
   if (name === 'calendar')  renderCalendars();
   if (name === 'holidays')  renderHolidays();
   if (name === 'analysis')  renderAnalysis();
-  if (name === 'progress')  if (typeof ProgressManager !== 'undefined') {
-    ProgressManager.renderTable();
-    ProgressManager.renderScurve(STATE.activeProject);
-    ProgressManager.renderVariance(STATE.activeProject);
+    if (name === 'progress') {
+    if (typeof ProgressManager !== 'undefined') {
+      ProgressManager.renderToolbar(STATE.activeProject);
+      ProgressManager.renderTable(STATE.activeProject);
+      ProgressManager.renderScurve(STATE.activeProject);
+      ProgressManager.renderVariance(STATE.activeProject);
+    }
   }
   if (name === 'projects')  renderProjects();
   if (name === 'settings')  renderSettings();
