@@ -194,8 +194,8 @@
         <div class="row">
           <button class="btn btn-primary" id="btnAddWbs">+ Item WBS</button>
           <button class="btn" id="btnAddWbsGroup">+ Grup</button>
-          <button class="btn" id="btnGenerateWbsTemplate" style="background:linear-gradient(135deg,#a855f7,#7c3aed);border-color:transparent;color:#fff">⚡ Generate WBS</button> 
-          <button class="btn" id="btnImportBQ" style="background:linear-gradient(135deg,#a855f7,#7c3aed);border-color:transparent;color:#fff">📥 Import BQ (XLSX)</button>
+          <button class="btn" id="btnGenerateWbsTemplate" style="background:linear-gradient(135deg,#a855f7,#7c3aed);border-color:transparent;color:#fff">⚡ Generate WBS</button>
+          <button class="btn" id="btnImportBQ" style="background:linear-gradient(135deg,#0891b2,#0e7490);border-color:transparent;color:#fff">📥 Import BQ (XLSX)</button>
           <button class="btn btn-ok" id="btnRunCPMWBS">⚡ Recalculate CPM</button>
         </div>
       </div>
@@ -636,6 +636,8 @@
 <script src="ReportGenerator.js"></script>    
 <script src="ImportProgressExcel.js"></script>
 <script src="WbsTemplate.js"></script>
+<script src="AhspMaster.js"></script>   <!-- ⬅️ BARU -->
+<script src="WbsTable.js"></script>     <!-- ⬅️ BARU -->
 
 <!-- ═══════════════════════════════════════════════════════════
      FASE 1C OVERRIDE — MS Project Style Dependency Arrows
@@ -3741,11 +3743,11 @@ document.addEventListener('DOMContentLoaded', function() {
 document.addEventListener('DOMContentLoaded', function(){
   const btn = document.getElementById('btnGenerateWbsTemplate');
   if (btn){
-    btn.onclick = function(){
-      const pid = (typeof STATE !== 'undefined') ? STATE.activeProject : null;
+    _wire('#btnGenerateWbsTemplate', () => {
+      const pid = STATE.activeProject;
       if (!pid){ toast('Pilih proyek dulu', false); return; }
       WbsTemplate.openDialog(pid);
-    };
+    });
   }
   console.log('%c[WbsTemplate.js] ✅ Modul Generate WBS terpasang',
     'color:#a855f7;font-weight:bold;font-size:12px');
