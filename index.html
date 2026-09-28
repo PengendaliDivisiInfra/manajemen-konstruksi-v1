@@ -32,6 +32,17 @@
       <button class="btn btn-sm" id="btnHistory" title="History">📜</button>
       <div class="history-menu" id="historyMenu"></div>
     </div>
+    <!-- ═══ TOMBOL MANUAL SYNC ═══ -->
+    <button class="btn btn-sm" id="btnSaveSync"
+      title="Simpan data ke Google Sheets (Manual Sync)"
+      style="background:linear-gradient(135deg,#16a34a,#0f8a3f);border-color:transparent;color:#fff;font-weight:700">
+      💾 Save
+    </button>
+    <button class="btn btn-sm" id="btnLoadSync"
+      title="Muat data dari Google Sheets (Manual Sync)"
+      style="background:linear-gradient(135deg,#0891b2,#0e7490);border-color:transparent;color:#fff;font-weight:700">
+      📂 Load
+    </button>
     <button class="btn btn-sm" id="btnExcel" title="Export ke Excel">📊 XLSX</button>
     <button class="btn btn-sm" id="btnIcal" title="Export Milestone ke Google Calendar">📅 iCal</button>
     <button class="btn btn-sm" id="btnReportPeriodik" title="Cetak Laporan Mingguan/Bulanan">📄 Report</button>
@@ -2777,6 +2788,169 @@ _wire('#btnPull', async () => {
 
   console.log('%cManajemen Konstruksi v1 (Schedule) — siap digunakan',
     'color:#1abc9c;font-size:14px;font-weight:bold');
+
+    /* ═══════════════════════════════════════════════════════════
+     MANUAL SYNC — Tombol Save & Load di Topbar
+     Untuk semua user (tanpa akses Tab Pengaturan)
+     ═══════════════════════════════════════════════════════════ */
+  
+  _wire('#btnSaveSync', async () => {
+    if (typeof SyncManager === 'undefined'){
+      toast('SyncManager belum siap', false);
+      return;
+    }
+  
+    // Cek auth
+    const token = localStorage.getItem('mk_session_token') ||
+                  (typeof Auth !== 'undefined' && Auth.token) || null;
+  
+    if (!token){
+      toast('🔒 Login dulu untuk Save ke server', false);
+      return;
+    }
+  
+    if (!SET.sheetUrl || !SET.sheetUrl.trim()){
+      toast('⚠ URL Apps Script belum diatur. Hubungi admin.', false);
+      return;
+    }
+  
+    const btn = $('#btnSaveSync');
+    const origText = btn ? btn.innerHTML : '💾 Save';
+    if (btn){ btn.disabled = true; btn.innerHTML = '⏳ Saving...'; }
+  
+    try {
+      toast('Mengirim data ke server...');
+      const clean = SyncManager.sanitize(DB);
+      const sizeKB = SyncManager.estimateSizeKB(clean);
+      console.log('[Save] Payload:', sizeKB, 'KB');
+  
+      // ═══ Ambil soft lock dulu (block kalau ada user lain edit) ═══
+      const lock = await SyncManager.lock(120000).catch(() => ({ ok: false, code: 'NET' }));
+      if (!lock.ok && lock.code === 'LOCKED'){
+        const go = confirm('⚠ ' + lock.message + '\n\nTetap lanjut? Risiko konflik data.');
+        if (!go){
+          if (btn){ btn.disabled = false; btn.innerHTML = origText; }
+          return;
+        }
+      }
+  
+      const out = await SyncManager.push(DB, SET);
+      
+      if (out.ok){
+        toast(`✅ Tersimpan di server (v${out.dbVersion}) · ${sizeKB} KB`);
+        const ind = document.getElementById('liveIndicator');
+        if (ind){
+          ind.classList.remove('is-ok','is-warn','is-err','is-off');
+          ind.classList.add('is-ok');
+          const t = ind.querySelector('.live-text');
+          if (t) t.textContent = 'Synced v' + out.dbVersion;
+        }
+      } else if (out.code === 'CONFLICT'){
+        const doLoad = confirm(
+          '⚠ Konflik versi.\n\nServer sudah diupdate user lain.\n\n' +
+          'Load data terbaru dari server? (data lokal saat ini akan ditimpa)'
+        );
+        if (doLoad){
+          if (typeof loadFromServer === 'function') loadFromServer();
+        }
+      } else {
+        toast('⚠ Gagal Save: ' + (out.message || 'unknown'), false);
+      }
+    } catch(e){
+      console.error('[Save] Error:', e);
+      toast('❌ Error: ' + e.message, false);
+    } finally {
+      await SyncManager.release().catch(() => {});
+      if (btn){ btn.disabled = false; btn.innerHTML = origText; }
+    }
+  });
+  
+  _wire('#btnLoadSync', async () => {
+    if (typeof SyncManager === 'undefined'){
+      toast('SyncManager belum siap', false);
+      return;
+    }
+  
+    const token = localStorage.getItem('mk_session_token') ||
+                  (typeof Auth !== 'undefined' && Auth.token) || null;
+    if (!token){
+      toast('🔒 Login dulu untuk Load dari server', false);
+      return;
+    }
+  
+    if (!SET.sheetUrl || !SET.sheetUrl.trim()){
+      toast('⚠ URL Apps Script belum diatur. Hubungi admin.', false);
+      return;
+    }
+  
+    if (!confirm('⚠ Load akan MENGGANTI data lokal dengan data terbaru dari server.\n\nLanjutkan?')){
+      return;
+    }
+  
+    const btn = $('#btnLoadSync');
+    const origText = btn ? btn.innerHTML : '📂 Load';
+    if (btn){ btn.disabled = true; btn.innerHTML = '⏳ Loading...'; }
+  
+    try {
+      toast('Mengambil data dari server...');
+      const out = await SyncManager.pull();
+      
+      if (out.ok && out.db){
+        // Backup dulu ke localStorage sebelum overwrite (safety)
+        try {
+          localStorage.setItem('mk_v1_db_backup_' + Date.now(), JSON.stringify(DB));
+        } catch(e){}
+  
+        DB = out.db;
+        if (out.settings) SET = Object.assign(SET, out.settings);
+        STATE.dbVersion = out.dbVersion ?? null;
+  
+        // Pastikan semua key ada
+        ['photos','progress','project_wbs','projects','ahsp_headers','project_ahsp_details',
+         'master_resources','working_calendars','holidays','users'].forEach(k => {
+          if (!DB[k]) DB[k] = [];
+        });
+  
+        saveDB(); saveSET();
+  
+        // Reset active project
+        if (!STATE.activeProject || !DB.projects.find(p => p.id === STATE.activeProject)){
+          STATE.activeProject = DB.projects[0]?.id || '';
+        }
+  
+        // Re-render
+        renderAll();
+        if (typeof renderSettings === 'function') renderSettings();
+  
+        toast(`✅ Data dimuat dari server (v${out.dbVersion})`);
+        const ind = document.getElementById('liveIndicator');
+        if (ind){
+          ind.classList.remove('is-ok','is-warn','is-err','is-off');
+          ind.classList.add('is-ok');
+          const t = ind.querySelector('.live-text');
+          if (t) t.textContent = 'Synced v' + out.dbVersion;
+        }
+      } else {
+        toast('⚠ Gagal Load: ' + (out.message || 'unknown'), false);
+      }
+    } catch(e){
+      console.error('[Load] Error:', e);
+      toast('❌ Error: ' + e.message, false);
+    } finally {
+      if (btn){ btn.disabled = false; btn.innerHTML = origText; }
+    }
+  });
+  
+  // Update indikator awal — tampilkan "Manual" bukan "Live"
+  setTimeout(() => {
+    const ind = document.getElementById('liveIndicator');
+    if (ind){
+      ind.classList.remove('is-ok','is-warn','is-err','is-syncing');
+      ind.classList.add('is-off');
+      const t = ind.querySelector('.live-text');
+      if (t) t.textContent = 'Manual';
+    }
+  }, 1000);
 })();
 </script>
 
