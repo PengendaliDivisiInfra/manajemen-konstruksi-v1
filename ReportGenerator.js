@@ -309,24 +309,24 @@
       var logoKontraktor = meta.logo_kontraktor ? '<img src="' + meta.logo_kontraktor + '" class="rg-logo" />' : '<div class="rg-logo-ph"></div>';
 
       // TTD
-      function ttdBlock(data){
-        var nikStr = String(data.nik || '').trim();
-        var nikHTML = nikStr !== ''
-          ? '<div class="rg-ttd-nik">NIP/NIK: ' + _esc(nikStr) + '</div>'
-          : '';
-        var namaStr = String(data.nama || '').trim();
-        var namaHTML = namaStr !== ''
-          ? '<b>' + _esc(namaStr) + '</b>'
-          : '<b style="letter-spacing:1px">................................</b>';
-        return '' +
-          '<div class="rg-ttd">' +
-            '<div class="rg-ttd-jabatan">' + _esc(data.jabatan || '') + '</div>' +
-            '<div class="rg-ttd-space"></div>' +
-            '<div class="rg-ttd-nama">' + namaHTML + '</div>' +
-            nikHTML +
-          '</div>';
-      }
-
+    function ttdBlock(title, data){
+      var nikStr = String(data.nik || '').trim();
+      var nikHTML = nikStr !== ''
+        ? '<div class="rg-ttd-nik">NIP/NIK: ' + _esc(nikStr) + '</div>'
+        : '';
+      var namaStr = String(data.nama || '').trim();
+      var namaHTML = namaStr !== ''
+        ? '<b>' + _esc(namaStr) + '</b>'
+        : '<b style="letter-spacing:1px">................................</b>';
+      return '' +
+        '<div class="rg-ttd">' +
+          (title ? '<div class="rg-ttd-title" style="font-style:italic; margin-bottom:4px; font-size:10px; color:#333;">' + _esc(title) + '</div>' : '') +
+          '<div class="rg-ttd-jabatan">' + _esc(data.jabatan || '') + '</div>' +
+          '<div class="rg-ttd-space"></div>' +
+          '<div class="rg-ttd-nama">' + namaHTML + '</div>' +
+          nikHTML +
+        '</div>';
+    }
       return '' +
         '<div class="rg-page">' +
 
@@ -414,12 +414,11 @@
             '</tr>' +
           '</table>' +
 
-            /* ═══ C. LAMPIRAN FOTO & TANDA TANGAN ═══ */
-            '<div class="rg-section-title">C. LAMPIRAN FOTO &amp; TANDA TANGAN</div>' +
+            /* ═══ C. LAMPIRAN FOTO ═══ */
+            '<div class="rg-section-title">C. LAMPIRAN FOTO</div>' +
             
-            /* Sub-bagian foto (kalau ada) */
             (photos.length
-              ? '<div class="rg-subsection-label">C.1 Dokumentasi Foto (' + photos.length + ')</div>' +
+              ? '<div class="rg-subsection-label">Dokumentasi Foto (' + photos.length + ')</div>' +
                 '<div class="rg-photo-grid">' +
                   photos.map(function(p){
                     var w = DB.project_wbs.find(function(x){ return x.id === p.wbs_id; });
@@ -433,21 +432,30 @@
               : '<div class="rg-empty-note">Tidak ada foto dokumentasi pada tanggal ini.</div>'
             ) +
             
-            /* Divider */
-            '<div class="rg-subsection-divider"></div>' +
+            /* ═══ TANDA TANGAN (Tanpa Label C.2) ═══ */
+            '<div class="rg-subsection-divider" style="margin: 24px 0 16px 0;"></div>' +
+            '<div class="rg-subsection-label">Tanda Tangan</div>' +
             
-            /* Sub-bagian TTD */
-            '<div class="rg-subsection-label">C.2 Tanda Tangan</div>' +
+            /* Baris Pertama: Kiri (Diperiksa) & Kanan (Dibuat) */
             '<div class="rg-ttd-wrap">' +
-              '<div class="rg-ttd-col">' + ttdBlock(meta.ttd_project_manager || {}) + '</div>' +
-              '<div class="rg-ttd-col">' + ttdBlock(meta.ttd_team_leader || {}) + '</div>' +
+              '<div class="rg-ttd-col">' +
+                ttdBlock('Diperiksa,', meta.ttd_team_leader || { jabatan: 'Konsultan Pengawas / Team Leader Konsultan' }) +
+              '</div>' +
+              '<div class="rg-ttd-col">' +
+                ttdBlock('Dibuat,', meta.ttd_project_manager || { jabatan: 'Project Manager' }) +
+              '</div>' +
             '</div>' +
-            '<div class="rg-ttd-wrap" style="margin-top:10px">' +
-              '<div class="rg-ttd-col">' + ttdBlock(meta.ttd_direksi || {}) + '</div>' +
-              '<div class="rg-ttd-col">' + ttdBlock(meta.ttd_ppk || {}) + '</div>' +
+            
+            /* Baris Kedua: Tengah (Disetujui) */
+            '<div class="rg-ttd-wrap" style="margin-top:30px; justify-content: center; gap: 50px;">' +
+              '<div class="rg-ttd-col" style="flex: 0 0 auto; min-width: 200px;">' +
+                ttdBlock('Disetujui,', meta.ttd_direksi || { jabatan: 'Direksi Pengawas' }) +
+              '</div>' +
+              '<div class="rg-ttd-col" style="flex: 0 0 auto; min-width: 200px;">' +
+                ttdBlock('', meta.ttd_ppk || { jabatan: 'Pejabat Pembuat Komitmen' }) +
+              '</div>' +
             '</div>' +
         '</div>';
-    }
 
     /* ═══════════════════════════════════════════════════════════
        RENDER KE PDF
